@@ -8,9 +8,9 @@ use commands::{
         validate_file_path,
     },
     booth::fetch_booth_thumbnail,
-    models::{create_model, delete_model, get_models, update_model},
+    models::{create_model, delete_model, get_models, reorder_models, update_model},
     saves::{export_save, import_save},
-    tags::{create_tag, delete_tag, get_tags, update_tag},
+    tags::{create_tag, delete_tag, get_tags, reorder_tags, update_tag},
 };
 use tauri::Manager;
 
@@ -33,10 +33,12 @@ pub fn run() {
             create_model,
             update_model,
             delete_model,
+            reorder_models,
             get_tags,
             create_tag,
             update_tag,
             delete_tag,
+            reorder_tags,
             export_save,
             import_save,
             fetch_booth_thumbnail,

@@ -13,10 +13,16 @@ type BackendModel = {
   id: number;
   name: string;
   displayName: string | null;
+  sortOrder: number;
   createdAt: string;
 };
 
-type BackendTag = Tag;
+type BackendTag = {
+  id: number;
+  name: string;
+  color: string;
+  sortOrder: number;
+};
 
 type BackendAsset = {
   id: number;
@@ -72,9 +78,11 @@ type AssetStore = {
   addModel: (name: string, displayName?: string) => Promise<void>;
   updateModel: (id: number, name: string, displayName?: string) => Promise<void>;
   deleteModel: (id: number) => Promise<void>;
+  reorderModels: (modelIds: number[]) => Promise<void>;
   addTag: (name: string, color: string) => Promise<void>;
   updateTag: (id: number, name: string, color: string) => Promise<void>;
   deleteTag: (id: number) => Promise<void>;
+  reorderTags: (tagIds: number[]) => Promise<void>;
   exportSave: (path: string) => Promise<void>;
   importSave: (path: string) => Promise<void>;
   setAddAssetDialogOpen: (open: boolean) => void;
@@ -99,7 +107,15 @@ const toModel = (model: BackendModel): Model => ({
   id: model.id,
   name: model.name,
   display_name: model.displayName,
+  sort_order: model.sortOrder,
   created_at: model.createdAt,
+});
+
+const toTag = (tag: BackendTag): Tag => ({
+  id: tag.id,
+  name: tag.name,
+  color: tag.color,
+  sort_order: tag.sortOrder,
 });
 
 const toAsset = (asset: BackendAsset): Asset => ({
@@ -113,7 +129,7 @@ const toAsset = (asset: BackendAsset): Asset => ({
   created_at: asset.createdAt,
   updated_at: asset.updatedAt,
   models: asset.models.map(toModel),
-  tags: asset.tags,
+  tags: asset.tags.map(toTag),
   file_exists: asset.fileExists,
 });
 
@@ -125,6 +141,17 @@ const cleanFilters = (filters: AssetFilters) => ({
 
 const toggleId = (values: number[], id: number) =>
   values.includes(id) ? values.filter((value) => value !== id) : [...values, id];
+
+const orderedByIds = <T extends { id: number }>(items: T[], ids: number[]) => {
+  const order = new Map(ids.map((id, index) => [id, index]));
+  return [...items]
+    .sort((first, second) => {
+      const firstOrder = order.get(first.id) ?? Number.MAX_SAFE_INTEGER;
+      const secondOrder = order.get(second.id) ?? Number.MAX_SAFE_INTEGER;
+      return firstOrder - secondOrder;
+    })
+    .map((item, index) => ({ ...item, sort_order: index + 1 }));
+};
 
 const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
   displayName:
@@ -165,7 +192,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       ]);
       set({
         models: models.map(toModel),
-        tags,
+        tags: tags.map(toTag),
         assets: assets.map(toAsset),
         loading: false,
       });
@@ -332,8 +359,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   addTag: async (name, color) => {
     set({ error: null });
     try {
-      const tag = await invoke<Tag>("create_tag", { input: { name, color } });
-      set((state) => ({ tags: [...state.tags, tag] }));
+      const tag = await invoke<BackendTag>("create_tag", { input: { name, color } });
+      set((state) => ({ tags: [...state.tags, toTag(tag)] }));
     } catch (error) {
       set({ error: toMessage(error) });
       throw error;
@@ -343,9 +370,11 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   updateTag: async (id, name, color) => {
     set({ error: null });
     try {
-      const tag = await invoke<Tag>("update_tag", { id, input: { name, color } });
+      const tag = await invoke<BackendTag>("update_tag", { id, input: { name, color } });
       set((state) => ({
-        tags: state.tags.map((current) => (current.id === id ? tag : current)),
+        tags: state.tags.map((current) =>
+          current.id === id ? toTag(tag) : current,
+        ),
         editingTag: null,
       }));
       await get().loadAssets();
@@ -369,6 +398,56 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       await get().loadAssets();
     } catch (error) {
       set({ error: toMessage(error) });
+      throw error;
+    }
+  },
+
+  reorderModels: async (modelIds) => {
+    const previousModels = get().models;
+    const previousAssets = get().assets;
+
+    set((state) => ({
+      error: null,
+      models: orderedByIds(state.models, modelIds),
+      assets: state.assets.map((asset) => ({
+        ...asset,
+        models: orderedByIds(asset.models, modelIds),
+      })),
+    }));
+
+    try {
+      await invoke("reorder_models", { input: { modelIds } });
+    } catch (error) {
+      set({
+        models: previousModels,
+        assets: previousAssets,
+        error: toMessage(error),
+      });
+      throw error;
+    }
+  },
+
+  reorderTags: async (tagIds) => {
+    const previousTags = get().tags;
+    const previousAssets = get().assets;
+
+    set((state) => ({
+      error: null,
+      tags: orderedByIds(state.tags, tagIds),
+      assets: state.assets.map((asset) => ({
+        ...asset,
+        tags: orderedByIds(asset.tags, tagIds),
+      })),
+    }));
+
+    try {
+      await invoke("reorder_tags", { input: { tagIds } });
+    } catch (error) {
+      set({
+        tags: previousTags,
+        assets: previousAssets,
+        error: toMessage(error),
+      });
       throw error;
     }
   },

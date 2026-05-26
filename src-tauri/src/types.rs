@@ -6,6 +6,7 @@ pub struct Model {
     pub id: i64,
     pub name: String,
     pub display_name: Option<String>,
+    pub sort_order: i64,
     pub created_at: String,
 }
 
@@ -15,6 +16,7 @@ pub struct Tag {
     pub id: i64,
     pub name: String,
     pub color: String,
+    pub sort_order: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,6 +91,13 @@ pub struct UpdateModelInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReorderModelsInput {
+    #[serde(default)]
+    pub model_ids: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateTagInput {
     pub name: String,
     pub color: String,
@@ -99,4 +108,11 @@ pub struct CreateTagInput {
 pub struct UpdateTagInput {
     pub name: String,
     pub color: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderTagsInput {
+    #[serde(default)]
+    pub tag_ids: Vec<i64>,
 }

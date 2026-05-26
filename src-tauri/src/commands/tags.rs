@@ -1,6 +1,6 @@
 use crate::{
     db::DbState,
-    types::{CreateTagInput, Tag, UpdateTagInput},
+    types::{CreateTagInput, ReorderTagsInput, Tag, UpdateTagInput},
 };
 use rusqlite::{params, Connection, Row};
 use tauri::State;
@@ -12,16 +12,25 @@ fn tag_from_row(row: &Row<'_>) -> rusqlite::Result<Tag> {
         id: row.get(0)?,
         name: row.get(1)?,
         color: row.get(2)?,
+        sort_order: row.get(3)?,
     })
+}
+
+fn next_sort_order(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tags",
+        [],
+        |row| row.get(0),
+    )
 }
 
 pub(crate) fn list_tags_for_asset(conn: &Connection, asset_id: i64) -> rusqlite::Result<Vec<Tag>> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.name, t.color
+        "SELECT t.id, t.name, t.color, t.sort_order
          FROM tags t
          INNER JOIN asset_tags at ON at.tag_id = t.id
          WHERE at.asset_id = ?
-         ORDER BY t.name COLLATE NOCASE",
+         ORDER BY t.sort_order ASC, t.name COLLATE NOCASE",
     )?;
 
     let rows = stmt.query_map(params![asset_id], tag_from_row)?;
@@ -32,7 +41,7 @@ pub(crate) fn list_tags_for_asset(conn: &Connection, asset_id: i64) -> rusqlite:
 pub fn get_tags(db: State<'_, DbState>) -> CommandResult<Vec<Tag>> {
     let conn = connection(&db)?;
     let mut stmt = conn
-        .prepare("SELECT id, name, color FROM tags ORDER BY name COLLATE NOCASE")
+        .prepare("SELECT id, name, color, sort_order FROM tags ORDER BY sort_order ASC, name COLLATE NOCASE")
         .map_err(db_error)?;
 
     let rows = stmt.query_map([], tag_from_row).map_err(db_error)?;
@@ -56,15 +65,16 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbState>) -> CommandResul
     };
 
     let conn = connection(&db)?;
+    let sort_order = next_sort_order(&conn).map_err(db_error)?;
     conn.execute(
-        "INSERT INTO tags (name, color) VALUES (?, ?)",
-        params![name, color],
+        "INSERT INTO tags (name, color, sort_order) VALUES (?, ?, ?)",
+        params![name, color, sort_order],
     )
     .map_err(db_error)?;
 
     let id = conn.last_insert_rowid();
     let mut stmt = conn
-        .prepare("SELECT id, name, color FROM tags WHERE id = ?")
+        .prepare("SELECT id, name, color, sort_order FROM tags WHERE id = ?")
         .map_err(db_error)?;
 
     stmt.query_row(params![id], tag_from_row).map_err(db_error)
@@ -96,7 +106,7 @@ pub fn update_tag(id: i64, input: UpdateTagInput, db: State<'_, DbState>) -> Com
     }
 
     let mut stmt = conn
-        .prepare("SELECT id, name, color FROM tags WHERE id = ?")
+        .prepare("SELECT id, name, color, sort_order FROM tags WHERE id = ?")
         .map_err(db_error)?;
 
     stmt.query_row(params![id], tag_from_row).map_err(db_error)
@@ -107,5 +117,29 @@ pub fn delete_tag(id: i64, db: State<'_, DbState>) -> CommandResult<()> {
     let conn = connection(&db)?;
     conn.execute("DELETE FROM tags WHERE id = ?", params![id])
         .map_err(db_error)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reorder_tags(input: ReorderTagsInput, db: State<'_, DbState>) -> CommandResult<()> {
+    let mut conn = connection(&db)?;
+    let tx = conn.transaction().map_err(db_error)?;
+
+    {
+        let mut stmt = tx
+            .prepare("UPDATE tags SET sort_order = ? WHERE id = ?")
+            .map_err(db_error)?;
+
+        for (index, tag_id) in input.tag_ids.iter().enumerate() {
+            let affected = stmt
+                .execute(params![index as i64 + 1, tag_id])
+                .map_err(db_error)?;
+            if affected == 0 {
+                return Err("Tag was not found".to_string());
+            }
+        }
+    }
+
+    tx.commit().map_err(db_error)?;
     Ok(())
 }

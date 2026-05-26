@@ -14,6 +14,8 @@ struct SaveModel {
     id: i64,
     name: String,
     display_name: Option<String>,
+    #[serde(default)]
+    sort_order: i64,
     created_at: String,
 }
 
@@ -23,6 +25,8 @@ struct SaveTag {
     id: i64,
     name: String,
     color: String,
+    #[serde(default)]
+    sort_order: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,7 +86,8 @@ fn model_from_row(row: &Row<'_>) -> rusqlite::Result<SaveModel> {
         id: row.get(0)?,
         name: row.get(1)?,
         display_name: row.get(2)?,
-        created_at: row.get(3)?,
+        sort_order: row.get(3)?,
+        created_at: row.get(4)?,
     })
 }
 
@@ -91,6 +96,7 @@ fn tag_from_row(row: &Row<'_>) -> rusqlite::Result<SaveTag> {
         id: row.get(0)?,
         name: row.get(1)?,
         color: row.get(2)?,
+        sort_order: row.get(3)?,
     })
 }
 
@@ -163,12 +169,16 @@ fn build_archive(conn: &Connection) -> CommandResult<SaveArchive> {
         exported_at,
         models: query_all(
             conn,
-            "SELECT id, name, display_name, created_at FROM models ORDER BY id",
+            "SELECT id, name, display_name, sort_order, created_at FROM models ORDER BY sort_order, id",
             model_from_row,
         )
         .map_err(db_error)?,
-        tags: query_all(conn, "SELECT id, name, color FROM tags ORDER BY id", tag_from_row)
-            .map_err(db_error)?,
+        tags: query_all(
+            conn,
+            "SELECT id, name, color, sort_order FROM tags ORDER BY sort_order, id",
+            tag_from_row,
+        )
+        .map_err(db_error)?,
         assets: query_all(
             conn,
             "SELECT id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at
@@ -208,15 +218,21 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
     {
         let mut stmt = tx
             .prepare(
-                "INSERT INTO models (id, name, display_name, created_at)
-                 VALUES (?, ?, ?, ?)",
+                "INSERT INTO models (id, name, display_name, sort_order, created_at)
+                 VALUES (?, ?, ?, ?, ?)",
             )
             .map_err(db_error)?;
-        for model in &archive.models {
+        for (index, model) in archive.models.iter().enumerate() {
+            let sort_order = if model.sort_order > 0 {
+                model.sort_order
+            } else {
+                index as i64 + 1
+            };
             stmt.execute(params![
                 model.id,
                 &model.name,
                 model.display_name.as_deref(),
+                sort_order,
                 &model.created_at
             ])
             .map_err(db_error)?;
@@ -225,10 +241,15 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
 
     {
         let mut stmt = tx
-            .prepare("INSERT INTO tags (id, name, color) VALUES (?, ?, ?)")
+            .prepare("INSERT INTO tags (id, name, color, sort_order) VALUES (?, ?, ?, ?)")
             .map_err(db_error)?;
-        for tag in &archive.tags {
-            stmt.execute(params![tag.id, &tag.name, &tag.color])
+        for (index, tag) in archive.tags.iter().enumerate() {
+            let sort_order = if tag.sort_order > 0 {
+                tag.sort_order
+            } else {
+                index as i64 + 1
+            };
+            stmt.execute(params![tag.id, &tag.name, &tag.color, sort_order])
                 .map_err(db_error)?;
         }
     }

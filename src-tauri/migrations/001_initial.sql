@@ -2,13 +2,15 @@ CREATE TABLE IF NOT EXISTS models (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     name         TEXT    NOT NULL,
     display_name TEXT,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS tags (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    name  TEXT    NOT NULL UNIQUE,
-    color TEXT    NOT NULL DEFAULT '#6B7280'
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL UNIQUE,
+    color      TEXT    NOT NULL DEFAULT '#6B7280',
+    sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS assets (

@@ -2,6 +2,7 @@ export interface Model {
   id: number;
   name: string;
   display_name: string | null;
+  sort_order: number;
   created_at: string;
 }
 
@@ -9,6 +10,7 @@ export interface Tag {
   id: number;
   name: string;
   color: string;
+  sort_order: number;
 }
 
 export interface Asset {
