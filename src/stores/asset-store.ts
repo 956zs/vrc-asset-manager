@@ -33,6 +33,15 @@ type BackendAsset = {
   fileExists: boolean;
 };
 
+type BackendSaveSummary = {
+  path: string;
+  models: number;
+  tags: number;
+  assets: number;
+  assetModels: number;
+  assetTags: number;
+};
+
 type AssetStore = {
   assets: Asset[];
   models: Model[];
@@ -47,9 +56,11 @@ type AssetStore = {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  notice: string | null;
   loadAll: () => Promise<void>;
   loadAssets: () => Promise<void>;
   clearError: () => void;
+  clearNotice: () => void;
   setSearchFilter: (search: string) => void;
   toggleModelFilter: (modelId: number) => void;
   toggleTagFilter: (tagId: number) => void;
@@ -64,6 +75,8 @@ type AssetStore = {
   addTag: (name: string, color: string) => Promise<void>;
   updateTag: (id: number, name: string, color: string) => Promise<void>;
   deleteTag: (id: number) => Promise<void>;
+  exportSave: (path: string) => Promise<void>;
+  importSave: (path: string) => Promise<void>;
   setAddAssetDialogOpen: (open: boolean) => void;
   setAddModelDialogOpen: (open: boolean) => void;
   setAddTagDialogOpen: (open: boolean) => void;
@@ -139,6 +152,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   loading: false,
   saving: false,
   error: null,
+  notice: null,
 
   loadAll: async () => {
     set({ loading: true, error: null });
@@ -172,6 +186,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+  clearNotice: () => set({ notice: null }),
 
   setSearchFilter: (search) => {
     set((state) => ({ filters: { ...state.filters, search } }));
@@ -354,6 +369,39 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       await get().loadAssets();
     } catch (error) {
       set({ error: toMessage(error) });
+      throw error;
+    }
+  },
+
+  exportSave: async (path) => {
+    set({ saving: true, error: null, notice: null });
+    try {
+      const summary = await invoke<BackendSaveSummary>("export_save", { path });
+      set({
+        saving: false,
+        notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤`,
+      });
+    } catch (error) {
+      set({ error: toMessage(error), saving: false });
+      throw error;
+    }
+  },
+
+  importSave: async (path) => {
+    set({ saving: true, error: null, notice: null });
+    try {
+      const summary = await invoke<BackendSaveSummary>("import_save", { path });
+      set({
+        filters: { ...defaultFilters },
+        selectedAssetId: null,
+      });
+      await get().loadAll();
+      set({
+        saving: false,
+        notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤`,
+      });
+    } catch (error) {
+      set({ error: toMessage(error), saving: false });
       throw error;
     }
   },

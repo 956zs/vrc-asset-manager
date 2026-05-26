@@ -13,7 +13,9 @@ function App() {
   const loadAll = useAssetStore((state) => state.loadAll);
   const selectedAssetId = useAssetStore((state) => state.selectedAssetId);
   const error = useAssetStore((state) => state.error);
+  const notice = useAssetStore((state) => state.notice);
   const clearError = useAssetStore((state) => state.clearError);
+  const clearNotice = useAssetStore((state) => state.clearNotice);
 
   useEffect(() => {
     void loadAll();
@@ -43,6 +45,15 @@ function App() {
         <div className="fixed bottom-4 left-1/2 z-50 flex max-w-[520px] -translate-x-1/2 items-center gap-3 rounded-md border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive shadow-lg">
           <span className="min-w-0 flex-1">{error}</span>
           <Button type="button" variant="ghost" size="sm" onClick={clearError}>
+            關閉
+          </Button>
+        </div>
+      )}
+
+      {!error && notice && (
+        <div className="fixed bottom-4 left-1/2 z-50 flex max-w-[520px] -translate-x-1/2 items-center gap-3 rounded-md border border-primary/30 bg-card px-4 py-3 text-sm text-foreground shadow-lg">
+          <span className="min-w-0 flex-1">{notice}</span>
+          <Button type="button" variant="ghost" size="sm" onClick={clearNotice}>
             關閉
           </Button>
         </div>

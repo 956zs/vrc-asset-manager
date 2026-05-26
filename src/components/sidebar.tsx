@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Package, Pencil, Plus, Search, Tag, Trash2, User, X } from "lucide-react";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import {
+  Check,
+  Download,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  Tag,
+  Trash2,
+  Upload,
+  User,
+  X,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,11 +60,15 @@ export function Sidebar() {
     setEditingTag,
     deleteModel,
     deleteTag,
+    exportSave,
+    importSave,
     getFilteredAssets,
+    saving,
   } = useAssetStore();
   const [isModelEditMode, setIsModelEditMode] = useState(false);
   const [isTagEditMode, setIsTagEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [importPath, setImportPath] = useState<string | null>(null);
 
   const filteredCount = getFilteredAssets().length;
   const hasActiveFilters =
@@ -90,6 +107,48 @@ export function Sidebar() {
     setAddTagDialogOpen(false);
     setEditingModel(null);
     setEditingTag({ ...tag });
+  };
+
+  const handleExportSave = async () => {
+    const selected = await saveDialog({
+      title: "匯出 VRC Asset Manager 存檔",
+      defaultPath: "vrc-asset-manager-save.json",
+      filters: [{ name: "JSON 存檔", extensions: ["json"] }],
+    });
+
+    if (typeof selected === "string") {
+      try {
+        await exportSave(selected);
+      } catch {
+        // The store owns the visible error message.
+      }
+    }
+  };
+
+  const handleSelectImportSave = async () => {
+    const selected = await openDialog({
+      title: "匯入 VRC Asset Manager 存檔",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "JSON 存檔", extensions: ["json"] }],
+    });
+
+    if (typeof selected === "string") {
+      setImportPath(selected);
+    }
+  };
+
+  const handleConfirmImportSave = async () => {
+    if (!importPath) {
+      return;
+    }
+
+    try {
+      await importSave(importPath);
+      setImportPath(null);
+    } catch {
+      // The store owns the visible error message.
+    }
   };
 
   return (
@@ -137,18 +196,18 @@ export function Sidebar() {
           </Button>
 
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground">
-                <User className="h-4 w-4" />
-                依模型篩選
+            <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium text-sidebar-foreground">
+                <User className="h-4 w-4 shrink-0" />
+                <span className="truncate">依模型篩選</span>
               </h3>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "h-6 w-6 text-muted-foreground hover:text-sidebar-foreground",
+                    "!size-7 text-muted-foreground hover:text-sidebar-foreground",
                     isModelEditMode && "bg-sidebar-accent text-sidebar-foreground",
                   )}
                   title={isModelEditMode ? "完成編輯模型" : "編輯模型清單"}
@@ -166,7 +225,7 @@ export function Sidebar() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
+                    className="!size-7 text-muted-foreground hover:text-sidebar-foreground"
                     title="新增模型"
                     aria-label="新增模型"
                     onClick={() => setAddModelDialogOpen(true)}
@@ -181,9 +240,10 @@ export function Sidebar() {
                 <div
                   key={model.id}
                   className={cn(
-                    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                    "grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
                     "hover:bg-sidebar-accent",
                     filters.modelIds.includes(model.id) && "bg-sidebar-accent",
+                    isModelEditMode && "grid-cols-[auto_minmax(0,1fr)_auto]",
                   )}
                 >
                   <Checkbox
@@ -198,11 +258,12 @@ export function Sidebar() {
                     {model.display_name || model.name}
                   </button>
                   {isModelEditMode && (
-                    <>
+                    <div className="flex shrink-0 items-center gap-1">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        className="!size-7"
                         title="編輯模型"
                         aria-label="編輯模型"
                         onClick={(event) => {
@@ -216,6 +277,7 @@ export function Sidebar() {
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        className="!size-7"
                         title="刪除模型"
                         aria-label="刪除模型"
                         onClick={(event) => {
@@ -229,7 +291,7 @@ export function Sidebar() {
                       >
                         <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}
@@ -237,18 +299,18 @@ export function Sidebar() {
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-medium text-sidebar-foreground">
-                <Tag className="h-4 w-4" />
-                依標籤篩選
+            <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium text-sidebar-foreground">
+                <Tag className="h-4 w-4 shrink-0" />
+                <span className="truncate">依標籤篩選</span>
               </h3>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "h-6 w-6 text-muted-foreground hover:text-sidebar-foreground",
+                    "!size-7 text-muted-foreground hover:text-sidebar-foreground",
                     isTagEditMode && "bg-sidebar-accent text-sidebar-foreground",
                   )}
                   title={isTagEditMode ? "完成編輯標籤" : "編輯標籤清單"}
@@ -266,7 +328,7 @@ export function Sidebar() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-sidebar-foreground"
+                    className="!size-7 text-muted-foreground hover:text-sidebar-foreground"
                     title="新增標籤"
                     aria-label="新增標籤"
                     onClick={() => setAddTagDialogOpen(true)}
@@ -281,9 +343,10 @@ export function Sidebar() {
                 <div
                   key={tag.id}
                   className={cn(
-                    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                    "grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
                     "hover:bg-sidebar-accent",
                     filters.tagIds.includes(tag.id) && "bg-sidebar-accent",
+                    isTagEditMode && "grid-cols-[auto_auto_minmax(0,1fr)_auto]",
                   )}
                 >
                   <Checkbox
@@ -302,11 +365,12 @@ export function Sidebar() {
                     {tag.name}
                   </button>
                   {isTagEditMode && (
-                    <>
+                    <div className="flex shrink-0 items-center gap-1">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        className="!size-7"
                         title="編輯標籤"
                         aria-label="編輯標籤"
                         onClick={(event) => {
@@ -320,6 +384,7 @@ export function Sidebar() {
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        className="!size-7"
                         title="刪除標籤"
                         aria-label="刪除標籤"
                         onClick={(event) => {
@@ -333,7 +398,7 @@ export function Sidebar() {
                       >
                         <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}
@@ -342,7 +407,31 @@ export function Sidebar() {
         </div>
       </ScrollArea>
 
-      <div className="border-t border-sidebar-border p-3">
+      <div className="space-y-2 border-t border-sidebar-border p-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-start"
+            disabled={saving}
+            onClick={() => void handleExportSave()}
+          >
+            <Download className="h-4 w-4" />
+            匯出
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-start"
+            disabled={saving}
+            onClick={() => void handleSelectImportSave()}
+          >
+            <Upload className="h-4 w-4" />
+            匯入
+          </Button>
+        </div>
         <p className="text-center text-xs text-muted-foreground">
           VRC Asset Manager v1.0
         </p>
@@ -372,6 +461,35 @@ export function Sidebar() {
               }}
             >
               刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={importPath !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setImportPath(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要匯入這個存檔嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              匯入會以選取的存檔替換目前資料庫中的素材、模型、標籤與關聯。此操作不會刪除實際素材檔案。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmImportSave();
+              }}
+            >
+              匯入
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

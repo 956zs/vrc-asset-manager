@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod booth;
 pub mod models;
+pub mod saves;
 pub mod tags;
 
 use crate::db::DbState;
