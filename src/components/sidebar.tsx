@@ -60,6 +60,13 @@ type DragState =
       id: number;
     };
 
+type DropPlacement = "before" | "after";
+
+type DropTarget = {
+  id: number;
+  placement: DropPlacement;
+};
+
 const SIDEBAR_WIDTH_STORAGE_KEY = "vrc-asset-manager-sidebar-width";
 const SIDEBAR_DEFAULT_WIDTH = 240;
 const SIDEBAR_MIN_WIDTH = 220;
@@ -83,31 +90,45 @@ const getReorderedIds = <T extends { id: number }>(
   items: T[],
   draggedId: number,
   targetId: number,
+  placement: DropPlacement,
 ) => {
-  const fromIndex = items.findIndex((item) => item.id === draggedId);
-  const toIndex = items.findIndex((item) => item.id === targetId);
+  const draggedItem = items.find((item) => item.id === draggedId);
+  const remainingItems = items.filter((item) => item.id !== draggedId);
+  const targetIndex = remainingItems.findIndex((item) => item.id === targetId);
 
-  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+  if (!draggedItem || targetIndex < 0) {
     return null;
   }
 
-  const nextItems = [...items];
-  const [draggedItem] = nextItems.splice(fromIndex, 1);
-  nextItems.splice(toIndex, 0, draggedItem);
-  return nextItems.map((item) => item.id);
+  const insertIndex = placement === "after" ? targetIndex + 1 : targetIndex;
+  const nextItems = [...remainingItems];
+  nextItems.splice(insertIndex, 0, draggedItem);
+
+  const currentIds = items.map((item) => item.id);
+  const nextIds = nextItems.map((item) => item.id);
+
+  return nextIds.every((id, index) => id === currentIds[index]) ? null : nextIds;
 };
 
 const getPointerDropTargetId = (
   type: DragState["type"],
   clientX: number,
   clientY: number,
-) => {
+): DropTarget | null => {
   const target = document.elementFromPoint(clientX, clientY);
   const attribute = type === "model" ? "data-model-id" : "data-tag-id";
   const row = target?.closest<HTMLElement>(`[${attribute}]`);
   const id = Number(row?.getAttribute(attribute));
 
-  return Number.isFinite(id) ? id : null;
+  if (!row || !Number.isFinite(id)) {
+    return null;
+  }
+
+  const rect = row.getBoundingClientRect();
+  return {
+    id,
+    placement: clientY > rect.top + rect.height / 2 ? "after" : "before",
+  };
 };
 
 export function Sidebar() {
@@ -139,8 +160,12 @@ export function Sidebar() {
   const [isModelEditMode, setIsModelEditMode] = useState(false);
   const [isTagEditMode, setIsTagEditMode] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const [modelDropTargetId, setModelDropTargetId] = useState<number | null>(null);
-  const [tagDropTargetId, setTagDropTargetId] = useState<number | null>(null);
+  const [dragPreviewPosition, setDragPreviewPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [modelDropTarget, setModelDropTarget] = useState<DropTarget | null>(null);
+  const [tagDropTarget, setTagDropTarget] = useState<DropTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [importPath, setImportPath] = useState<string | null>(null);
 
@@ -155,6 +180,13 @@ export function Sidebar() {
         : "";
   const draggedModelId = dragState?.type === "model" ? dragState.id : null;
   const draggedTagId = dragState?.type === "tag" ? dragState.id : null;
+  const dragPreviewLabel =
+    dragState?.type === "model"
+      ? models.find((model) => model.id === dragState.id)?.display_name ||
+        models.find((model) => model.id === dragState.id)?.name
+      : dragState?.type === "tag"
+        ? tags.find((tag) => tag.id === dragState.id)?.name
+        : null;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -200,42 +232,55 @@ export function Sidebar() {
 
     const clearDragState = () => {
       setDragState(null);
-      setModelDropTargetId(null);
-      setTagDropTargetId(null);
+      setDragPreviewPosition(null);
+      setModelDropTarget(null);
+      setTagDropTarget(null);
     };
 
     const handlePointerMove = (event: PointerEvent) => {
       event.preventDefault();
-      const targetId = getPointerDropTargetId(
+      setDragPreviewPosition({ x: event.clientX, y: event.clientY });
+      const target = getPointerDropTargetId(
         dragState.type,
         event.clientX,
         event.clientY,
       );
+      const nextTarget = target?.id !== dragState.id ? target : null;
 
       if (dragState.type === "model") {
-        setModelDropTargetId(targetId !== dragState.id ? targetId : null);
+        setModelDropTarget(nextTarget);
       } else {
-        setTagDropTargetId(targetId !== dragState.id ? targetId : null);
+        setTagDropTarget(nextTarget);
       }
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      const targetId = getPointerDropTargetId(
+      const target = getPointerDropTargetId(
         dragState.type,
         event.clientX,
         event.clientY,
       );
 
-      if (targetId !== null && targetId !== dragState.id) {
+      if (target !== null && target.id !== dragState.id) {
         if (dragState.type === "model") {
-          const nextIds = getReorderedIds(models, dragState.id, targetId);
+          const nextIds = getReorderedIds(
+            models,
+            dragState.id,
+            target.id,
+            target.placement,
+          );
           if (nextIds) {
             void reorderModels(nextIds).catch(() => {
               // The store owns the visible error message.
             });
           }
         } else {
-          const nextIds = getReorderedIds(tags, dragState.id, targetId);
+          const nextIds = getReorderedIds(
+            tags,
+            dragState.id,
+            target.id,
+            target.placement,
+          );
           if (nextIds) {
             void reorderTags(nextIds).catch(() => {
               // The store owns the visible error message.
@@ -354,7 +399,8 @@ export function Sidebar() {
     }
 
     setDragState({ type: "model", id: modelId });
-    setModelDropTargetId(null);
+    setDragPreviewPosition({ x: event.clientX, y: event.clientY });
+    setModelDropTarget(null);
   };
 
   const handleTagDragStart = (
@@ -368,7 +414,8 @@ export function Sidebar() {
     }
 
     setDragState({ type: "tag", id: tagId });
-    setTagDropTargetId(null);
+    setDragPreviewPosition({ x: event.clientX, y: event.clientY });
+    setTagDropTarget(null);
   };
 
   return (
@@ -469,14 +516,20 @@ export function Sidebar() {
                   key={model.id}
                   data-model-id={model.id}
                   className={cn(
-                    "grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                    "relative grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
                     "hover:bg-sidebar-accent",
                     filters.modelIds.includes(model.id) && "bg-sidebar-accent",
                     isModelEditMode && "grid-cols-[auto_auto_minmax(0,1fr)_auto]",
-                    draggedModelId === model.id && "opacity-50",
-                    modelDropTargetId === model.id &&
+                    draggedModelId === model.id && "scale-[0.98] opacity-40",
+                    modelDropTarget?.id === model.id &&
                       draggedModelId !== model.id &&
-                      "ring-1 ring-primary/50",
+                      "bg-sidebar-accent/80",
+                    modelDropTarget?.id === model.id &&
+                      modelDropTarget.placement === "before" &&
+                      "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
+                    modelDropTarget?.id === model.id &&
+                      modelDropTarget.placement === "after" &&
+                      "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
                   )}
                 >
                   {isModelEditMode && (
@@ -589,14 +642,20 @@ export function Sidebar() {
                   key={tag.id}
                   data-tag-id={tag.id}
                   className={cn(
-                    "grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                    "relative grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
                     "hover:bg-sidebar-accent",
                     filters.tagIds.includes(tag.id) && "bg-sidebar-accent",
                     isTagEditMode && "grid-cols-[auto_auto_auto_minmax(0,1fr)_auto]",
-                    draggedTagId === tag.id && "opacity-50",
-                    tagDropTargetId === tag.id &&
+                    draggedTagId === tag.id && "scale-[0.98] opacity-40",
+                    tagDropTarget?.id === tag.id &&
                       draggedTagId !== tag.id &&
-                      "ring-1 ring-primary/50",
+                      "bg-sidebar-accent/80",
+                    tagDropTarget?.id === tag.id &&
+                      tagDropTarget.placement === "before" &&
+                      "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
+                    tagDropTarget?.id === tag.id &&
+                      tagDropTarget.placement === "after" &&
+                      "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
                   )}
                 >
                   {isTagEditMode && (
@@ -709,6 +768,21 @@ export function Sidebar() {
         )}
         onPointerDown={handleSidebarResizeStart}
       />
+
+      {dragState && dragPreviewPosition && dragPreviewLabel && (
+        <div
+          className="pointer-events-none fixed z-[60] max-w-80 -translate-y-1/2 rounded-md border border-border bg-popover px-3 py-2 text-sm font-medium text-popover-foreground shadow-lg"
+          style={{
+            left: dragPreviewPosition.x + 14,
+            top: dragPreviewPosition.y,
+          }}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">{dragPreviewLabel}</span>
+          </div>
+        </div>
+      )}
 
       <AlertDialog
         open={deleteTarget !== null}
