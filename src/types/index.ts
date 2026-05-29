@@ -13,6 +13,13 @@ export interface Tag {
   sort_order: number;
 }
 
+export interface AssetLink {
+  id: number;
+  label: string;
+  url: string;
+  sort_order: number;
+}
+
 export interface Asset {
   id: number;
   name: string;
@@ -25,6 +32,7 @@ export interface Asset {
   updated_at: string;
   models: Model[];
   tags: Tag[];
+  related_links: AssetLink[];
   file_exists: boolean;
 }
 
@@ -42,6 +50,7 @@ export interface CreateAssetInput {
   note: string | null;
   model_ids: number[];
   tag_ids: number[];
+  related_links: AssetLinkInput[];
 }
 
 export interface UpdateAssetInput {
@@ -52,6 +61,12 @@ export interface UpdateAssetInput {
   note?: string | null;
   model_ids?: number[];
   tag_ids?: number[];
+  related_links?: AssetLinkInput[];
+}
+
+export interface AssetLinkInput {
+  label: string;
+  url: string;
 }
 
 export interface CreateModelInput {

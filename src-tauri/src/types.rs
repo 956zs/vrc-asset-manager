@@ -21,6 +21,15 @@ pub struct Tag {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AssetLink {
+    pub id: i64,
+    pub label: String,
+    pub url: String,
+    pub sort_order: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Asset {
     pub id: i64,
     pub name: String,
@@ -33,6 +42,7 @@ pub struct Asset {
     pub updated_at: String,
     pub models: Vec<Model>,
     pub tags: Vec<Tag>,
+    pub related_links: Vec<AssetLink>,
     pub file_exists: bool,
 }
 
@@ -59,6 +69,8 @@ pub struct CreateAssetInput {
     pub model_ids: Vec<i64>,
     #[serde(default)]
     pub tag_ids: Vec<i64>,
+    #[serde(default)]
+    pub related_links: Vec<AssetLinkInput>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +85,15 @@ pub struct UpdateAssetInput {
     pub model_ids: Vec<i64>,
     #[serde(default)]
     pub tag_ids: Vec<i64>,
+    #[serde(default)]
+    pub related_links: Vec<AssetLinkInput>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetLinkInput {
+    pub label: String,
+    pub url: String,
 }
 
 #[derive(Debug, Deserialize)]

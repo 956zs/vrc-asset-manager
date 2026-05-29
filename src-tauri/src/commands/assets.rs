@@ -1,6 +1,6 @@
 use crate::{
     db::DbState,
-    types::{Asset, AssetFilters, CreateAssetInput, UpdateAssetInput},
+    types::{Asset, AssetFilters, AssetLink, AssetLinkInput, CreateAssetInput, UpdateAssetInput},
 };
 use rusqlite::{params, params_from_iter, types::Value, Connection, Row, Transaction};
 use std::{
@@ -27,6 +27,15 @@ struct AssetBase {
     updated_at: String,
 }
 
+fn asset_link_from_row(row: &Row<'_>) -> rusqlite::Result<AssetLink> {
+    Ok(AssetLink {
+        id: row.get(0)?,
+        label: row.get(1)?,
+        url: row.get(2)?,
+        sort_order: row.get(3)?,
+    })
+}
+
 fn asset_base_from_row(row: &Row<'_>) -> rusqlite::Result<AssetBase> {
     Ok(AssetBase {
         id: row.get(0)?,
@@ -41,6 +50,28 @@ fn asset_base_from_row(row: &Row<'_>) -> rusqlite::Result<AssetBase> {
     })
 }
 
+fn normalize_asset_links(links: &[AssetLinkInput]) -> Vec<AssetLinkInput> {
+    links
+        .iter()
+        .filter_map(|link| {
+            let url = link.url.trim().to_string();
+            if url.is_empty() {
+                return None;
+            }
+
+            let label = link.label.trim();
+            Some(AssetLinkInput {
+                label: if label.is_empty() {
+                    url.clone()
+                } else {
+                    label.to_string()
+                },
+                url,
+            })
+        })
+        .collect()
+}
+
 fn asset_name_from_path(file_path: &str) -> String {
     Path::new(file_path)
         .file_name()
@@ -50,9 +81,22 @@ fn asset_name_from_path(file_path: &str) -> String {
         .to_string()
 }
 
+fn list_links_for_asset(conn: &Connection, asset_id: i64) -> rusqlite::Result<Vec<AssetLink>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, label, url, sort_order
+         FROM asset_links
+         WHERE asset_id = ?
+         ORDER BY sort_order ASC, id ASC",
+    )?;
+
+    let rows = stmt.query_map(params![asset_id], asset_link_from_row)?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+}
+
 fn hydrate_asset(conn: &Connection, base: AssetBase) -> rusqlite::Result<Asset> {
     let models = list_models_for_asset(conn, base.id)?;
     let tags = list_tags_for_asset(conn, base.id)?;
+    let related_links = list_links_for_asset(conn, base.id)?;
     let file_exists = Path::new(&base.file_path).exists();
 
     Ok(Asset {
@@ -67,6 +111,7 @@ fn hydrate_asset(conn: &Connection, base: AssetBase) -> rusqlite::Result<Asset> 
         updated_at: base.updated_at,
         models,
         tags,
+        related_links,
         file_exists,
     })
 }
@@ -105,11 +150,30 @@ fn insert_asset_tags(tx: &Transaction<'_>, asset_id: i64, tag_ids: &[i64]) -> ru
     Ok(())
 }
 
+fn insert_asset_links(
+    tx: &Transaction<'_>,
+    asset_id: i64,
+    links: &[AssetLinkInput],
+) -> rusqlite::Result<()> {
+    let cleaned_links = normalize_asset_links(links);
+    let mut stmt = tx.prepare(
+        "INSERT INTO asset_links (asset_id, label, url, sort_order)
+         VALUES (?, ?, ?, ?)",
+    )?;
+
+    for (index, link) in cleaned_links.iter().enumerate() {
+        stmt.execute(params![asset_id, &link.label, &link.url, index as i64 + 1])?;
+    }
+
+    Ok(())
+}
+
 fn replace_asset_relations(
     tx: &Transaction<'_>,
     asset_id: i64,
     model_ids: &[i64],
     tag_ids: &[i64],
+    related_links: &[AssetLinkInput],
 ) -> rusqlite::Result<()> {
     tx.execute(
         "DELETE FROM asset_models WHERE asset_id = ?",
@@ -119,8 +183,13 @@ fn replace_asset_relations(
         "DELETE FROM asset_tags WHERE asset_id = ?",
         params![asset_id],
     )?;
+    tx.execute(
+        "DELETE FROM asset_links WHERE asset_id = ?",
+        params![asset_id],
+    )?;
     insert_asset_models(tx, asset_id, model_ids)?;
     insert_asset_tags(tx, asset_id, tag_ids)?;
+    insert_asset_links(tx, asset_id, related_links)?;
     Ok(())
 }
 
@@ -154,8 +223,15 @@ pub fn get_assets(filters: AssetFilters, db: State<'_, DbState>) -> CommandResul
                 LOWER(COALESCE(a.display_name, a.name)) LIKE ?
                 OR LOWER(a.file_path) LIKE ?
                 OR LOWER(COALESCE(a.note, '')) LIKE ?
+                OR a.id IN (
+                    SELECT asset_id
+                    FROM asset_links
+                    WHERE LOWER(label) LIKE ? OR LOWER(url) LIKE ?
+                )
             )",
         );
+        values.push(Value::Text(pattern.clone()));
+        values.push(Value::Text(pattern.clone()));
         values.push(Value::Text(pattern.clone()));
         values.push(Value::Text(pattern.clone()));
         values.push(Value::Text(pattern));
@@ -247,6 +323,7 @@ pub fn create_asset(input: CreateAssetInput, db: State<'_, DbState>) -> CommandR
     let id = tx.last_insert_rowid();
     insert_asset_models(&tx, id, &input.model_ids).map_err(db_error)?;
     insert_asset_tags(&tx, id, &input.tag_ids).map_err(db_error)?;
+    insert_asset_links(&tx, id, &input.related_links).map_err(db_error)?;
     tx.commit().map_err(db_error)?;
 
     get_asset_by_id(&conn, id).map_err(db_error)
@@ -284,7 +361,14 @@ pub fn update_asset(
         return Err("Asset was not found".to_string());
     }
 
-    replace_asset_relations(&tx, id, &input.model_ids, &input.tag_ids).map_err(db_error)?;
+    replace_asset_relations(
+        &tx,
+        id,
+        &input.model_ids,
+        &input.tag_ids,
+        &input.related_links,
+    )
+    .map_err(db_error)?;
     tx.commit().map_err(db_error)?;
 
     get_asset_by_id(&conn, id).map_err(db_error)

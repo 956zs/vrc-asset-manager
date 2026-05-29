@@ -37,8 +37,17 @@ CREATE TABLE IF NOT EXISTS asset_tags (
     PRIMARY KEY (asset_id, tag_id)
 );
 
+CREATE TABLE IF NOT EXISTS asset_links (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id   INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    label      TEXT    NOT NULL,
+    url        TEXT    NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_asset_models_model ON asset_models(model_id);
 CREATE INDEX IF NOT EXISTS idx_asset_models_asset ON asset_models(asset_id);
 CREATE INDEX IF NOT EXISTS idx_asset_tags_tag     ON asset_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_asset_tags_asset   ON asset_tags(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_links_asset  ON asset_links(asset_id);
 CREATE INDEX IF NOT EXISTS idx_assets_file_path   ON assets(file_path);

@@ -12,7 +12,9 @@ import {
   FolderSearch,
   ImageDown,
   Image as ImageIcon,
+  Link2,
   Pencil,
+  Plus,
   Save,
   Trash2,
   X,
@@ -37,12 +39,34 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/asset-store";
-import type { Asset } from "@/types";
+import type { Asset, AssetLinkInput } from "@/types";
+
+type RelatedLinkDraft = AssetLinkInput;
 
 const sortedIds = (values: number[]) => [...values].sort((a, b) => a - b);
 
 const sameIds = (left: number[], right: number[]) =>
   JSON.stringify(sortedIds(left)) === JSON.stringify(sortedIds(right));
+
+const createEmptyLink = (): RelatedLinkDraft => ({
+  label: "",
+  url: "",
+});
+
+const cleanRelatedLinks = (links: RelatedLinkDraft[]): AssetLinkInput[] =>
+  links
+    .map((link) => ({
+      label: link.label.trim(),
+      url: link.url.trim(),
+    }))
+    .filter((link) => link.url.length > 0)
+    .map((link) => ({
+      label: link.label || link.url,
+      url: link.url,
+    }));
+
+const sameLinks = (left: RelatedLinkDraft[], right: RelatedLinkDraft[]) =>
+  JSON.stringify(cleanRelatedLinks(left)) === JSON.stringify(cleanRelatedLinks(right));
 
 export function AssetDetail() {
   const {
@@ -64,6 +88,7 @@ export function AssetDetail() {
   const [editedNote, setEditedNote] = useState("");
   const [editedModelIds, setEditedModelIds] = useState<number[]>([]);
   const [editedTagIds, setEditedTagIds] = useState<number[]>([]);
+  const [editedRelatedLinks, setEditedRelatedLinks] = useState<RelatedLinkDraft[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [isFetchingThumbnail, setIsFetchingThumbnail] = useState(false);
 
@@ -73,6 +98,14 @@ export function AssetDetail() {
   );
   const originalTagIds = useMemo(
     () => asset?.tags.map((tag) => tag.id) ?? [],
+    [asset],
+  );
+  const originalRelatedLinks = useMemo(
+    () =>
+      (asset?.related_links ?? []).map((link) => ({
+        label: link.label,
+        url: link.url,
+      })),
     [asset],
   );
 
@@ -88,6 +121,12 @@ export function AssetDetail() {
     setEditedNote(current.note || "");
     setEditedModelIds(current.models.map((model) => model.id));
     setEditedTagIds(current.tags.map((tag) => tag.id));
+    setEditedRelatedLinks(
+      (current.related_links ?? []).map((link) => ({
+        label: link.label,
+        url: link.url,
+      })),
+    );
     setHasChanges(false);
   };
 
@@ -109,6 +148,7 @@ export function AssetDetail() {
     const noteChanged = editedNote !== (asset.note || "");
     const modelsChanged = !sameIds(editedModelIds, originalModelIds);
     const tagsChanged = !sameIds(editedTagIds, originalTagIds);
+    const linksChanged = !sameLinks(editedRelatedLinks, originalRelatedLinks);
 
     setHasChanges(
       displayNameChanged ||
@@ -117,7 +157,8 @@ export function AssetDetail() {
         thumbnailUrlChanged ||
         noteChanged ||
         modelsChanged ||
-        tagsChanged,
+        tagsChanged ||
+        linksChanged,
     );
   }, [
     asset,
@@ -129,8 +170,10 @@ export function AssetDetail() {
     editedNote,
     editedModelIds,
     editedTagIds,
+    editedRelatedLinks,
     originalModelIds,
     originalTagIds,
+    originalRelatedLinks,
   ]);
 
   if (!asset) {
@@ -147,6 +190,7 @@ export function AssetDetail() {
   const thumbnailUrl = isEditingAsset ? editedThumbnailUrl : asset.thumbnail_url || "";
   const filePath = isEditingAsset ? editedFilePath : asset.file_path;
   const boothUrl = isEditingAsset ? editedBoothUrl : asset.booth_url || "";
+  const relatedLinks = asset.related_links ?? [];
 
   const startEditing = () => {
     resetDraft();
@@ -171,6 +215,24 @@ export function AssetDetail() {
       current.includes(tagId)
         ? current.filter((id) => id !== tagId)
         : [...current, tagId],
+    );
+  };
+
+  const updateRelatedLink = (
+    index: number,
+    field: keyof RelatedLinkDraft,
+    value: string,
+  ) => {
+    setEditedRelatedLinks((current) =>
+      current.map((link, currentIndex) =>
+        currentIndex === index ? { ...link, [field]: value } : link,
+      ),
+    );
+  };
+
+  const removeRelatedLink = (index: number) => {
+    setEditedRelatedLinks((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index),
     );
   };
 
@@ -209,6 +271,7 @@ export function AssetDetail() {
       note: editedNote || null,
       model_ids: editedModelIds,
       tag_ids: editedTagIds,
+      related_links: cleanRelatedLinks(editedRelatedLinks),
     });
     setHasChanges(false);
     setIsEditingAsset(false);
@@ -221,6 +284,12 @@ export function AssetDetail() {
   const handleOpenBooth = async () => {
     if (boothUrl.trim()) {
       await openUrl(boothUrl.trim());
+    }
+  };
+
+  const handleOpenRelatedLink = async (url: string) => {
+    if (url.trim()) {
+      await openUrl(url.trim());
     }
   };
 
@@ -341,7 +410,33 @@ export function AssetDetail() {
           <Separator />
 
           <div>
-            <label className="text-sm font-medium text-muted-foreground">相容模型</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium text-muted-foreground">相容模型</label>
+              {isEditingAsset && (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={models.length === 0}
+                    onClick={() => setEditedModelIds(models.map((model) => model.id))}
+                  >
+                    全選
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={editedModelIds.length === 0}
+                    onClick={() => setEditedModelIds([])}
+                  >
+                    全不選
+                  </Button>
+                </div>
+              )}
+            </div>
             {isEditingAsset ? (
               <div className="mt-2 space-y-1">
                 {models.length > 0 ? (
@@ -383,7 +478,33 @@ export function AssetDetail() {
           <Separator />
 
           <div>
-            <label className="text-sm font-medium text-muted-foreground">標籤</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium text-muted-foreground">標籤</label>
+              {isEditingAsset && (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={tags.length === 0}
+                    onClick={() => setEditedTagIds(tags.map((tag) => tag.id))}
+                  >
+                    全選
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={editedTagIds.length === 0}
+                    onClick={() => setEditedTagIds([])}
+                  >
+                    全不選
+                  </Button>
+                </div>
+              )}
+            </div>
             {isEditingAsset ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 {tags.length > 0 ? (
@@ -468,6 +589,107 @@ export function AssetDetail() {
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Button>
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium text-muted-foreground">相關連結</label>
+              {isEditingAsset && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    setEditedRelatedLinks((current) => [
+                      ...current,
+                      createEmptyLink(),
+                    ])
+                  }
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  新增
+                </Button>
+              )}
+            </div>
+            {isEditingAsset ? (
+              <div className="mt-2 space-y-2">
+                {editedRelatedLinks.length > 0 ? (
+                  editedRelatedLinks.map((link, index) => (
+                    <div key={index} className="space-y-2 rounded-md border border-border p-2">
+                      <div className="flex gap-2">
+                        <Input
+                          value={link.label}
+                          onChange={(event) =>
+                            updateRelatedLink(index, "label", event.target.value)
+                          }
+                          placeholder="論壇討論"
+                          className="min-w-0 flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="!size-9"
+                          title="移除連結"
+                          aria-label="移除連結"
+                          onClick={() => removeRelatedLink(index)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                      <Input
+                        value={link.url}
+                        onChange={(event) =>
+                          updateRelatedLink(index, "url", event.target.value)
+                        }
+                        placeholder="https://..."
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                    onClick={() => setEditedRelatedLinks([createEmptyLink()])}
+                  >
+                    <Link2 className="h-4 w-4" />
+                    新增論壇、教學或輔助插件連結
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {relatedLinks.length > 0 ? (
+                  relatedLinks.map((link) => (
+                    <div key={link.id} className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {link.label}
+                        </p>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {link.url}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="開啟連結"
+                        aria-label="開啟連結"
+                        onClick={() => void handleOpenRelatedLink(link.url)}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">未設定</p>
+                )}
               </div>
             )}
           </div>

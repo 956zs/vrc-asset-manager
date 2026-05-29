@@ -24,6 +24,13 @@ type BackendTag = {
   sortOrder: number;
 };
 
+type BackendAssetLink = {
+  id: number;
+  label: string;
+  url: string;
+  sortOrder: number;
+};
+
 type BackendAsset = {
   id: number;
   name: string;
@@ -36,6 +43,7 @@ type BackendAsset = {
   updatedAt: string;
   models: BackendModel[];
   tags: BackendTag[];
+  relatedLinks: BackendAssetLink[];
   fileExists: boolean;
 };
 
@@ -46,6 +54,7 @@ type BackendSaveSummary = {
   assets: number;
   assetModels: number;
   assetTags: number;
+  assetLinks: number;
 };
 
 type AssetStore = {
@@ -118,6 +127,13 @@ const toTag = (tag: BackendTag): Tag => ({
   sort_order: tag.sortOrder,
 });
 
+const toAssetLink = (link: BackendAssetLink) => ({
+  id: link.id,
+  label: link.label,
+  url: link.url,
+  sort_order: link.sortOrder,
+});
+
 const toAsset = (asset: BackendAsset): Asset => ({
   id: asset.id,
   name: asset.name,
@@ -130,6 +146,7 @@ const toAsset = (asset: BackendAsset): Asset => ({
   updated_at: asset.updatedAt,
   models: asset.models.map(toModel),
   tags: asset.tags.map(toTag),
+  related_links: (asset.relatedLinks ?? []).map(toAssetLink),
   file_exists: asset.fileExists,
 });
 
@@ -163,6 +180,12 @@ const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
   note: updates.note !== undefined ? updates.note : asset.note,
   modelIds: updates.model_ids ?? asset.models.map((model) => model.id),
   tagIds: updates.tag_ids ?? asset.tags.map((tag) => tag.id),
+  relatedLinks:
+    updates.related_links ??
+    (asset.related_links ?? []).map((link) => ({
+      label: link.label,
+      url: link.url,
+    })),
 });
 
 export const useAssetStore = create<AssetStore>((set, get) => ({
@@ -259,6 +282,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
           note: asset.note,
           modelIds: asset.model_ids,
           tagIds: asset.tag_ids,
+          relatedLinks: asset.related_links,
         },
       });
       await get().loadAssets();

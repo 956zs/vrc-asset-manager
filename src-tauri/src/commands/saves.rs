@@ -59,6 +59,17 @@ struct SaveAssetTag {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SaveAssetLink {
+    id: i64,
+    asset_id: i64,
+    label: String,
+    url: String,
+    #[serde(default)]
+    sort_order: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SaveArchive {
     schema_version: u32,
     app: String,
@@ -68,6 +79,8 @@ struct SaveArchive {
     assets: Vec<SaveAsset>,
     asset_models: Vec<SaveAssetModel>,
     asset_tags: Vec<SaveAssetTag>,
+    #[serde(default)]
+    asset_links: Vec<SaveAssetLink>,
 }
 
 #[derive(Debug, Serialize)]
@@ -79,6 +92,7 @@ pub struct SaveSummary {
     pub assets: usize,
     pub asset_models: usize,
     pub asset_tags: usize,
+    pub asset_links: usize,
 }
 
 fn model_from_row(row: &Row<'_>) -> rusqlite::Result<SaveModel> {
@@ -128,6 +142,16 @@ fn asset_tag_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAssetTag> {
     })
 }
 
+fn asset_link_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAssetLink> {
+    Ok(SaveAssetLink {
+        id: row.get(0)?,
+        asset_id: row.get(1)?,
+        label: row.get(2)?,
+        url: row.get(3)?,
+        sort_order: row.get(4)?,
+    })
+}
+
 fn query_all<T>(
     conn: &Connection,
     sql: &str,
@@ -146,6 +170,7 @@ fn summary(path: String, archive: &SaveArchive) -> SaveSummary {
         assets: archive.assets.len(),
         asset_models: archive.asset_models.len(),
         asset_tags: archive.asset_tags.len(),
+        asset_links: archive.asset_links.len(),
     }
 }
 
@@ -199,10 +224,20 @@ fn build_archive(conn: &Connection) -> CommandResult<SaveArchive> {
             asset_tag_from_row,
         )
         .map_err(db_error)?,
+        asset_links: query_all(
+            conn,
+            "SELECT id, asset_id, label, url, sort_order
+             FROM asset_links
+             ORDER BY asset_id, sort_order, id",
+            asset_link_from_row,
+        )
+        .map_err(db_error)?,
     })
 }
 
 fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResult<()> {
+    tx.execute("DELETE FROM asset_links", [])
+        .map_err(db_error)?;
     tx.execute("DELETE FROM asset_models", [])
         .map_err(db_error)?;
     tx.execute("DELETE FROM asset_tags", []).map_err(db_error)?;
@@ -210,7 +245,7 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
     tx.execute("DELETE FROM models", []).map_err(db_error)?;
     tx.execute("DELETE FROM tags", []).map_err(db_error)?;
     tx.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('assets', 'models', 'tags')",
+        "DELETE FROM sqlite_sequence WHERE name IN ('assets', 'models', 'tags', 'asset_links')",
         [],
     )
     .map_err(db_error)?;
@@ -273,6 +308,30 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
                 asset.note.as_deref(),
                 &asset.created_at,
                 &asset.updated_at
+            ])
+            .map_err(db_error)?;
+        }
+    }
+
+    {
+        let mut stmt = tx
+            .prepare(
+                "INSERT INTO asset_links (id, asset_id, label, url, sort_order)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .map_err(db_error)?;
+        for (index, link) in archive.asset_links.iter().enumerate() {
+            let sort_order = if link.sort_order > 0 {
+                link.sort_order
+            } else {
+                index as i64 + 1
+            };
+            stmt.execute(params![
+                link.id,
+                link.asset_id,
+                &link.label,
+                &link.url,
+                sort_order
             ])
             .map_err(db_error)?;
         }

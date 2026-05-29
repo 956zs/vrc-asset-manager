@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { FileSearch, FolderSearch, Loader2 } from "lucide-react";
+import { FileSearch, FolderSearch, Link2, Loader2, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +18,26 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAssetStore } from "@/stores/asset-store";
+import type { AssetLinkInput } from "@/types";
+
+type RelatedLinkDraft = AssetLinkInput;
+
+const createEmptyLink = (): RelatedLinkDraft => ({
+  label: "",
+  url: "",
+});
+
+const cleanRelatedLinks = (links: RelatedLinkDraft[]): AssetLinkInput[] =>
+  links
+    .map((link) => ({
+      label: link.label.trim(),
+      url: link.url.trim(),
+    }))
+    .filter((link) => link.url.length > 0)
+    .map((link) => ({
+      label: link.label || link.url,
+      url: link.url,
+    }));
 
 export function AddAssetDialog() {
   const {
@@ -36,6 +56,7 @@ export function AddAssetDialog() {
   const [note, setNote] = useState("");
   const [selectedModelIds, setSelectedModelIds] = useState<number[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [relatedLinks, setRelatedLinks] = useState<RelatedLinkDraft[]>([]);
   const [isFetchingThumbnail, setIsFetchingThumbnail] = useState(false);
 
   const resetForm = () => {
@@ -46,6 +67,7 @@ export function AddAssetDialog() {
     setNote("");
     setSelectedModelIds([]);
     setSelectedTagIds([]);
+    setRelatedLinks([]);
   };
 
   const handleClose = () => {
@@ -66,6 +88,24 @@ export function AddAssetDialog() {
       current.includes(tagId)
         ? current.filter((id) => id !== tagId)
         : [...current, tagId],
+    );
+  };
+
+  const updateRelatedLink = (
+    index: number,
+    field: keyof RelatedLinkDraft,
+    value: string,
+  ) => {
+    setRelatedLinks((current) =>
+      current.map((link, currentIndex) =>
+        currentIndex === index ? { ...link, [field]: value } : link,
+      ),
+    );
+  };
+
+  const removeRelatedLink = (index: number) => {
+    setRelatedLinks((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index),
     );
   };
 
@@ -124,14 +164,24 @@ export function AddAssetDialog() {
       note: note.trim() || null,
       model_ids: selectedModelIds,
       tag_ids: selectedTagIds,
+      related_links: cleanRelatedLinks(relatedLinks),
     });
 
     resetForm();
   };
 
   return (
-    <Dialog open={isAddAssetDialogOpen} onOpenChange={setAddAssetDialogOpen}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
+    <Dialog
+      open={isAddAssetDialogOpen}
+      onOpenChange={(open) => {
+        if (open) {
+          setAddAssetDialogOpen(true);
+        } else {
+          handleClose();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] min-w-0 overflow-y-auto sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>新增素材</DialogTitle>
           <DialogDescription>填寫素材資訊並選擇相容的模型和標籤</DialogDescription>
@@ -169,17 +219,18 @@ export function AddAssetDialog() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Booth 連結</label>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <Input
                 value={boothUrl}
                 onChange={(event) => setBoothUrl(event.target.value)}
                 placeholder="https://booth.pm/ja/items/..."
-                className="flex-1"
+                className="min-w-0 flex-1"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="shrink-0"
                 disabled={!boothUrl.trim() || isFetchingThumbnail}
                 onClick={handleFetchThumbnail}
               >
@@ -191,12 +242,38 @@ export function AddAssetDialog() {
               </Button>
             </div>
             {thumbnailUrl && (
-              <p className="truncate text-xs text-muted-foreground">{thumbnailUrl}</p>
+              <p className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted-foreground">
+                {thumbnailUrl}
+              </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">相容模型</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">相容模型</label>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={models.length === 0}
+                  onClick={() => setSelectedModelIds(models.map((model) => model.id))}
+                >
+                  全選
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={selectedModelIds.length === 0}
+                  onClick={() => setSelectedModelIds([])}
+                >
+                  全不選
+                </Button>
+              </div>
+            </div>
             <div className="max-h-32 space-y-2 overflow-y-auto rounded-md border p-3">
               {models.map((model) => (
                 <label key={model.id} className="flex cursor-pointer items-center gap-2">
@@ -204,14 +281,40 @@ export function AddAssetDialog() {
                     checked={selectedModelIds.includes(model.id)}
                     onCheckedChange={() => toggleModel(model.id)}
                   />
-                  <span className="text-sm">{model.display_name || model.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {model.display_name || model.name}
+                  </span>
                 </label>
               ))}
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">標籤</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">標籤</label>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={tags.length === 0}
+                  onClick={() => setSelectedTagIds(tags.map((tag) => tag.id))}
+                >
+                  全選
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={selectedTagIds.length === 0}
+                  onClick={() => setSelectedTagIds([])}
+                >
+                  全不選
+                </Button>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               {tags.map((tag) => (
                 <Badge
@@ -236,6 +339,67 @@ export function AddAssetDialog() {
                 </Badge>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">相關連結</label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setRelatedLinks((current) => [...current, createEmptyLink()])}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                新增
+              </Button>
+            </div>
+            {relatedLinks.length > 0 ? (
+              <div className="space-y-2">
+                {relatedLinks.map((link, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto] gap-2"
+                  >
+                    <Input
+                      value={link.label}
+                      onChange={(event) =>
+                        updateRelatedLink(index, "label", event.target.value)
+                      }
+                      placeholder="論壇討論"
+                    />
+                    <Input
+                      value={link.url}
+                      onChange={(event) =>
+                        updateRelatedLink(index, "url", event.target.value)
+                      }
+                      placeholder="https://..."
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="!size-9"
+                      title="移除連結"
+                      aria-label="移除連結"
+                      onClick={() => removeRelatedLink(index)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                onClick={() => setRelatedLinks([createEmptyLink()])}
+              >
+                <Link2 className="h-4 w-4" />
+                新增論壇、教學或輔助插件連結
+              </button>
+            )}
           </div>
 
           <div className="space-y-2">
