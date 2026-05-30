@@ -1,6 +1,6 @@
 # GitHub Releases Updater
 
-Repo: `https://github.com/956zs/betterdir`
+Repo: `https://github.com/956zs/vrc-asset-manager`
 
 This project is prepared to publish Windows builds through GitHub Releases. The
 workflow creates a draft release first, so builds are not public until manual
@@ -57,7 +57,7 @@ Not done yet:
 The app checks:
 
 ```text
-https://github.com/956zs/betterdir/releases/latest/download/latest.json
+https://github.com/956zs/vrc-asset-manager/releases/latest/download/latest.json
 ```
 
 `latest.json` points to the installer and its signature. The app verifies the

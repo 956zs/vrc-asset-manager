@@ -11,7 +11,7 @@ export type UpdateStatus =
   | "installed"
   | "error";
 
-export const releaseUrl = "https://github.com/956zs/betterdir/releases";
+export const releaseUrl = "https://github.com/956zs/vrc-asset-manager/releases";
 
 export const toMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);

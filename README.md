@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/956zs/betterdir/releases">
+  <a href="https://github.com/956zs/vrc-asset-manager/releases">
     <img alt="Release" src="https://img.shields.io/badge/release-0.1.0--beta.5-0ea5e9?style=flat-square" />
   </a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-2563eb?style=flat-square" />

@@ -7,7 +7,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwNkUxMkMwQTA4QTQwMTUKUldRVlFJcWd3Qkp1VU56Tk1aaWJRL21HcTNIZGRlYzc0US80Nk9vTEFENzJvVWRrSkc4OTFTQjUK",
       "endpoints": [
-        "https://github.com/956zs/betterdir/releases/latest/download/latest.json"
+        "https://github.com/956zs/vrc-asset-manager/releases/latest/download/latest.json"
       ]
     }
   }

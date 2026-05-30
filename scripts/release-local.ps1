@@ -1,6 +1,6 @@
 param(
   [string]$Tag,
-  [string]$Repo = "956zs/betterdir",
+  [string]$Repo = "956zs/vrc-asset-manager",
   [string]$PrivateKeyPath = "$env:USERPROFILE\.tauri\vrc-asset-manager.key",
   [string]$PrivateKeyPassword,
   [string]$Notes = "Draft local build. Run smoke checks before publishing this release.",
