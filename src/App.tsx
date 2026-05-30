@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
+import { Boxes, Images } from "lucide-react";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { AddModelDialog } from "@/components/add-model-dialog";
 import { AddTagDialog } from "@/components/add-tag-dialog";
@@ -7,7 +8,10 @@ import { AssetDetail } from "@/components/asset-detail";
 import { AssetGrid } from "@/components/asset-grid";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
+import { VccProjects } from "@/components/vcc-projects";
 import { useAssetStore } from "@/stores/asset-store";
+
+type MainView = "assets" | "vcc";
 
 function App() {
   const loadAll = useAssetStore((state) => state.loadAll);
@@ -16,6 +20,7 @@ function App() {
   const notice = useAssetStore((state) => state.notice);
   const clearError = useAssetStore((state) => state.clearError);
   const clearNotice = useAssetStore((state) => state.clearNotice);
+  const [mainView, setMainView] = useState<MainView>("assets");
 
   useEffect(() => {
     void loadAll();
@@ -28,14 +33,38 @@ function App() {
       <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">素材庫</h2>
-            <p className="text-xs text-muted-foreground">管理你的 VRChat 素材</p>
+            <h2 className="text-lg font-semibold text-foreground">
+              {mainView === "assets" ? "素材庫" : "VCC 專案"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {mainView === "assets" ? "管理你的 VRChat 素材" : "VPM 套件快照"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={mainView === "assets" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setMainView("assets")}
+            >
+              <Images className="h-4 w-4" />
+              素材庫
+            </Button>
+            <Button
+              type="button"
+              variant={mainView === "vcc" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setMainView("vcc")}
+            >
+              <Boxes className="h-4 w-4" />
+              VCC
+            </Button>
           </div>
         </header>
-        <AssetGrid />
+        {mainView === "assets" ? <AssetGrid /> : <VccProjects />}
       </main>
 
-      {selectedAssetId !== null && <AssetDetail />}
+      {mainView === "assets" && selectedAssetId !== null && <AssetDetail />}
 
       <AddAssetDialog />
       <AddModelDialog />

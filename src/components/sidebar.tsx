@@ -825,7 +825,7 @@ export function Sidebar() {
           <AlertDialogHeader>
             <AlertDialogTitle>確定要匯入這個存檔嗎？</AlertDialogTitle>
             <AlertDialogDescription>
-              匯入會以選取的存檔替換目前資料庫中的素材、模型、標籤與關聯。此操作不會刪除實際素材檔案。
+              匯入會以選取的存檔替換目前資料庫中的素材、模型、標籤、VCC 專案與套件來源。此操作不會刪除實際素材檔案，也不會覆寫 VCC 本身的設定。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

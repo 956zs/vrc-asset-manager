@@ -69,6 +69,42 @@ export interface AssetLinkInput {
   url: string;
 }
 
+export interface VccProject {
+  id: number;
+  name: string;
+  path: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VccPackage {
+  package_id: string;
+  display_name: string | null;
+  requested_version: string | null;
+  installed_version: string | null;
+  latest_version: string | null;
+  source: string | null;
+  installed: boolean;
+  available: boolean;
+}
+
+export interface VccProjectSnapshot {
+  project: VccProject;
+  packages: VccPackage[];
+  vpm_manifest: unknown | null;
+  unity_manifest: unknown | null;
+  scanned_at: string;
+  scan_error: string | null;
+}
+
+export interface VccRepository {
+  id: number;
+  name: string;
+  url: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CreateModelInput {
   name: string;
   display_name: string | null;

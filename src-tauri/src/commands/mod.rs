@@ -3,6 +3,7 @@ pub mod booth;
 pub mod models;
 pub mod saves;
 pub mod tags;
+pub mod vcc;
 
 use crate::db::DbState;
 use rusqlite::Connection;

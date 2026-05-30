@@ -1,12 +1,17 @@
-use crate::db::DbState;
+use crate::{db::DbState, types::VccProjectSnapshot};
 use rusqlite::{params, Connection, Row, Transaction};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use tauri::State;
 
+use super::vcc::{snapshot_vcc_projects, vcc_app_data_dir};
 use super::{connection, db_error, CommandResult};
 
 const SAVE_SCHEMA_VERSION: u32 = 1;
+const VCC_BACKUP_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +75,26 @@ struct SaveAssetLink {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SaveVccProject {
+    id: i64,
+    name: String,
+    path: String,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveVccRepository {
+    id: i64,
+    name: String,
+    url: String,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SaveArchive {
     schema_version: u32,
     app: String,
@@ -81,6 +106,41 @@ struct SaveArchive {
     asset_tags: Vec<SaveAssetTag>,
     #[serde(default)]
     asset_links: Vec<SaveAssetLink>,
+    #[serde(default)]
+    vcc_projects: Vec<SaveVccProject>,
+    #[serde(default)]
+    vcc_repositories: Vec<SaveVccRepository>,
+    #[serde(default)]
+    vcc_project_snapshots: Vec<VccProjectSnapshot>,
+}
+
+#[derive(Debug, Clone)]
+struct VccBackupResult {
+    path: String,
+    files: usize,
+    cached_repositories: usize,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VccLocalBackup {
+    app_data_path: Option<String>,
+    copied_files: Vec<String>,
+    settings_copied: bool,
+    cached_repositories: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VccBackupManifest<'a> {
+    schema_version: u32,
+    app: &'static str,
+    exported_at: &'a str,
+    restore_note: &'static str,
+    vcc_projects: &'a [SaveVccProject],
+    vcc_repositories: &'a [SaveVccRepository],
+    vcc_project_snapshots: &'a [VccProjectSnapshot],
+    local_vcc: VccLocalBackup,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,6 +153,11 @@ pub struct SaveSummary {
     pub asset_models: usize,
     pub asset_tags: usize,
     pub asset_links: usize,
+    pub vcc_projects: usize,
+    pub vcc_repositories: usize,
+    pub vcc_backup_path: Option<String>,
+    pub vcc_backup_files: usize,
+    pub vcc_cached_repositories: usize,
 }
 
 fn model_from_row(row: &Row<'_>) -> rusqlite::Result<SaveModel> {
@@ -152,6 +217,26 @@ fn asset_link_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAssetLink> {
     })
 }
 
+fn vcc_project_from_row(row: &Row<'_>) -> rusqlite::Result<SaveVccProject> {
+    Ok(SaveVccProject {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        path: row.get(2)?,
+        created_at: row.get(3)?,
+        updated_at: row.get(4)?,
+    })
+}
+
+fn vcc_repository_from_row(row: &Row<'_>) -> rusqlite::Result<SaveVccRepository> {
+    Ok(SaveVccRepository {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        url: row.get(2)?,
+        created_at: row.get(3)?,
+        updated_at: row.get(4)?,
+    })
+}
+
 fn query_all<T>(
     conn: &Connection,
     sql: &str,
@@ -162,7 +247,11 @@ fn query_all<T>(
     rows.collect::<rusqlite::Result<Vec<_>>>()
 }
 
-fn summary(path: String, archive: &SaveArchive) -> SaveSummary {
+fn summary(
+    path: String,
+    archive: &SaveArchive,
+    vcc_backup: Option<&VccBackupResult>,
+) -> SaveSummary {
     SaveSummary {
         path,
         models: archive.models.len(),
@@ -171,6 +260,13 @@ fn summary(path: String, archive: &SaveArchive) -> SaveSummary {
         asset_models: archive.asset_models.len(),
         asset_tags: archive.asset_tags.len(),
         asset_links: archive.asset_links.len(),
+        vcc_projects: archive.vcc_projects.len(),
+        vcc_repositories: archive.vcc_repositories.len(),
+        vcc_backup_path: vcc_backup.map(|backup| backup.path.clone()),
+        vcc_backup_files: vcc_backup.map(|backup| backup.files).unwrap_or_default(),
+        vcc_cached_repositories: vcc_backup
+            .map(|backup| backup.cached_repositories)
+            .unwrap_or_default(),
     }
 }
 
@@ -232,10 +328,159 @@ fn build_archive(conn: &Connection) -> CommandResult<SaveArchive> {
             asset_link_from_row,
         )
         .map_err(db_error)?,
+        vcc_projects: query_all(
+            conn,
+            "SELECT id, name, path, created_at, updated_at
+             FROM vcc_projects
+             ORDER BY name COLLATE NOCASE, path COLLATE NOCASE",
+            vcc_project_from_row,
+        )
+        .map_err(db_error)?,
+        vcc_repositories: query_all(
+            conn,
+            "SELECT id, name, url, created_at, updated_at
+             FROM vcc_repositories
+             ORDER BY name COLLATE NOCASE, url COLLATE NOCASE",
+            vcc_repository_from_row,
+        )
+        .map_err(db_error)?,
+        vcc_project_snapshots: snapshot_vcc_projects(conn)?,
+    })
+}
+
+fn vcc_backup_dir_for(save_path: &Path) -> PathBuf {
+    let parent = save_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let stem = save_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("vrc-asset-manager-save");
+
+    parent.join(format!("{stem}_vcc_backup"))
+}
+
+fn relative_display(base: &Path, path: &Path) -> String {
+    path.strip_prefix(base)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn copy_backup_file(
+    source: &Path,
+    destination: &Path,
+    backup_dir: &Path,
+    copied_files: &mut Vec<String>,
+) -> CommandResult<bool> {
+    if !source.is_file() {
+        return Ok(false);
+    }
+
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(db_error)?;
+    }
+    fs::copy(source, destination).map_err(db_error)?;
+    copied_files.push(relative_display(backup_dir, destination));
+
+    Ok(true)
+}
+
+fn copy_vcc_local_backup(backup_dir: &Path) -> CommandResult<VccLocalBackup> {
+    let Some(app_data_dir) = vcc_app_data_dir() else {
+        return Ok(VccLocalBackup::default());
+    };
+
+    let mut copied_files = Vec::new();
+    let local_backup_dir = backup_dir.join("vcc-local");
+    let settings_copied = copy_backup_file(
+        &app_data_dir.join("settings.json"),
+        &local_backup_dir.join("settings.json"),
+        backup_dir,
+        &mut copied_files,
+    )?;
+
+    let repos_dir = app_data_dir.join("Repos");
+    let backup_repos_dir = local_backup_dir.join("Repos");
+    let mut cached_repositories = 0;
+    if repos_dir.is_dir() {
+        fs::create_dir_all(&backup_repos_dir).map_err(db_error)?;
+        for entry in fs::read_dir(&repos_dir).map_err(db_error)? {
+            let entry = entry.map_err(db_error)?;
+            let source = entry.path();
+            if source.extension().and_then(|extension| extension.to_str()) != Some("json") {
+                continue;
+            }
+
+            let Some(file_name) = source.file_name() else {
+                continue;
+            };
+            let destination = backup_repos_dir.join(file_name);
+            if copy_backup_file(&source, &destination, backup_dir, &mut copied_files)? {
+                cached_repositories += 1;
+            }
+        }
+    }
+
+    Ok(VccLocalBackup {
+        app_data_path: Some(app_data_dir.to_string_lossy().to_string()),
+        copied_files,
+        settings_copied,
+        cached_repositories,
+    })
+}
+
+fn write_vcc_backup_readme(backup_dir: &Path) -> CommandResult<()> {
+    let readme = [
+        "VRC Asset Manager - VCC backup bundle",
+        "",
+        "This folder is created next to the main save file.",
+        "Import the main save JSON in VRC Asset Manager to restore tracked VCC projects and package repositories.",
+        "The vcc-local folder is a reference copy of VRChat Creator Companion settings/cache from this machine.",
+        "Do not overwrite a new machine's VCC files blindly; use vcc-backup.json as the source of truth for repo URLs and snapshots.",
+        "",
+    ]
+    .join("\n");
+    fs::write(backup_dir.join("README.txt"), readme).map_err(db_error)
+}
+
+fn export_vcc_backup_bundle(
+    save_path: &Path,
+    archive: &SaveArchive,
+) -> CommandResult<VccBackupResult> {
+    let backup_dir = vcc_backup_dir_for(save_path);
+    fs::create_dir_all(&backup_dir).map_err(db_error)?;
+
+    let local_vcc = copy_vcc_local_backup(&backup_dir)?;
+    let manifest = VccBackupManifest {
+        schema_version: VCC_BACKUP_SCHEMA_VERSION,
+        app: "vrc-asset-manager-vcc-backup",
+        exported_at: &archive.exported_at,
+        restore_note:
+            "Import the main save JSON first. This sidecar keeps VCC repository/project data and a reference copy of local VCC settings/cache.",
+        vcc_projects: &archive.vcc_projects,
+        vcc_repositories: &archive.vcc_repositories,
+        vcc_project_snapshots: &archive.vcc_project_snapshots,
+        local_vcc,
+    };
+    let manifest_json = serde_json::to_string_pretty(&manifest).map_err(db_error)?;
+    fs::write(backup_dir.join("vcc-backup.json"), manifest_json).map_err(db_error)?;
+    write_vcc_backup_readme(&backup_dir)?;
+
+    Ok(VccBackupResult {
+        path: backup_dir.to_string_lossy().to_string(),
+        files: manifest.local_vcc.copied_files.len() + 2,
+        cached_repositories: manifest.local_vcc.cached_repositories,
     })
 }
 
 fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResult<()> {
+    tx.execute("DELETE FROM vcc_repositories", [])
+        .map_err(db_error)?;
+    tx.execute("DELETE FROM vcc_projects", [])
+        .map_err(db_error)?;
     tx.execute("DELETE FROM asset_links", [])
         .map_err(db_error)?;
     tx.execute("DELETE FROM asset_models", [])
@@ -245,7 +490,7 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
     tx.execute("DELETE FROM models", []).map_err(db_error)?;
     tx.execute("DELETE FROM tags", []).map_err(db_error)?;
     tx.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('assets', 'models', 'tags', 'asset_links')",
+        "DELETE FROM sqlite_sequence WHERE name IN ('assets', 'models', 'tags', 'asset_links', 'vcc_projects', 'vcc_repositories')",
         [],
     )
     .map_err(db_error)?;
@@ -339,6 +584,67 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
 
     {
         let mut stmt = tx
+            .prepare(
+                "INSERT INTO vcc_repositories (id, name, url, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .map_err(db_error)?;
+        for repository in &archive.vcc_repositories {
+            stmt.execute(params![
+                repository.id,
+                &repository.name,
+                &repository.url,
+                &repository.created_at,
+                &repository.updated_at
+            ])
+            .map_err(db_error)?;
+        }
+    }
+    tx.execute(
+        "UPDATE vcc_repositories
+         SET name = 'VRChat Official',
+             url = 'https://packages.vrchat.com/official',
+             updated_at = datetime('now')
+         WHERE url = 'https://vrchat.github.io/packages/index.json'
+           AND NOT EXISTS (
+               SELECT 1 FROM vcc_repositories
+               WHERE url = 'https://packages.vrchat.com/official'
+           )",
+        [],
+    )
+    .map_err(db_error)?;
+    for (name, url) in [
+        ("VRChat Official", "https://packages.vrchat.com/official"),
+        ("VRChat Curated", "https://packages.vrchat.com/curated"),
+    ] {
+        tx.execute(
+            "INSERT OR IGNORE INTO vcc_repositories (name, url) VALUES (?, ?)",
+            params![name, url],
+        )
+        .map_err(db_error)?;
+    }
+
+    {
+        let mut stmt = tx
+            .prepare(
+                "INSERT INTO vcc_projects (id, name, path, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .map_err(db_error)?;
+        for project in &archive.vcc_projects {
+            stmt.execute(params![
+                project.id,
+                &project.name,
+                &project.path,
+                &project.created_at,
+                &project.updated_at
+            ])
+            .map_err(db_error)?;
+        }
+    }
+
+    {
+        let mut stmt = tx
             .prepare("INSERT INTO asset_models (asset_id, model_id) VALUES (?, ?)")
             .map_err(db_error)?;
         for relation in &archive.asset_models {
@@ -374,8 +680,13 @@ pub fn export_save(path: String, db: State<'_, DbState>) -> CommandResult<SaveSu
     let archive = build_archive(&conn)?;
     let json = serde_json::to_string_pretty(&archive).map_err(db_error)?;
     fs::write(save_path, json).map_err(db_error)?;
+    let vcc_backup = export_vcc_backup_bundle(save_path, &archive)?;
 
-    Ok(summary(save_path.to_string_lossy().to_string(), &archive))
+    Ok(summary(
+        save_path.to_string_lossy().to_string(),
+        &archive,
+        Some(&vcc_backup),
+    ))
 }
 
 #[tauri::command]
@@ -396,5 +707,9 @@ pub fn import_save(path: String, db: State<'_, DbState>) -> CommandResult<SaveSu
     replace_database(&tx, &archive)?;
     tx.commit().map_err(db_error)?;
 
-    Ok(summary(save_path.to_string_lossy().to_string(), &archive))
+    Ok(summary(
+        save_path.to_string_lossy().to_string(),
+        &archive,
+        None,
+    ))
 }

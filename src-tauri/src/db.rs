@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use std::{path::PathBuf, sync::Mutex};
 
 pub struct DbState {
@@ -14,10 +14,37 @@ pub fn init(db_path: PathBuf) -> Result<DbState, Box<dyn std::error::Error>> {
     conn.pragma_update(None, "foreign_keys", "ON")?;
     conn.execute_batch(include_str!("../migrations/001_initial.sql"))?;
     migrate_sort_order(&conn)?;
+    seed_vcc_repositories(&conn)?;
 
     Ok(DbState {
         conn: Mutex::new(conn),
     })
+}
+
+fn seed_vcc_repositories(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE vcc_repositories
+         SET name = 'VRChat Official',
+             url = 'https://packages.vrchat.com/official',
+             updated_at = datetime('now')
+         WHERE url = 'https://vrchat.github.io/packages/index.json'
+           AND NOT EXISTS (
+               SELECT 1 FROM vcc_repositories
+               WHERE url = 'https://packages.vrchat.com/official'
+           )",
+        [],
+    )?;
+    for (name, url) in [
+        ("VRChat Official", "https://packages.vrchat.com/official"),
+        ("VRChat Curated", "https://packages.vrchat.com/curated"),
+    ] {
+        conn.execute(
+            "INSERT OR IGNORE INTO vcc_repositories (name, url) VALUES (?, ?)",
+            params![name, url],
+        )?;
+    }
+
+    Ok(())
 }
 
 fn has_column(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {

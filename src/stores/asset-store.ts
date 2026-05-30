@@ -55,6 +55,11 @@ type BackendSaveSummary = {
   assetModels: number;
   assetTags: number;
   assetLinks: number;
+  vccProjects: number;
+  vccRepositories: number;
+  vccBackupPath: string | null;
+  vccBackupFiles: number;
+  vccCachedRepositories: number;
 };
 
 type AssetStore = {
@@ -480,9 +485,12 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     set({ saving: true, error: null, notice: null });
     try {
       const summary = await invoke<BackendSaveSummary>("export_save", { path });
+      const vccBackupText = summary.vccBackupPath
+        ? `，VCC 備份 ${summary.vccBackupFiles} 個檔案`
+        : "";
       set({
         saving: false,
-        notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤`,
+        notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案${vccBackupText}`,
       });
     } catch (error) {
       set({ error: toMessage(error), saving: false });
@@ -501,7 +509,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       await get().loadAll();
       set({
         saving: false,
-        notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤`,
+        notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案`,
       });
     } catch (error) {
       set({ error: toMessage(error), saving: false });

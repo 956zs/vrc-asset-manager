@@ -45,6 +45,22 @@ CREATE TABLE IF NOT EXISTS asset_links (
     sort_order INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS vcc_projects (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    path       TEXT    NOT NULL UNIQUE,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS vcc_repositories (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    url        TEXT    NOT NULL UNIQUE,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_asset_models_model ON asset_models(model_id);
 CREATE INDEX IF NOT EXISTS idx_asset_models_asset ON asset_models(asset_id);
 CREATE INDEX IF NOT EXISTS idx_asset_tags_tag     ON asset_tags(tag_id);
