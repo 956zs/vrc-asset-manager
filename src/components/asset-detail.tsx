@@ -34,7 +34,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -269,7 +268,7 @@ export function AssetDetail() {
 
   if (!asset) {
     return (
-      <div className="flex w-80 items-center justify-center border-l border-border bg-card">
+      <div className="flex w-[25rem] items-center justify-center border-l border-border bg-card">
         <div className="space-y-2 p-6 text-center">
           <p className="text-muted-foreground">選擇一個素材以查看詳情</p>
         </div>
@@ -393,10 +392,10 @@ export function AssetDetail() {
 
   return (
     <div
-      className="flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+      className="flex h-full min-h-0 w-[25rem] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
       data-asset-detail-editing={isEditingAsset ? "true" : undefined}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border p-4">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h2 className="truncate font-semibold text-foreground">管理素材</h2>
           <p className="text-xs text-muted-foreground">
@@ -429,9 +428,9 @@ export function AssetDetail() {
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-6 p-4">
-          <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
+        <div className="w-full max-w-full min-w-0 space-y-6 overflow-hidden px-5 py-5">
+          <div className="relative aspect-video min-w-0 overflow-hidden rounded-lg bg-muted">
             {thumbnailUrl ? (
               <img
                 src={thumbnailUrl}
@@ -454,9 +453,9 @@ export function AssetDetail() {
           </div>
 
           {!asset.file_exists && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
+            <div className="flex min-w-0 items-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <div className="text-sm">
+              <div className="min-w-0 text-sm">
                 <p className="font-medium">檔案遺失</p>
                 <p className="text-xs opacity-80">
                   {isEditingAsset ? "請重新指定素材位置" : "請進入編輯模式重新指定素材位置"}
@@ -465,19 +464,19 @@ export function AssetDetail() {
             </div>
           )}
 
-          <div>
+          <div className="min-w-0">
             <label className="text-sm font-medium text-muted-foreground">檔案名稱</label>
             <p className="mt-1 break-all text-sm text-foreground">{asset.name}</p>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="text-sm font-medium text-muted-foreground">顯示名稱</label>
             {isEditingAsset ? (
               <Input
                 value={editedDisplayName}
                 onChange={(event) => setEditedDisplayName(event.target.value)}
                 placeholder="自訂顯示名稱"
-                className="mt-1"
+                className="mt-1 min-w-0"
               />
             ) : (
               <p className="mt-1 break-all text-sm text-foreground">
@@ -488,16 +487,23 @@ export function AssetDetail() {
 
           <Separator />
 
-          <div>
-            <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div
+              className={cn(
+                "flex gap-2",
+                isEditingAsset
+                  ? "flex-col items-start"
+                  : "items-center justify-between",
+              )}
+            >
               <label className="text-sm font-medium text-muted-foreground">相容模型</label>
               {isEditingAsset && (
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="grid w-full min-w-0 grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs"
+                    className="h-8 w-full px-2 text-xs"
                     disabled={models.length === 0}
                     onClick={() => setEditedModelIds(models.map((model) => model.id))}
                   >
@@ -507,7 +513,7 @@ export function AssetDetail() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs"
+                    className="h-8 w-full px-2 text-xs"
                     disabled={editedModelIds.length === 0}
                     onClick={() => setEditedModelIds([])}
                   >
@@ -517,10 +523,13 @@ export function AssetDetail() {
               )}
             </div>
             {isEditingAsset ? (
-              <div className="mt-2 space-y-1">
+              <div className="mt-2 min-w-0 space-y-1">
                 {models.length > 0 ? (
                   models.map((model) => (
-                    <div key={model.id} className="flex items-center gap-2 rounded-md py-1">
+                    <div
+                      key={model.id}
+                      className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md py-1"
+                    >
                       <Checkbox
                         checked={editedModelIds.includes(model.id)}
                         onCheckedChange={() => toggleModel(model.id)}
@@ -540,10 +549,10 @@ export function AssetDetail() {
                 )}
               </div>
             ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex min-w-0 flex-wrap gap-2">
                 {asset.models.length > 0 ? (
                   asset.models.map((model) => (
-                    <Badge key={model.id} variant="secondary">
+                    <Badge key={model.id} variant="secondary" className="max-w-full truncate">
                       {model.display_name || model.name}
                     </Badge>
                   ))
@@ -556,16 +565,23 @@ export function AssetDetail() {
 
           <Separator />
 
-          <div>
-            <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div
+              className={cn(
+                "flex gap-2",
+                isEditingAsset
+                  ? "flex-col items-start"
+                  : "items-center justify-between",
+              )}
+            >
               <label className="text-sm font-medium text-muted-foreground">標籤</label>
               {isEditingAsset && (
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="grid w-full min-w-0 grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs"
+                    className="h-8 w-full px-2 text-xs"
                     disabled={tags.length === 0}
                     onClick={() => setEditedTagIds(tags.map((tag) => tag.id))}
                   >
@@ -575,7 +591,7 @@ export function AssetDetail() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs"
+                    className="h-8 w-full px-2 text-xs"
                     disabled={editedTagIds.length === 0}
                     onClick={() => setEditedTagIds([])}
                   >
@@ -585,13 +601,13 @@ export function AssetDetail() {
               )}
             </div>
             {isEditingAsset ? (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex min-w-0 max-w-full flex-wrap gap-2">
                 {tags.length > 0 ? (
                   tags.map((tag) => (
                     <Badge
                       key={tag.id}
                       variant={editedTagIds.includes(tag.id) ? "default" : "outline"}
-                      className="cursor-pointer transition-colors"
+                      className="max-w-full cursor-pointer truncate transition-colors"
                       style={
                         editedTagIds.includes(tag.id)
                           ? {
@@ -614,12 +630,13 @@ export function AssetDetail() {
                 )}
               </div>
             ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex min-w-0 flex-wrap gap-2">
                 {asset.tags.length > 0 ? (
                   asset.tags.map((tag) => (
                     <Badge
                       key={tag.id}
                       variant="outline"
+                      className="max-w-full truncate"
                       style={{ borderColor: tag.color, color: tag.color }}
                     >
                       {tag.name}
@@ -634,15 +651,15 @@ export function AssetDetail() {
 
           <Separator />
 
-          <div>
+          <div className="min-w-0">
             <label className="text-sm font-medium text-muted-foreground">Booth 連結</label>
             {isEditingAsset ? (
-              <div className="mt-1 flex gap-2">
+              <div className="mt-1 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.25rem] gap-2">
                 <Input
                   value={editedBoothUrl}
                   onChange={(event) => setEditedBoothUrl(event.target.value)}
                   placeholder="https://booth.pm/ja/items/..."
-                  className="flex-1"
+                  className="min-w-0"
                 />
                 <Button
                   type="button"
@@ -656,7 +673,7 @@ export function AssetDetail() {
                 </Button>
               </div>
             ) : (
-              <div className="mt-1 flex items-start gap-2">
+              <div className="mt-1 flex min-w-0 items-start gap-2">
                 <p className="min-w-0 flex-1 break-all text-sm text-foreground">
                   {asset.booth_url || "未設定"}
                 </p>
@@ -676,15 +693,22 @@ export function AssetDetail() {
 
           <Separator />
 
-          <div>
-            <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div
+              className={cn(
+                "flex gap-2",
+                isEditingAsset
+                  ? "flex-col items-start"
+                  : "items-center justify-between",
+              )}
+            >
               <label className="text-sm font-medium text-muted-foreground">相關連結</label>
               {isEditingAsset && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-xs"
+                  className="h-8 w-full px-2 text-xs"
                   onClick={() =>
                     setEditedRelatedLinks((current) => [
                       ...current,
@@ -698,18 +722,21 @@ export function AssetDetail() {
               )}
             </div>
             {isEditingAsset ? (
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 min-w-0 space-y-2">
                 {editedRelatedLinks.length > 0 ? (
                   editedRelatedLinks.map((link, index) => (
-                    <div key={index} className="space-y-2 rounded-md border border-border p-2">
-                      <div className="flex gap-2">
+                    <div
+                      key={index}
+                      className="min-w-0 space-y-2 rounded-md border border-border p-2"
+                    >
+                      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.25rem] gap-2">
                         <Input
                           value={link.label}
                           onChange={(event) =>
                             updateRelatedLink(index, "label", event.target.value)
                           }
                           placeholder="論壇討論"
-                          className="min-w-0 flex-1"
+                          className="min-w-0"
                         />
                         <Button
                           type="button"
@@ -729,25 +756,26 @@ export function AssetDetail() {
                           updateRelatedLink(index, "url", event.target.value)
                         }
                         placeholder="https://..."
+                        className="min-w-0"
                       />
                     </div>
                   ))
                 ) : (
                   <button
                     type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                    className="flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
                     onClick={() => setEditedRelatedLinks([createEmptyLink()])}
                   >
                     <Link2 className="h-4 w-4" />
-                    新增論壇、教學或輔助插件連結
+                    <span className="min-w-0 truncate">新增論壇、教學或輔助插件連結</span>
                   </button>
                 )}
               </div>
             ) : (
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 min-w-0 space-y-2">
                 {relatedLinks.length > 0 ? (
                   relatedLinks.map((link) => (
-                    <div key={link.id} className="flex items-start gap-2">
+                    <div key={link.id} className="flex min-w-0 items-start gap-2">
                       <div className="min-w-0 flex-1" data-context-url={link.url}>
                         <p className="truncate text-sm font-medium text-foreground">
                           {link.label}
@@ -778,7 +806,7 @@ export function AssetDetail() {
 
           <Separator />
 
-          <div>
+          <div className="min-w-0">
             <label className="text-sm font-medium text-muted-foreground">備註</label>
             {isEditingAsset ? (
               <Textarea
@@ -799,14 +827,14 @@ export function AssetDetail() {
             <>
               <Separator />
 
-              <div>
+              <div className="min-w-0">
                 <label className="text-sm font-medium text-muted-foreground">縮圖 URL</label>
-                <div className="mt-1 flex gap-2">
+                <div className="mt-1 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.25rem] gap-2">
                   <Input
                     value={editedThumbnailUrl}
                     onChange={(event) => setEditedThumbnailUrl(event.target.value)}
                     placeholder="https://..."
-                    className="flex-1"
+                    className="min-w-0"
                   />
                   <Button
                     type="button"
@@ -828,22 +856,34 @@ export function AssetDetail() {
 
           <Separator />
 
-          <div>
+          <div className="min-w-0">
             <label className="text-sm font-medium text-muted-foreground">素材位置</label>
             {isEditingAsset ? (
               <>
                 <Input
                   value={editedFilePath}
                   onChange={(event) => setEditedFilePath(event.target.value)}
-                  className="mt-1 font-mono text-xs"
+                  className="mt-1 min-w-0 font-mono text-xs"
                 />
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={handleBrowseFile}>
-                    <FileSearch className="mr-2 h-4 w-4" />
+                <div className="mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-w-0"
+                    onClick={handleBrowseFile}
+                  >
+                    <FileSearch className="h-4 w-4" />
                     選檔案
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleBrowseFolder}>
-                    <FolderSearch className="mr-2 h-4 w-4" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-w-0"
+                    onClick={handleBrowseFolder}
+                  >
+                    <FolderSearch className="h-4 w-4" />
                     選資料夾
                   </Button>
                 </div>
@@ -858,15 +898,16 @@ export function AssetDetail() {
             )}
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="shrink-0 space-y-2 border-t border-border p-4">
+      <div className="shrink-0 space-y-2 border-t border-border px-5 py-4">
         {isEditingAsset ? (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid min-w-0 grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant="outline"
+                className="min-w-0"
                 disabled={saving}
                 onClick={cancelEditing}
               >
@@ -874,10 +915,11 @@ export function AssetDetail() {
               </Button>
               <Button
                 type="button"
+                className="min-w-0"
                 disabled={!hasChanges || saving}
                 onClick={() => void saveDraft()}
               >
-                <Save className="mr-2 h-4 w-4" />
+                <Save className="h-4 w-4" />
                 {saving ? "儲存中" : "儲存"}
               </Button>
             </div>
@@ -886,10 +928,10 @@ export function AssetDetail() {
                 <Button
                   type="button"
                   variant="destructive"
-                  className="w-full"
+                  className="w-full min-w-0"
                   disabled={saving}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
+                  <Trash2 className="h-4 w-4" />
                   刪除素材
                 </Button>
               </AlertDialogTrigger>
@@ -911,19 +953,19 @@ export function AssetDetail() {
           </>
         ) : (
           <>
-            <Button type="button" className="w-full" onClick={startEditing}>
-              <Pencil className="mr-2 h-4 w-4" />
+            <Button type="button" className="w-full min-w-0" onClick={startEditing}>
+              <Pencil className="h-4 w-4" />
               編輯素材
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="w-full justify-start"
+              className="w-full min-w-0 justify-start"
               onClick={handleOpenFolder}
               disabled={!filePath.trim()}
               data-context-path={filePath.trim() || undefined}
             >
-              <FolderOpen className="mr-2 h-4 w-4" />
+              <FolderOpen className="h-4 w-4" />
               開啟素材資料夾
             </Button>
           </>

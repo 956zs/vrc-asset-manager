@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import { Boxes, Images, Keyboard } from "lucide-react";
+import { Boxes, Images, Keyboard, Settings } from "lucide-react";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { AddModelDialog } from "@/components/add-model-dialog";
 import { AddTagDialog } from "@/components/add-tag-dialog";
 import { AppContextMenu } from "@/components/app-context-menu";
+import { AppSettingsDialog } from "@/components/app-settings-dialog";
 import { AssetDetail } from "@/components/asset-detail";
 import { AssetGrid } from "@/components/asset-grid";
 import { CommandPalette } from "@/components/command-palette/command-palette";
@@ -28,6 +29,7 @@ function App() {
   const [mainView, setMainView] = useState<MainView>("assets");
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     void loadAll();
@@ -68,6 +70,16 @@ function App() {
             </Button>
             <Button
               type="button"
+              variant="ghost"
+              size="icon"
+              title="設定 / 關於"
+              aria-label="設定 / 關於"
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
               variant={mainView === "assets" ? "secondary" : "ghost"}
               size="sm"
               onClick={() => setMainView("assets")}
@@ -104,6 +116,11 @@ function App() {
         onOpenChange={setIsCommandPaletteOpen}
         showAssets={() => setMainView("assets")}
         showVcc={() => setMainView("vcc")}
+      />
+      <AppSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        showAssets={() => setMainView("assets")}
       />
 
       {error && (

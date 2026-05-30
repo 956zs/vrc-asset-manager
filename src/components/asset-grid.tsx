@@ -30,7 +30,7 @@ export function AssetGrid() {
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="p-4">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4">
           {filteredAssets.map((asset) => (
             <AssetCard
               key={asset.id}

@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { FileSearch, FolderSearch, Link2, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  FileSearch,
+  FolderSearch,
+  Link2,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -184,7 +191,9 @@ export function AddAssetDialog() {
       <DialogContent className="max-h-[90vh] min-w-0 overflow-y-auto sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>新增素材</DialogTitle>
-          <DialogDescription>填寫素材資訊並選擇相容的模型和標籤</DialogDescription>
+          <DialogDescription>
+            填寫素材資訊並選擇相容的模型和標籤
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -193,7 +202,7 @@ export function AddAssetDialog() {
             <Input
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="例：可愛貓耳 v2"
+              placeholder="例：lilToon shaders"
             />
           </div>
 
@@ -208,10 +217,20 @@ export function AddAssetDialog() {
                 placeholder="D:/VRChat/Assets/..."
                 className="flex-1"
               />
-              <Button type="button" variant="outline" size="icon" onClick={handleBrowseFile}>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleBrowseFile}
+              >
                 <FileSearch className="h-4 w-4" />
               </Button>
-              <Button type="button" variant="outline" size="icon" onClick={handleBrowseFolder}>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleBrowseFolder}
+              >
                 <FolderSearch className="h-4 w-4" />
               </Button>
             </div>
@@ -258,7 +277,9 @@ export function AddAssetDialog() {
                   size="sm"
                   className="h-7 px-2 text-xs"
                   disabled={models.length === 0}
-                  onClick={() => setSelectedModelIds(models.map((model) => model.id))}
+                  onClick={() =>
+                    setSelectedModelIds(models.map((model) => model.id))
+                  }
                 >
                   全選
                 </Button>
@@ -276,7 +297,10 @@ export function AddAssetDialog() {
             </div>
             <div className="max-h-32 space-y-2 overflow-y-auto rounded-md border p-3">
               {models.map((model) => (
-                <label key={model.id} className="flex cursor-pointer items-center gap-2">
+                <label
+                  key={model.id}
+                  className="flex cursor-pointer items-center gap-2"
+                >
                   <Checkbox
                     checked={selectedModelIds.includes(model.id)}
                     onCheckedChange={() => toggleModel(model.id)}
@@ -319,7 +343,9 @@ export function AddAssetDialog() {
               {tags.map((tag) => (
                 <Badge
                   key={tag.id}
-                  variant={selectedTagIds.includes(tag.id) ? "default" : "outline"}
+                  variant={
+                    selectedTagIds.includes(tag.id) ? "default" : "outline"
+                  }
                   className="cursor-pointer transition-colors"
                   style={
                     selectedTagIds.includes(tag.id)
@@ -349,7 +375,9 @@ export function AddAssetDialog() {
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs"
-                onClick={() => setRelatedLinks((current) => [...current, createEmptyLink()])}
+                onClick={() =>
+                  setRelatedLinks((current) => [...current, createEmptyLink()])
+                }
               >
                 <Plus className="h-3.5 w-3.5" />
                 新增
@@ -417,7 +445,10 @@ export function AddAssetDialog() {
           <Button variant="outline" onClick={handleClose}>
             取消
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={!filePath.trim() || saving}>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={!filePath.trim() || saving}
+          >
             {saving ? "新增中" : "新增素材"}
           </Button>
         </DialogFooter>

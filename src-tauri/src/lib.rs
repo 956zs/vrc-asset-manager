@@ -17,6 +17,7 @@ use commands::{
         sync_vcc_repositories,
     },
 };
+use std::{env, path::PathBuf};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -26,8 +27,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let db_path = app.path().app_data_dir()?.join("vrc_asset_manager.sqlite3");
-            app.manage(db::init(db_path)?);
+            let db_path = match env::var_os("VRC_ASSET_MANAGER_DB_PATH") {
+                Some(path) => PathBuf::from(path),
+                None => app.path().app_data_dir()?.join("vrc_asset_manager.sqlite3"),
+            };
+            let seed_demo = env::var("VRC_ASSET_MANAGER_DEMO")
+                .map(|value| value != "0" && !value.eq_ignore_ascii_case("false"))
+                .unwrap_or(false);
+            app.manage(db::init(db_path, seed_demo)?);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

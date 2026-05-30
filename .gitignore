@@ -29,6 +29,7 @@ src-tauri/target
 
 # Local-only reference/demo sources
 web-demo/
+.demo-data/
 
 # Release artifacts are uploaded by CI, not committed.
 *.msi

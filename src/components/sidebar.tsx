@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
   Check,
@@ -168,6 +169,7 @@ export function Sidebar() {
   const [tagDropTarget, setTagDropTarget] = useState<DropTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [importPath, setImportPath] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
   const filteredCount = getFilteredAssets().length;
   const hasActiveFilters =
@@ -198,6 +200,12 @@ export function Sidebar() {
       String(sidebarWidth),
     );
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    void getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion(null));
+  }, []);
 
   useEffect(() => {
     if (!isResizingSidebar) {
@@ -428,10 +436,10 @@ export function Sidebar() {
         maxWidth: SIDEBAR_MAX_WIDTH,
       }}
     >
-      <div className="border-b border-sidebar-border p-4">
-        <h1 className="flex items-center gap-2 text-lg font-semibold text-sidebar-foreground">
-          <Package className="h-5 w-5" />
-          VRC Asset Manager
+      <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-4">
+        <h1 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-sidebar-foreground">
+          <Package className="h-5 w-5 shrink-0" />
+          <span className="truncate">VRC Asset Manager</span>
         </h1>
       </div>
 
@@ -755,7 +763,7 @@ export function Sidebar() {
           </Button>
         </div>
         <p className="text-center text-xs text-muted-foreground">
-          VRC Asset Manager v1.0
+          VRC Asset Manager{appVersion ? ` v${appVersion}` : ""}
         </p>
       </div>
 
