@@ -1,6 +1,6 @@
 [package]
 name = "vrc-asset-manager"
-version = "0.1.0-beta.4"
+version = "0.1.0-beta.5"
 description = "A local VRChat asset manager"
 authors = ["n1cat"]
 edition = "2021"

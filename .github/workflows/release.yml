@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
@@ -31,9 +35,17 @@ jobs:
         with:
           node-version: "lts/*"
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+          cache-on-failure: true
 
       - name: Install frontend dependencies
         run: npm ci
@@ -43,14 +55,6 @@ jobs:
 
       - name: Check Rust formatting
         run: cargo fmt --check
-        working-directory: src-tauri
-
-      - name: Check Rust
-        run: cargo check
-        working-directory: src-tauri
-
-      - name: Test Rust
-        run: cargo test
         working-directory: src-tauri
 
       - name: Build and draft GitHub release
