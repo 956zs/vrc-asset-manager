@@ -17,10 +17,10 @@ Done:
 - `.gitignore` blocks `.env`, signing keys, SQLite databases, build output, and
   release artifacts.
 - `src-tauri/tauri.conf.updater.example.json` shows the updater config shape.
+- GitHub repository secrets are configured for updater signing.
 
 Not done yet:
 
-- GitHub repository secrets are not configured.
 - In-app update UI/checks should wait until releases are public. Do not embed a
   GitHub token in the app.
 
@@ -76,3 +76,46 @@ migration plan.
 
 Keep beta and RC builds as GitHub prereleases. Normal users should only receive
 stable releases through GitHub's latest release endpoint.
+
+## Local Draft Release
+
+For faster beta builds, create the release from this machine instead of waiting
+for a fresh GitHub-hosted Windows runner.
+
+1. Update versions in:
+
+   - `package.json`
+   - `package-lock.json`
+   - `src-tauri/Cargo.toml`
+   - `src-tauri/Cargo.lock`
+   - `src-tauri/tauri.conf.json`
+
+2. Commit the version bump.
+
+3. Run:
+
+```powershell
+npm run release:local -- -Tag v0.1.0-beta.5
+```
+
+The script checks that versions match the tag, creates and pushes the tag if it
+does not exist, builds the NSIS installer locally, writes `latest.json`, and
+uploads the installer, `.sig`, and `latest.json` to a draft GitHub Release.
+
+The default signing key path is:
+
+```powershell
+$env:USERPROFILE\.tauri\vrc-asset-manager.key
+```
+
+If the signing key has a password, set it before running the script:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your key password"
+```
+
+If a draft release already exists and you want to replace its assets:
+
+```powershell
+npm run release:local -- -Tag v0.1.0-beta.5 -Clobber
+```
