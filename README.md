@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/956zs/vrc-asset-manager/releases">
-    <img alt="Release" src="https://img.shields.io/badge/release-0.1.0--beta.5-0ea5e9?style=flat-square" />
+    <img alt="Release" src="https://img.shields.io/badge/release-0.1.0--beta.7-0ea5e9?style=flat-square" />
   </a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-2563eb?style=flat-square" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-v2-24c8db?style=flat-square" />
@@ -148,7 +148,9 @@ npm run tauri build -- --no-bundle
 在本機建立已簽章的 GitHub draft release：
 
 ```powershell
-npm run release:local -- -Tag v0.1.0-beta.5
+npm run version:bump -- 0.1.0-beta.7
+npm run release:check -- -Tag v0.1.0-beta.7
+npm run release:local -- -Tag v0.1.0-beta.7
 ```
 
 GitHub Releases 與 updater 設定請參考 [docs/github-releases-updater.md](docs/github-releases-updater.md)。
@@ -196,7 +198,7 @@ scripts/                Local development and release helpers
 
 目前發佈流程以 GitHub Releases draft 為核心：
 
-1. 更新 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的版本。
+1. 執行 `npm run version:bump -- 0.1.0-beta.7` 同步版本。
 2. 建立 beta / RC draft release。
 3. 下載同一份 draft artifact 做 smoke test。
 4. 確認無誤後才發布 stable release。

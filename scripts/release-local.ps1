@@ -57,29 +57,13 @@ Invoke-Step $gh @("auth", "status")
 
 $package = Read-Json (Join-Path $RepoRoot "package.json")
 $tauri = Read-Json (Join-Path $RepoRoot "src-tauri\tauri.conf.json")
-$cargoToml = Get-Content (Join-Path $RepoRoot "src-tauri\Cargo.toml") -Raw
 
 $version = [string]$package.version
 if (-not $Tag) {
   $Tag = "v$version"
 }
 
-if ($Tag -notmatch "^v") {
-  Fail "Tag must start with 'v'. Received: $Tag"
-}
-
-$tagVersion = $Tag.Substring(1)
-if ($tagVersion -ne $version) {
-  Fail "Tag $Tag does not match package.json version $version."
-}
-
-if ([string]$tauri.version -ne $version) {
-  Fail "src-tauri/tauri.conf.json version $($tauri.version) does not match package.json version $version."
-}
-
-if ($cargoToml -notmatch "version\s*=\s*`"$([regex]::Escape($version))`"") {
-  Fail "src-tauri/Cargo.toml version does not match package.json version $version."
-}
+Invoke-Step "powershell" @("-ExecutionPolicy", "Bypass", "-File", (Join-Path $RepoRoot "scripts\check-release-version.ps1"), "-Tag", $Tag)
 
 $dirty = git status --porcelain
 if ($dirty) {

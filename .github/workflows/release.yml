@@ -30,6 +30,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check release version
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/check-release-version.ps1 -Tag "$env:RELEASE_TAG"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

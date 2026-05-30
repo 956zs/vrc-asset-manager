@@ -82,20 +82,36 @@ stable releases through GitHub's latest release endpoint.
 For faster beta builds, create the release from this machine instead of waiting
 for a fresh GitHub-hosted Windows runner.
 
-1. Update versions in:
-
-   - `package.json`
-   - `package-lock.json`
-   - `src-tauri/Cargo.toml`
-   - `src-tauri/Cargo.lock`
-   - `src-tauri/tauri.conf.json`
-
-2. Commit the version bump.
-
-3. Run:
+1. Update all release versions:
 
 ```powershell
-npm run release:local -- -Tag v0.1.0-beta.5
+npm run version:bump -- 0.1.0-beta.7
+```
+
+2. Enable the local tag guard once per clone:
+
+```powershell
+npm run hooks:install
+```
+
+This installs a repo-local `pre-push` hook. When you push a `v*` tag, it blocks
+the push if the tag does not match the app versions.
+
+3. Commit the version bump.
+
+4. Optional fast guard before building:
+
+```powershell
+npm run release:check -- -Tag v0.1.0-beta.7
+```
+
+This check also runs automatically in `release:local` and in GitHub Actions
+before the expensive Windows build starts.
+
+5. Run:
+
+```powershell
+npm run release:local -- -Tag v0.1.0-beta.7
 ```
 
 The script checks that versions match the tag, creates and pushes the tag if it
@@ -117,5 +133,5 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your key password"
 If a draft release already exists and you want to replace its assets:
 
 ```powershell
-npm run release:local -- -Tag v0.1.0-beta.5 -Clobber
+npm run release:local -- -Tag v0.1.0-beta.7 -Clobber
 ```

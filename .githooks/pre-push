@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+set -eu
+
+zero_sha="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha remote_ref remote_sha
+do
+  if [ "$local_sha" = "$zero_sha" ]; then
+    continue
+  fi
+
+  tag=""
+  case "$local_ref" in
+    refs/tags/v*)
+      tag="${local_ref#refs/tags/}"
+      ;;
+    *)
+      case "$remote_ref" in
+        refs/tags/v*)
+          tag="${remote_ref#refs/tags/}"
+          ;;
+      esac
+      ;;
+  esac
+
+  if [ -z "$tag" ]; then
+    continue
+  fi
+
+  echo "[pre-push] Checking release tag $tag"
+  if command -v pwsh >/dev/null 2>&1; then
+    pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-release-version.ps1 -Tag "$tag"
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-release-version.ps1 -Tag "$tag"
+  elif command -v powershell >/dev/null 2>&1; then
+    powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-release-version.ps1 -Tag "$tag"
+  else
+    echo "[pre-push] PowerShell was not found; cannot check release tag." >&2
+    exit 1
+  fi
+done

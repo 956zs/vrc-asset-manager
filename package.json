@@ -1,7 +1,7 @@
 {
   "name": "vrc-asset-manager",
   "private": true,
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.7",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -9,6 +9,9 @@
     "demo": "powershell -ExecutionPolicy Bypass -File scripts/demo-dev.ps1",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "hooks:install": "powershell -ExecutionPolicy Bypass -File scripts/install-git-hooks.ps1",
+    "version:bump": "powershell -ExecutionPolicy Bypass -File scripts/bump-version.ps1",
+    "release:check": "powershell -ExecutionPolicy Bypass -File scripts/check-release-version.ps1",
     "release:local": "powershell -ExecutionPolicy Bypass -File scripts/release-local.ps1",
     "tauri": "tauri"
   },
