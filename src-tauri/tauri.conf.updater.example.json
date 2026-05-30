@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwNkUxMkMwQTA4QTQwMTUKUldRVlFJcWd3Qkp1VU56Tk1aaWJRL21HcTNIZGRlYzc0US80Nk9vTEFENzJvVWRrSkc4OTFTQjUK",
+      "endpoints": [
+        "https://github.com/956zs/betterdir/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

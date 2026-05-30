@@ -3,7 +3,9 @@ use crate::{
     types::{Asset, AssetFilters, AssetLink, AssetLinkInput, CreateAssetInput, UpdateAssetInput},
 };
 use rusqlite::{params, params_from_iter, types::Value, Connection, Row, Transaction};
+use serde::Serialize;
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -25,6 +27,30 @@ struct AssetBase {
     note: Option<String>,
     created_at: String,
     updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetHealthIssue {
+    pub asset_id: i64,
+    pub name: String,
+    pub display_name: Option<String>,
+    pub file_path: String,
+    pub status: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetHealthSummary {
+    pub total: usize,
+    pub ok: usize,
+    pub missing: usize,
+    pub unreadable: usize,
+    pub empty_files: usize,
+    pub empty_directories: usize,
+    pub unsupported: usize,
+    pub issues: Vec<AssetHealthIssue>,
 }
 
 fn asset_link_from_row(row: &Row<'_>) -> rusqlite::Result<AssetLink> {
@@ -114,6 +140,84 @@ fn hydrate_asset(conn: &Connection, base: AssetBase) -> rusqlite::Result<Asset> 
         related_links,
         file_exists,
     })
+}
+
+fn push_health_issue(
+    summary: &mut AssetHealthSummary,
+    base: &AssetBase,
+    status: &str,
+    message: impl Into<String>,
+) {
+    summary.issues.push(AssetHealthIssue {
+        asset_id: base.id,
+        name: base.name.clone(),
+        display_name: base.display_name.clone(),
+        file_path: base.file_path.clone(),
+        status: status.to_string(),
+        message: message.into(),
+    });
+}
+
+fn scan_asset_path(summary: &mut AssetHealthSummary, base: &AssetBase) {
+    let path = Path::new(&base.file_path);
+
+    if !path.exists() {
+        summary.missing += 1;
+        push_health_issue(summary, base, "missing", "Path does not exist");
+        return;
+    }
+
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            summary.unreadable += 1;
+            push_health_issue(summary, base, "unreadable", error.to_string());
+            return;
+        }
+    };
+
+    if metadata.is_file() {
+        if fs::File::open(path).is_err() {
+            summary.unreadable += 1;
+            push_health_issue(summary, base, "unreadable", "File cannot be opened");
+            return;
+        }
+
+        if metadata.len() == 0 {
+            summary.empty_files += 1;
+            push_health_issue(summary, base, "emptyFile", "File is empty");
+            return;
+        }
+
+        summary.ok += 1;
+        return;
+    }
+
+    if metadata.is_dir() {
+        match fs::read_dir(path) {
+            Ok(mut entries) => {
+                if entries.next().is_none() {
+                    summary.empty_directories += 1;
+                    push_health_issue(summary, base, "emptyDirectory", "Directory is empty");
+                } else {
+                    summary.ok += 1;
+                }
+            }
+            Err(error) => {
+                summary.unreadable += 1;
+                push_health_issue(summary, base, "unreadable", error.to_string());
+            }
+        }
+        return;
+    }
+
+    summary.unsupported += 1;
+    push_health_issue(
+        summary,
+        base,
+        "unsupported",
+        "Path exists but is not a regular file or directory",
+    );
 }
 
 fn get_asset_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Asset> {
@@ -289,6 +393,40 @@ pub fn get_assets(filters: AssetFilters, db: State<'_, DbState>) -> CommandResul
         .map(|base| hydrate_asset(&conn, base))
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(db_error)
+}
+
+#[tauri::command]
+pub fn scan_asset_health(db: State<'_, DbState>) -> CommandResult<AssetHealthSummary> {
+    let conn = connection(&db)?;
+    let bases = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at
+                 FROM assets
+                 ORDER BY id",
+            )
+            .map_err(db_error)?;
+        let rows = stmt.query_map([], asset_base_from_row).map_err(db_error)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(db_error)?
+    };
+
+    let mut summary = AssetHealthSummary {
+        total: bases.len(),
+        ok: 0,
+        missing: 0,
+        unreadable: 0,
+        empty_files: 0,
+        empty_directories: 0,
+        unsupported: 0,
+        issues: Vec::new(),
+    };
+
+    for base in &bases {
+        scan_asset_path(&mut summary, base);
+    }
+
+    Ok(summary)
 }
 
 #[tauri::command]

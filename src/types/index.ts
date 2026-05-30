@@ -36,6 +36,26 @@ export interface Asset {
   file_exists: boolean;
 }
 
+export interface AssetHealthIssue {
+  assetId: number;
+  name: string;
+  displayName: string | null;
+  filePath: string;
+  status: string;
+  message: string;
+}
+
+export interface AssetHealthSummary {
+  total: number;
+  ok: number;
+  missing: number;
+  unreadable: number;
+  emptyFiles: number;
+  emptyDirectories: number;
+  unsupported: number;
+  issues: AssetHealthIssue[];
+}
+
 export interface AssetFilters {
   search: string;
   modelIds: number[];
