@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import { Boxes, Images } from "lucide-react";
+import { Boxes, Images, Keyboard } from "lucide-react";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { AddModelDialog } from "@/components/add-model-dialog";
 import { AddTagDialog } from "@/components/add-tag-dialog";
+import { AppContextMenu } from "@/components/app-context-menu";
 import { AssetDetail } from "@/components/asset-detail";
 import { AssetGrid } from "@/components/asset-grid";
+import { CommandPalette } from "@/components/command-palette/command-palette";
+import { AssetRelatedDialog } from "@/components/asset-related-dialog";
 import { Sidebar } from "@/components/sidebar";
+import { ShortcutHelpDialog } from "@/components/shortcuts/shortcut-help-dialog";
+import { useAppShortcuts } from "@/components/shortcuts/use-app-shortcuts";
 import { Button } from "@/components/ui/button";
 import { VccProjects } from "@/components/vcc-projects";
 import { useAssetStore } from "@/stores/asset-store";
@@ -21,10 +26,20 @@ function App() {
   const clearError = useAssetStore((state) => state.clearError);
   const clearNotice = useAssetStore((state) => state.clearNotice);
   const [mainView, setMainView] = useState<MainView>("assets");
+  const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useAppShortcuts({
+    isAssetView: mainView === "assets",
+    showAssets: () => setMainView("assets"),
+    showVcc: () => setMainView("vcc"),
+    openCommandPalette: () => setIsCommandPaletteOpen(true),
+    openHelp: () => setIsShortcutHelpOpen(true),
+  });
 
   return (
     <div className="flex h-screen min-h-0 overflow-hidden bg-background">
@@ -41,6 +56,16 @@ function App() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              title="快捷鍵"
+              aria-label="快捷鍵"
+              onClick={() => setIsShortcutHelpOpen(true)}
+            >
+              <Keyboard className="h-4 w-4" />
+            </Button>
             <Button
               type="button"
               variant={mainView === "assets" ? "secondary" : "ghost"}
@@ -69,6 +94,17 @@ function App() {
       <AddAssetDialog />
       <AddModelDialog />
       <AddTagDialog />
+      <AssetRelatedDialog />
+      <ShortcutHelpDialog
+        open={isShortcutHelpOpen}
+        onOpenChange={setIsShortcutHelpOpen}
+      />
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onOpenChange={setIsCommandPaletteOpen}
+        showAssets={() => setMainView("assets")}
+        showVcc={() => setMainView("vcc")}
+      />
 
       {error && (
         <div className="fixed bottom-4 left-1/2 z-50 flex max-w-[520px] -translate-x-1/2 items-center gap-3 rounded-md border border-destructive/30 bg-card px-4 py-3 text-sm text-destructive shadow-lg">
@@ -87,6 +123,8 @@ function App() {
           </Button>
         </div>
       )}
+
+      <AppContextMenu />
     </div>
   );
 }

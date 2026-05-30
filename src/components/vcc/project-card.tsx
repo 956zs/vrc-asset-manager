@@ -57,7 +57,10 @@ export function ProjectCard({
               </Badge>
             )}
           </div>
-          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+          <p
+            className="mt-1 break-all font-mono text-xs text-muted-foreground"
+            data-context-path={snapshot.project.path}
+          >
             {snapshot.project.path}
           </p>
         </div>
@@ -74,6 +77,7 @@ export function ProjectCard({
             size="icon"
             title="開啟專案資料夾"
             aria-label="開啟專案資料夾"
+            data-context-path={snapshot.project.path}
             onClick={() => onOpenProject(snapshot.project.path)}
           >
             <FolderOpen className="h-4 w-4" />

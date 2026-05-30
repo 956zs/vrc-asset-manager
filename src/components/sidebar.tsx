@@ -440,6 +440,7 @@ export function Sidebar() {
           <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
+            data-shortcut="asset-search"
             placeholder="搜尋素材..."
             className="border-sidebar-border bg-sidebar-accent pl-8 text-sidebar-foreground placeholder:text-muted-foreground"
             value={filters.search}

@@ -17,6 +17,10 @@ export function AssetCard({ asset, isSelected, onClick }: AssetCardProps) {
 
   return (
     <Card
+      data-context-asset-id={asset.id}
+      data-context-asset-name={displayName}
+      data-context-path={asset.file_path}
+      data-context-url={asset.booth_url || undefined}
       className={cn(
         "group relative cursor-pointer overflow-hidden py-0 transition-all duration-200",
         "hover:ring-2 hover:ring-ring hover:shadow-md",

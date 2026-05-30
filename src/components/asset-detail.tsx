@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -73,9 +73,11 @@ export function AssetDetail() {
     models,
     tags,
     saving,
+    editingAssetRequestId,
     selectAsset,
     updateAsset,
     deleteAsset,
+    clearAssetEditRequest,
     getSelectedAsset,
   } = useAssetStore();
 
@@ -130,10 +132,50 @@ export function AssetDetail() {
     setHasChanges(false);
   };
 
+  const saveDraft = useCallback(async () => {
+    if (!asset) {
+      return;
+    }
+
+    await updateAsset(asset.id, {
+      display_name: editedDisplayName || null,
+      file_path: editedFilePath,
+      booth_url: editedBoothUrl || null,
+      thumbnail_url: editedThumbnailUrl || null,
+      note: editedNote || null,
+      model_ids: editedModelIds,
+      tag_ids: editedTagIds,
+      related_links: cleanRelatedLinks(editedRelatedLinks),
+    });
+    setHasChanges(false);
+    setIsEditingAsset(false);
+  }, [
+    asset,
+    editedBoothUrl,
+    editedDisplayName,
+    editedFilePath,
+    editedModelIds,
+    editedNote,
+    editedRelatedLinks,
+    editedTagIds,
+    editedThumbnailUrl,
+    updateAsset,
+  ]);
+
   useEffect(() => {
     resetDraft(asset);
     setIsEditingAsset(false);
   }, [asset]);
+
+  useEffect(() => {
+    if (!asset || editingAssetRequestId !== asset.id) {
+      return;
+    }
+
+    resetDraft(asset);
+    setIsEditingAsset(true);
+    clearAssetEditRequest();
+  }, [asset, editingAssetRequestId, clearAssetEditRequest]);
 
   useEffect(() => {
     if (!asset || !isEditingAsset) {
@@ -174,6 +216,55 @@ export function AssetDetail() {
     originalModelIds,
     originalTagIds,
     originalRelatedLinks,
+  ]);
+
+  useEffect(() => {
+    if (!asset || !isEditingAsset) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) {
+        return;
+      }
+
+      const dialogOpen = Boolean(
+        document.querySelector(
+          "[data-slot='dialog-content'], [data-slot='alert-dialog-content']",
+        ),
+      );
+      if (dialogOpen) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+
+      if (modifier && key === "s") {
+        event.preventDefault();
+        if (!hasChanges || saving) {
+          return;
+        }
+
+        void saveDraft().catch(console.warn);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        resetDraft(asset);
+        setIsEditingAsset(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    asset,
+    hasChanges,
+    isEditingAsset,
+    saveDraft,
+    saving,
   ]);
 
   if (!asset) {
@@ -262,21 +353,6 @@ export function AssetDetail() {
     setSelectedPath(selected);
   };
 
-  const handleSave = async () => {
-    await updateAsset(asset.id, {
-      display_name: editedDisplayName || null,
-      file_path: editedFilePath,
-      booth_url: editedBoothUrl || null,
-      thumbnail_url: editedThumbnailUrl || null,
-      note: editedNote || null,
-      model_ids: editedModelIds,
-      tag_ids: editedTagIds,
-      related_links: cleanRelatedLinks(editedRelatedLinks),
-    });
-    setHasChanges(false);
-    setIsEditingAsset(false);
-  };
-
   const handleDelete = async () => {
     await deleteAsset(asset.id);
   };
@@ -316,7 +392,10 @@ export function AssetDetail() {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card">
+    <div
+      className="flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+      data-asset-detail-editing={isEditingAsset ? "true" : undefined}
+    >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0">
           <h2 className="truncate font-semibold text-foreground">管理素材</h2>
@@ -569,6 +648,7 @@ export function AssetDetail() {
                   type="button"
                   variant="outline"
                   size="icon"
+                  data-context-url={editedBoothUrl.trim() || undefined}
                   onClick={handleOpenBooth}
                   disabled={!editedBoothUrl.trim()}
                 >
@@ -584,6 +664,7 @@ export function AssetDetail() {
                   type="button"
                   variant="outline"
                   size="icon"
+                  data-context-url={asset.booth_url || undefined}
                   onClick={handleOpenBooth}
                   disabled={!asset.booth_url}
                 >
@@ -667,7 +748,7 @@ export function AssetDetail() {
                 {relatedLinks.length > 0 ? (
                   relatedLinks.map((link) => (
                     <div key={link.id} className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1" data-context-url={link.url}>
                         <p className="truncate text-sm font-medium text-foreground">
                           {link.label}
                         </p>
@@ -681,6 +762,7 @@ export function AssetDetail() {
                         size="icon"
                         title="開啟連結"
                         aria-label="開啟連結"
+                        data-context-url={link.url}
                         onClick={() => void handleOpenRelatedLink(link.url)}
                       >
                         <ExternalLink className="h-4 w-4" />
@@ -767,7 +849,12 @@ export function AssetDetail() {
                 </div>
               </>
             ) : (
-              <p className="mt-1 break-all font-mono text-xs text-foreground">{asset.file_path}</p>
+              <p
+                className="mt-1 break-all font-mono text-xs text-foreground"
+                data-context-path={asset.file_path}
+              >
+                {asset.file_path}
+              </p>
             )}
           </div>
         </div>
@@ -788,7 +875,7 @@ export function AssetDetail() {
               <Button
                 type="button"
                 disabled={!hasChanges || saving}
-                onClick={() => void handleSave()}
+                onClick={() => void saveDraft()}
               >
                 <Save className="mr-2 h-4 w-4" />
                 {saving ? "儲存中" : "儲存"}
@@ -834,6 +921,7 @@ export function AssetDetail() {
               className="w-full justify-start"
               onClick={handleOpenFolder}
               disabled={!filePath.trim()}
+              data-context-path={filePath.trim() || undefined}
             >
               <FolderOpen className="mr-2 h-4 w-4" />
               開啟素材資料夾

@@ -106,7 +106,10 @@ export function RepositoriesSection({
                   <p className="truncate text-sm font-medium text-card-foreground">
                     {repository.name}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p
+                    className="truncate text-xs text-muted-foreground"
+                    data-context-url={repository.url}
+                  >
                     {repository.url}
                   </p>
                 </div>

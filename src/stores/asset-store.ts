@@ -73,15 +73,19 @@ type AssetStore = {
   isAddTagDialogOpen: boolean;
   editingModel: Model | null;
   editingTag: Tag | null;
+  editingAssetRequestId: number | null;
+  relatedAssetSearchId: number | null;
   loading: boolean;
   saving: boolean;
   error: string | null;
   notice: string | null;
   loadAll: () => Promise<void>;
   loadAssets: () => Promise<void>;
+  getAllAssets: () => Promise<Asset[]>;
   clearError: () => void;
   clearNotice: () => void;
   setSearchFilter: (search: string) => void;
+  setFilters: (filters: AssetFilters) => void;
   toggleModelFilter: (modelId: number) => void;
   toggleTagFilter: (tagId: number) => void;
   clearFilters: () => void;
@@ -104,6 +108,10 @@ type AssetStore = {
   setAddTagDialogOpen: (open: boolean) => void;
   setEditingModel: (model: Model | null) => void;
   setEditingTag: (tag: Tag | null) => void;
+  requestAssetEdit: (assetId: number) => void;
+  clearAssetEditRequest: () => void;
+  openRelatedAssetSearch: (assetId: number) => void;
+  closeRelatedAssetSearch: () => void;
   getFilteredAssets: () => Asset[];
   getSelectedAsset: () => Asset | null;
 };
@@ -204,6 +212,8 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   isAddTagDialogOpen: false,
   editingModel: null,
   editingTag: null,
+  editingAssetRequestId: null,
+  relatedAssetSearchId: null,
   loading: false,
   saving: false,
   error: null,
@@ -240,11 +250,23 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     }
   },
 
+  getAllAssets: async () => {
+    const assets = await invoke<BackendAsset[]>("get_assets", {
+      filters: { modelIds: [], tagIds: [] },
+    });
+    return assets.map(toAsset);
+  },
+
   clearError: () => set({ error: null }),
   clearNotice: () => set({ notice: null }),
 
   setSearchFilter: (search) => {
     set((state) => ({ filters: { ...state.filters, search } }));
+    void get().loadAssets();
+  },
+
+  setFilters: (filters) => {
+    set({ filters: { ...filters } });
     void get().loadAssets();
   },
 
@@ -522,6 +544,11 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   setAddTagDialogOpen: (open) => set({ isAddTagDialogOpen: open }),
   setEditingModel: (model) => set({ editingModel: model }),
   setEditingTag: (tag) => set({ editingTag: tag }),
+  requestAssetEdit: (assetId) =>
+    set({ selectedAssetId: assetId, editingAssetRequestId: assetId }),
+  clearAssetEditRequest: () => set({ editingAssetRequestId: null }),
+  openRelatedAssetSearch: (assetId) => set({ relatedAssetSearchId: assetId }),
+  closeRelatedAssetSearch: () => set({ relatedAssetSearchId: null }),
 
   getFilteredAssets: () => get().assets,
 
