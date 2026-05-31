@@ -31,6 +31,8 @@ import { OverviewSection } from "./settings/overview-section";
 import { UpdateSection } from "./settings/update-section";
 import {
   formatPercent,
+  formatUpdateError,
+  isReleaseJsonUnavailable,
   releaseUrl,
   toMessage,
   type SettingsTab,
@@ -109,6 +111,10 @@ export function AppSettingsDialog({
       return "目前已是最新版本";
     }
 
+    if (updateStatus === "unavailable") {
+      return "目前沒有可用的公開更新資訊";
+    }
+
     if (updateStatus === "downloading") {
       return downloadPercent === null
         ? "正在下載更新"
@@ -140,8 +146,9 @@ export function AppSettingsDialog({
 
       setUpdateStatus("current");
     } catch (error) {
-      setUpdateStatus("error");
-      setUpdateMessage(toMessage(error));
+      const message = formatUpdateError(error, appVersion);
+      setUpdateStatus(isReleaseJsonUnavailable(toMessage(error)) ? "unavailable" : "error");
+      setUpdateMessage(message);
       setActiveTab("updates");
     }
   };
@@ -230,6 +237,7 @@ export function AppSettingsDialog({
         downloadPercent={downloadPercent}
         onCheckUpdate={handleCheckUpdate}
         onInstallUpdate={handleInstallUpdate}
+        onOpenReleases={() => void openUrl(releaseUrl)}
       />
     ),
     health: (

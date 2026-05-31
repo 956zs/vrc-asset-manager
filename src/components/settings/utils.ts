@@ -7,6 +7,7 @@ export type UpdateStatus =
   | "checking"
   | "available"
   | "current"
+  | "unavailable"
   | "downloading"
   | "installed"
   | "error";
@@ -15,6 +16,40 @@ export const releaseUrl = "https://github.com/956zs/vrc-asset-manager/releases";
 
 export const toMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+export const isPrereleaseVersion = (version: string | null) =>
+  Boolean(version && /-(alpha|beta|rc|dev|preview)/i.test(version));
+
+const releaseJsonUnavailablePatterns = [
+  "could not fetch a valid release json",
+  "latest.json",
+  "release not found",
+  "not found",
+  "404",
+];
+
+export const isReleaseJsonUnavailable = (message: string) => {
+  const normalized = message.toLowerCase();
+
+  return releaseJsonUnavailablePatterns.some((pattern) =>
+    normalized.includes(pattern),
+  );
+};
+
+export const formatUpdateError = (
+  error: unknown,
+  appVersion: string | null,
+) => {
+  const message = toMessage(error);
+
+  if (isReleaseJsonUnavailable(message)) {
+    return isPrereleaseVersion(appVersion)
+      ? "目前 beta 版沒有可用的公開更新資訊。Draft / prerelease 不會透過 stable 更新端點推送，請到 GitHub Releases 手動確認。"
+      : "目前沒有可用的公開更新資訊。請稍後再試，或到 GitHub Releases 手動確認。";
+  }
+
+  return message;
+};
 
 export const formatPercent = (downloaded: number, total: number | null) => {
   if (!total || total <= 0) {

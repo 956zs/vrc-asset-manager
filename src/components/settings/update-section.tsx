@@ -2,6 +2,8 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import {
   CheckCircle2,
   Download,
+  ExternalLink,
+  Info,
   Loader2,
   RefreshCw,
   TriangleAlert,
@@ -19,6 +21,7 @@ type UpdateSectionProps = {
   downloadPercent: number | null;
   onCheckUpdate: () => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
+  onOpenReleases: () => void | Promise<void>;
 };
 
 export function UpdateSection({
@@ -30,6 +33,7 @@ export function UpdateSection({
   downloadPercent,
   onCheckUpdate,
   onInstallUpdate,
+  onOpenReleases,
 }: UpdateSectionProps) {
   const busy = updateStatus === "checking" || updateStatus === "downloading";
 
@@ -105,13 +109,33 @@ export function UpdateSection({
         </div>
       )}
 
+      {updateStatus === "unavailable" && updateMessage && (
+        <div className="rounded-lg border border-border bg-background/70 p-4 text-sm text-foreground">
+          <div className="flex items-start gap-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-muted-foreground">{updateMessage}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void onOpenReleases()}
+              >
+                <ExternalLink className="h-4 w-4" />
+                開啟 Releases
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {updateStatus === "error" && updateMessage && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <TriangleAlert className="h-4 w-4" />
           {updateMessage}
         </div>
       )}
-      <div className="min-h-[160px] flex-1 rounded-lg border border-dashed border-border bg-background/50" />
     </section>
   );
 }
