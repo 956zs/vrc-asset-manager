@@ -70,12 +70,28 @@ if ($dirty) {
   Fail "Working tree is not clean. Commit or stash changes before creating a release."
 }
 
-if (-not $env:TAURI_SIGNING_PRIVATE_KEY -and -not $env:TAURI_SIGNING_PRIVATE_KEY_PATH) {
-  if (-not (Test-Path $PrivateKeyPath)) {
-    Fail "Signing key was not found: $PrivateKeyPath"
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+  $resolvedPrivateKeyPath = $null
+
+  if ($env:TAURI_SIGNING_PRIVATE_KEY_PATH) {
+    $resolvedPrivateKeyPath = $env:TAURI_SIGNING_PRIVATE_KEY_PATH
+  } else {
+    if (-not (Test-Path $PrivateKeyPath)) {
+      Fail "Signing key was not found: $PrivateKeyPath"
+    }
+
+    $resolvedPrivateKeyPath = (Resolve-Path $PrivateKeyPath).Path
+    $env:TAURI_SIGNING_PRIVATE_KEY_PATH = $resolvedPrivateKeyPath
   }
 
-  $env:TAURI_SIGNING_PRIVATE_KEY_PATH = (Resolve-Path $PrivateKeyPath).Path
+  if (-not (Test-Path $resolvedPrivateKeyPath)) {
+    Fail "Signing key path was set but the file was not found: $resolvedPrivateKeyPath"
+  }
+
+  $env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content $resolvedPrivateKeyPath -Raw).Trim()
+  if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+    Fail "Signing key file is empty: $resolvedPrivateKeyPath"
+  }
 }
 
 if ($PSBoundParameters.ContainsKey("PrivateKeyPassword")) {

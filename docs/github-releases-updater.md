@@ -124,6 +124,10 @@ The default signing key path is:
 $env:USERPROFILE\.tauri\vrc-asset-manager.key
 ```
 
+`release:local` reads this file and sets `TAURI_SIGNING_PRIVATE_KEY` only for
+the current build process. You do not need to store the private key as a
+persistent system environment variable on your own machine.
+
 If the signing key has a password, set it before running the script:
 
 ```powershell
