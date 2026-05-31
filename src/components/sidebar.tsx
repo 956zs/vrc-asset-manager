@@ -9,6 +9,7 @@ import {
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
+  ChevronDown,
   Check,
   Download,
   GripVertical,
@@ -69,6 +70,10 @@ type DropTarget = {
 };
 
 const SIDEBAR_WIDTH_STORAGE_KEY = "vrc-asset-manager-sidebar-width";
+const SIDEBAR_MODEL_FILTER_OPEN_STORAGE_KEY =
+  "vrc-asset-manager-sidebar-model-filter-open";
+const SIDEBAR_TAG_FILTER_OPEN_STORAGE_KEY =
+  "vrc-asset-manager-sidebar-tag-filter-open";
 const SIDEBAR_DEFAULT_WIDTH = 240;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 420;
@@ -85,6 +90,15 @@ const getInitialSidebarWidth = () => {
   return Number.isFinite(saved)
     ? clampSidebarWidth(saved)
     : SIDEBAR_DEFAULT_WIDTH;
+};
+
+const getInitialSidebarSectionOpen = (key: string) => {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const saved = window.localStorage.getItem(key);
+  return saved === null ? true : saved === "true";
 };
 
 const getReorderedIds = <T extends { id: number }>(
@@ -158,6 +172,12 @@ export function Sidebar() {
   const sidebarRef = useRef<HTMLElement>(null);
   const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [isModelFilterOpen, setIsModelFilterOpen] = useState(() =>
+    getInitialSidebarSectionOpen(SIDEBAR_MODEL_FILTER_OPEN_STORAGE_KEY),
+  );
+  const [isTagFilterOpen, setIsTagFilterOpen] = useState(() =>
+    getInitialSidebarSectionOpen(SIDEBAR_TAG_FILTER_OPEN_STORAGE_KEY),
+  );
   const [isModelEditMode, setIsModelEditMode] = useState(false);
   const [isTagEditMode, setIsTagEditMode] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -172,6 +192,8 @@ export function Sidebar() {
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
   const filteredCount = getFilteredAssets().length;
+  const selectedModelCount = filters.modelIds.length;
+  const selectedTagCount = filters.tagIds.length;
   const hasActiveFilters =
     filters.search || filters.modelIds.length > 0 || filters.tagIds.length > 0;
   const deleteDescription =
@@ -202,10 +224,44 @@ export function Sidebar() {
   }, [sidebarWidth]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      SIDEBAR_MODEL_FILTER_OPEN_STORAGE_KEY,
+      String(isModelFilterOpen),
+    );
+  }, [isModelFilterOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      SIDEBAR_TAG_FILTER_OPEN_STORAGE_KEY,
+      String(isTagFilterOpen),
+    );
+  }, [isTagFilterOpen]);
+
+  useEffect(() => {
     void getVersion()
       .then(setAppVersion)
       .catch(() => setAppVersion(null));
   }, []);
+
+  useEffect(() => {
+    if (isModelEditMode) {
+      setIsModelFilterOpen(true);
+    }
+  }, [isModelEditMode]);
+
+  useEffect(() => {
+    if (isTagEditMode) {
+      setIsTagFilterOpen(true);
+    }
+  }, [isTagEditMode]);
 
   useEffect(() => {
     if (!isResizingSidebar) {
@@ -481,10 +537,26 @@ export function Sidebar() {
 
           <div>
             <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-              <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium text-sidebar-foreground">
+              <button
+                type="button"
+                className="flex h-8 min-w-0 items-center gap-2 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+                aria-expanded={isModelFilterOpen}
+                onClick={() => setIsModelFilterOpen((current) => !current)}
+              >
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 transition-transform",
+                    !isModelFilterOpen && "-rotate-90",
+                  )}
+                />
                 <User className="h-4 w-4 shrink-0" />
                 <span className="truncate">依模型篩選</span>
-              </h3>
+                {selectedModelCount > 0 && (
+                  <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
+                    已選 {selectedModelCount}
+                  </span>
+                )}
+              </button>
               <div className="flex shrink-0 items-center gap-1">
                 <Button
                   type="button"
@@ -496,7 +568,13 @@ export function Sidebar() {
                   )}
                   title={isModelEditMode ? "完成編輯模型" : "編輯模型清單"}
                   aria-label={isModelEditMode ? "完成編輯模型" : "編輯模型清單"}
-                  onClick={() => setIsModelEditMode((current) => !current)}
+                  onClick={() => {
+                    const nextEditMode = !isModelEditMode;
+                    setIsModelEditMode(nextEditMode);
+                    if (nextEditMode) {
+                      setIsModelFilterOpen(true);
+                    }
+                  }}
                 >
                   {isModelEditMode ? (
                     <Check className="h-3.5 w-3.5" />
@@ -512,105 +590,126 @@ export function Sidebar() {
                     className="!size-7 text-muted-foreground hover:text-sidebar-foreground"
                     title="新增模型"
                     aria-label="新增模型"
-                    onClick={() => setAddModelDialogOpen(true)}
+                    onClick={() => {
+                      setIsModelFilterOpen(true);
+                      setAddModelDialogOpen(true);
+                    }}
                   >
                     <Plus className="h-3 w-3" />
                   </Button>
                 )}
               </div>
             </div>
-            <div className="space-y-1">
-              {models.map((model) => (
-                <div
-                  key={model.id}
-                  data-model-id={model.id}
-                  className={cn(
-                    "relative grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
-                    "hover:bg-sidebar-accent",
-                    filters.modelIds.includes(model.id) && "bg-sidebar-accent",
-                    isModelEditMode && "grid-cols-[auto_auto_minmax(0,1fr)_auto]",
-                    draggedModelId === model.id && "scale-[0.98] opacity-40",
-                    modelDropTarget?.id === model.id &&
-                      draggedModelId !== model.id &&
-                      "bg-sidebar-accent/80",
-                    modelDropTarget?.id === model.id &&
-                      modelDropTarget.placement === "before" &&
-                      "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
-                    modelDropTarget?.id === model.id &&
-                      modelDropTarget.placement === "after" &&
-                      "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
-                  )}
-                >
-                  {isModelEditMode && (
+            {isModelFilterOpen && (
+              <div className="space-y-1">
+                {models.map((model) => (
+                  <div
+                    key={model.id}
+                    data-model-id={model.id}
+                    className={cn(
+                      "relative grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                      "hover:bg-sidebar-accent",
+                      filters.modelIds.includes(model.id) && "bg-sidebar-accent",
+                      isModelEditMode && "grid-cols-[auto_auto_minmax(0,1fr)_auto]",
+                      draggedModelId === model.id && "scale-[0.98] opacity-40",
+                      modelDropTarget?.id === model.id &&
+                        draggedModelId !== model.id &&
+                        "bg-sidebar-accent/80",
+                      modelDropTarget?.id === model.id &&
+                        modelDropTarget.placement === "before" &&
+                        "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
+                      modelDropTarget?.id === model.id &&
+                        modelDropTarget.placement === "after" &&
+                        "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
+                    )}
+                  >
+                    {isModelEditMode && (
+                      <button
+                        type="button"
+                        className="flex !size-6 !cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground active:!cursor-grabbing"
+                        title="拖曳排序"
+                        aria-label="拖曳排序"
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => handleModelDragStart(event, model.id)}
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <Checkbox
+                      checked={filters.modelIds.includes(model.id)}
+                      onCheckedChange={() => toggleModelFilter(model.id)}
+                    />
                     <button
                       type="button"
-                      className="flex !size-6 !cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground active:!cursor-grabbing"
-                      title="拖曳排序"
-                      aria-label="拖曳排序"
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => handleModelDragStart(event, model.id)}
+                      className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
+                      onClick={() => toggleModelFilter(model.id)}
                     >
-                      <GripVertical className="h-3.5 w-3.5" />
+                      {model.display_name || model.name}
                     </button>
-                  )}
-                  <Checkbox
-                    checked={filters.modelIds.includes(model.id)}
-                    onCheckedChange={() => toggleModelFilter(model.id)}
-                  />
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
-                    onClick={() => toggleModelFilter(model.id)}
-                  >
-                    {model.display_name || model.name}
-                  </button>
-                  {isModelEditMode && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="!size-7"
-                        title="編輯模型"
-                        aria-label="編輯模型"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleEditModel(model);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="!size-7"
-                        title="刪除模型"
-                        aria-label="刪除模型"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDeleteTarget({
-                            type: "model",
-                            id: model.id,
-                            label: model.display_name || model.name,
-                          });
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                    {isModelEditMode && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="!size-7"
+                          title="編輯模型"
+                          aria-label="編輯模型"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEditModel(model);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="!size-7"
+                          title="刪除模型"
+                          aria-label="刪除模型"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeleteTarget({
+                              type: "model",
+                              id: model.id,
+                              label: model.display_name || model.name,
+                            });
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
             <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-              <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium text-sidebar-foreground">
+              <button
+                type="button"
+                className="flex h-8 min-w-0 items-center gap-2 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+                aria-expanded={isTagFilterOpen}
+                onClick={() => setIsTagFilterOpen((current) => !current)}
+              >
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 transition-transform",
+                    !isTagFilterOpen && "-rotate-90",
+                  )}
+                />
                 <Tag className="h-4 w-4 shrink-0" />
                 <span className="truncate">依標籤篩選</span>
-              </h3>
+                {selectedTagCount > 0 && (
+                  <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
+                    已選 {selectedTagCount}
+                  </span>
+                )}
+              </button>
               <div className="flex shrink-0 items-center gap-1">
                 <Button
                   type="button"
@@ -622,7 +721,13 @@ export function Sidebar() {
                   )}
                   title={isTagEditMode ? "完成編輯標籤" : "編輯標籤清單"}
                   aria-label={isTagEditMode ? "完成編輯標籤" : "編輯標籤清單"}
-                  onClick={() => setIsTagEditMode((current) => !current)}
+                  onClick={() => {
+                    const nextEditMode = !isTagEditMode;
+                    setIsTagEditMode(nextEditMode);
+                    if (nextEditMode) {
+                      setIsTagFilterOpen(true);
+                    }
+                  }}
                 >
                   {isTagEditMode ? (
                     <Check className="h-3.5 w-3.5" />
@@ -638,101 +743,106 @@ export function Sidebar() {
                     className="!size-7 text-muted-foreground hover:text-sidebar-foreground"
                     title="新增標籤"
                     aria-label="新增標籤"
-                    onClick={() => setAddTagDialogOpen(true)}
+                    onClick={() => {
+                      setIsTagFilterOpen(true);
+                      setAddTagDialogOpen(true);
+                    }}
                   >
                     <Plus className="h-3 w-3" />
                   </Button>
                 )}
               </div>
             </div>
-            <div className="space-y-1">
-              {tags.map((tag) => (
-                <div
-                  key={tag.id}
-                  data-tag-id={tag.id}
-                  className={cn(
-                    "relative grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
-                    "hover:bg-sidebar-accent",
-                    filters.tagIds.includes(tag.id) && "bg-sidebar-accent",
-                    isTagEditMode && "grid-cols-[auto_auto_auto_minmax(0,1fr)_auto]",
-                    draggedTagId === tag.id && "scale-[0.98] opacity-40",
-                    tagDropTarget?.id === tag.id &&
-                      draggedTagId !== tag.id &&
-                      "bg-sidebar-accent/80",
-                    tagDropTarget?.id === tag.id &&
-                      tagDropTarget.placement === "before" &&
-                      "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
-                    tagDropTarget?.id === tag.id &&
-                      tagDropTarget.placement === "after" &&
-                      "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
-                  )}
-                >
-                  {isTagEditMode && (
+            {isTagFilterOpen && (
+              <div className="space-y-1">
+                {tags.map((tag) => (
+                  <div
+                    key={tag.id}
+                    data-tag-id={tag.id}
+                    className={cn(
+                      "relative grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+                      "hover:bg-sidebar-accent",
+                      filters.tagIds.includes(tag.id) && "bg-sidebar-accent",
+                      isTagEditMode && "grid-cols-[auto_auto_auto_minmax(0,1fr)_auto]",
+                      draggedTagId === tag.id && "scale-[0.98] opacity-40",
+                      tagDropTarget?.id === tag.id &&
+                        draggedTagId !== tag.id &&
+                        "bg-sidebar-accent/80",
+                      tagDropTarget?.id === tag.id &&
+                        tagDropTarget.placement === "before" &&
+                        "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
+                      tagDropTarget?.id === tag.id &&
+                        tagDropTarget.placement === "after" &&
+                        "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
+                    )}
+                  >
+                    {isTagEditMode && (
+                      <button
+                        type="button"
+                        className="flex !size-6 !cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground active:!cursor-grabbing"
+                        title="拖曳排序"
+                        aria-label="拖曳排序"
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => handleTagDragStart(event, tag.id)}
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <Checkbox
+                      checked={filters.tagIds.includes(tag.id)}
+                      onCheckedChange={() => toggleTagFilter(tag.id)}
+                    />
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: tag.color }}
+                    />
                     <button
                       type="button"
-                      className="flex !size-6 !cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground active:!cursor-grabbing"
-                      title="拖曳排序"
-                      aria-label="拖曳排序"
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => handleTagDragStart(event, tag.id)}
+                      className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
+                      onClick={() => toggleTagFilter(tag.id)}
                     >
-                      <GripVertical className="h-3.5 w-3.5" />
+                      {tag.name}
                     </button>
-                  )}
-                  <Checkbox
-                    checked={filters.tagIds.includes(tag.id)}
-                    onCheckedChange={() => toggleTagFilter(tag.id)}
-                  />
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: tag.color }}
-                  />
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
-                    onClick={() => toggleTagFilter(tag.id)}
-                  >
-                    {tag.name}
-                  </button>
-                  {isTagEditMode && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="!size-7"
-                        title="編輯標籤"
-                        aria-label="編輯標籤"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleEditTag(tag);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="!size-7"
-                        title="刪除標籤"
-                        aria-label="刪除標籤"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDeleteTarget({
-                            type: "tag",
-                            id: tag.id,
-                            label: tag.name,
-                          });
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                    {isTagEditMode && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="!size-7"
+                          title="編輯標籤"
+                          aria-label="編輯標籤"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEditTag(tag);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="!size-7"
+                          title="刪除標籤"
+                          aria-label="刪除標籤"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeleteTarget({
+                              type: "tag",
+                              id: tag.id,
+                              label: tag.name,
+                            });
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </ScrollArea>
@@ -743,7 +853,7 @@ export function Sidebar() {
             type="button"
             variant="outline"
             size="sm"
-            className="justify-start"
+            className="justify-center"
             disabled={saving}
             onClick={() => void handleExportSave()}
           >
@@ -754,7 +864,7 @@ export function Sidebar() {
             type="button"
             variant="outline"
             size="sm"
-            className="justify-start"
+            className="justify-center"
             disabled={saving}
             onClick={() => void handleSelectImportSave()}
           >
