@@ -49,6 +49,11 @@ function Read-Json($Path) {
   return Get-Content $Path -Raw | ConvertFrom-Json
 }
 
+function Test-ReleaseExists($Gh, $Tag, $Repo) {
+  & $Gh release view $Tag --repo $Repo *> $null
+  return $LASTEXITCODE -eq 0
+}
+
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
@@ -110,6 +115,11 @@ if (-not $remoteTag) {
   Invoke-Step "git" @("push", "origin", $Tag)
 }
 
+$releaseExists = Test-ReleaseExists $gh $Tag $Repo
+if ($releaseExists -and -not $Clobber) {
+  Fail "Release $Tag already exists. Re-run with -Clobber to replace matching assets, or delete the draft release and re-run. Use -SkipBuild if the local installer is already built."
+}
+
 if (-not $SkipBuild) {
   Invoke-Step "npm" @("run", "tauri", "build", "--", "--bundles", "nsis")
 }
@@ -151,12 +161,6 @@ $latest = [ordered]@{
 }
 
 $latest | ConvertTo-Json -Depth 10 | Set-Content -Path $latestJsonPath -Encoding utf8
-
-$releaseExists = $true
-& $gh release view $Tag --repo $Repo *> $null
-if ($LASTEXITCODE -ne 0) {
-  $releaseExists = $false
-}
 
 $isPrerelease = $Tag -match "-(beta|rc)"
 $assetPaths = @($installer.FullName, $signaturePath, $latestJsonPath)
