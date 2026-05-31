@@ -6,10 +6,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAssetStore } from "@/stores/asset-store";
 
 export function AssetGrid() {
-  const { loading, selectedAssetId, selectAsset, getFilteredAssets } = useAssetStore();
-  const filteredAssets = getFilteredAssets();
+  const assets = useAssetStore((state) => state.assets);
+  const loading = useAssetStore((state) => state.loading);
+  const selectedAssetId = useAssetStore((state) => state.selectedAssetId);
+  const selectAsset = useAssetStore((state) => state.selectAsset);
 
-  if (filteredAssets.length === 0) {
+  if (assets.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="space-y-3 text-center">
@@ -31,7 +33,7 @@ export function AssetGrid() {
     <ScrollArea className="min-h-0 flex-1">
       <div className="p-4">
         <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4">
-          {filteredAssets.map((asset) => (
+          {assets.map((asset) => (
             <AssetCard
               key={asset.id}
               asset={asset}

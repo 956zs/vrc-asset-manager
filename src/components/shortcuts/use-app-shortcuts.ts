@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useAssetStore } from "@/stores/asset-store";
+import { selectSelectedAsset, useAssetStore } from "@/stores/asset-store";
 
 type UseAppShortcutsInput = {
   isAssetView: boolean;
@@ -60,7 +60,7 @@ export function useAppShortcuts({
   const openRelatedAssetSearch = useAssetStore(
     (state) => state.openRelatedAssetSearch,
   );
-  const getSelectedAsset = useAssetStore((state) => state.getSelectedAsset);
+  const selectedAsset = useAssetStore(selectSelectedAsset);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -147,9 +147,8 @@ export function useAppShortcuts({
 
       if (modifier && key === "o") {
         event.preventDefault();
-        const asset = getSelectedAsset();
-        if (isAssetView && asset?.file_path.trim()) {
-          void invoke("open_file_location", { path: asset.file_path });
+        if (isAssetView && selectedAsset?.file_path.trim()) {
+          void invoke("open_file_location", { path: selectedAsset.file_path });
         }
         return;
       }
@@ -166,13 +165,13 @@ export function useAppShortcuts({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    getSelectedAsset,
     isAssetView,
     openCommandPalette,
     openHelp,
     openRelatedAssetSearch,
     requestAssetEdit,
     selectAsset,
+    selectedAsset,
     selectedAssetId,
     setAddAssetDialogOpen,
     setAddModelDialogOpen,

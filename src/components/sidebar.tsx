@@ -3,22 +3,19 @@
 import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import {
-  ChevronDown,
-  Check,
   Download,
   GripVertical,
   Package,
-  Pencil,
   Plus,
   Search,
   Tag,
-  Trash2,
   Upload,
   User,
   X,
@@ -33,8 +30,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { SidebarFilterSectionHeader } from "@/components/sidebar-filter-section-header";
+import {
+  SidebarFilterRow,
+  type SidebarDropTarget,
+} from "@/components/sidebar-filter-row";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -61,13 +62,6 @@ type DragState =
       type: "tag";
       id: number;
     };
-
-type DropPlacement = "before" | "after";
-
-type DropTarget = {
-  id: number;
-  placement: DropPlacement;
-};
 
 const SIDEBAR_WIDTH_STORAGE_KEY = "vrc-asset-manager-sidebar-width";
 const SIDEBAR_MODEL_FILTER_OPEN_STORAGE_KEY =
@@ -105,7 +99,7 @@ const getReorderedIds = <T extends { id: number }>(
   items: T[],
   draggedId: number,
   targetId: number,
-  placement: DropPlacement,
+  placement: SidebarDropTarget["placement"],
 ) => {
   const draggedItem = items.find((item) => item.id === draggedId);
   const remainingItems = items.filter((item) => item.id !== draggedId);
@@ -129,7 +123,7 @@ const getPointerDropTargetId = (
   type: DragState["type"],
   clientX: number,
   clientY: number,
-): DropTarget | null => {
+): SidebarDropTarget | null => {
   const target = document.elementFromPoint(clientX, clientY);
   const attribute = type === "model" ? "data-model-id" : "data-tag-id";
   const row = target?.closest<HTMLElement>(`[${attribute}]`);
@@ -148,6 +142,7 @@ const getPointerDropTargetId = (
 
 export function Sidebar() {
   const {
+    assets,
     models,
     tags,
     filters,
@@ -166,7 +161,6 @@ export function Sidebar() {
     reorderTags,
     exportSave,
     importSave,
-    getFilteredAssets,
     saving,
   } = useAssetStore();
   const sidebarRef = useRef<HTMLElement>(null);
@@ -185,17 +179,36 @@ export function Sidebar() {
     x: number;
     y: number;
   } | null>(null);
-  const [modelDropTarget, setModelDropTarget] = useState<DropTarget | null>(null);
-  const [tagDropTarget, setTagDropTarget] = useState<DropTarget | null>(null);
+  const [modelDropTarget, setModelDropTarget] =
+    useState<SidebarDropTarget | null>(null);
+  const [tagDropTarget, setTagDropTarget] =
+    useState<SidebarDropTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [importPath, setImportPath] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
-  const filteredCount = getFilteredAssets().length;
   const selectedModelCount = filters.modelIds.length;
   const selectedTagCount = filters.tagIds.length;
-  const hasActiveFilters =
-    filters.search || filters.modelIds.length > 0 || filters.tagIds.length > 0;
+  const hasActiveFilters = Boolean(
+    filters.search || selectedModelCount > 0 || selectedTagCount > 0,
+  );
+  const filteredCount = hasActiveFilters ? assets.length : 0;
+  const selectedModelIds = useMemo(
+    () => new Set(filters.modelIds),
+    [filters.modelIds],
+  );
+  const selectedTagIds = useMemo(
+    () => new Set(filters.tagIds),
+    [filters.tagIds],
+  );
+  const modelById = useMemo(
+    () => new Map(models.map((model) => [model.id, model])),
+    [models],
+  );
+  const tagById = useMemo(
+    () => new Map(tags.map((tag) => [tag.id, tag])),
+    [tags],
+  );
   const deleteDescription =
     deleteTarget?.type === "model"
       ? `此操作將刪除模型「${deleteTarget.label}」，並移除所有素材與此模型的關聯。實際素材檔案不會被刪除。`
@@ -204,13 +217,18 @@ export function Sidebar() {
         : "";
   const draggedModelId = dragState?.type === "model" ? dragState.id : null;
   const draggedTagId = dragState?.type === "tag" ? dragState.id : null;
-  const dragPreviewLabel =
-    dragState?.type === "model"
-      ? models.find((model) => model.id === dragState.id)?.display_name ||
-        models.find((model) => model.id === dragState.id)?.name
-      : dragState?.type === "tag"
-        ? tags.find((tag) => tag.id === dragState.id)?.name
-        : null;
+  const dragPreviewLabel = useMemo(() => {
+    if (!dragState) {
+      return null;
+    }
+
+    if (dragState.type === "model") {
+      const model = modelById.get(dragState.id);
+      return model?.display_name || model?.name || null;
+    }
+
+    return tagById.get(dragState.id)?.name ?? null;
+  }, [dragState, modelById, tagById]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -536,310 +554,107 @@ export function Sidebar() {
           </Button>
 
           <div>
-            <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-              <button
-                type="button"
-                className="flex h-8 min-w-0 items-center gap-2 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
-                aria-expanded={isModelFilterOpen}
-                onClick={() => setIsModelFilterOpen((current) => !current)}
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 shrink-0 transition-transform",
-                    !isModelFilterOpen && "-rotate-90",
-                  )}
-                />
-                <User className="h-4 w-4 shrink-0" />
-                <span className="truncate">依模型篩選</span>
-                {selectedModelCount > 0 && (
-                  <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
-                    已選 {selectedModelCount}
-                  </span>
-                )}
-              </button>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "!size-7 text-muted-foreground hover:text-sidebar-foreground",
-                    isModelEditMode && "bg-sidebar-accent text-sidebar-foreground",
-                  )}
-                  title={isModelEditMode ? "完成編輯模型" : "編輯模型清單"}
-                  aria-label={isModelEditMode ? "完成編輯模型" : "編輯模型清單"}
-                  onClick={() => {
-                    const nextEditMode = !isModelEditMode;
-                    setIsModelEditMode(nextEditMode);
-                    if (nextEditMode) {
-                      setIsModelFilterOpen(true);
-                    }
-                  }}
-                >
-                  {isModelEditMode ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : (
-                    <Pencil className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-                {isModelEditMode && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="!size-7 text-muted-foreground hover:text-sidebar-foreground"
-                    title="新增模型"
-                    aria-label="新增模型"
-                    onClick={() => {
-                      setIsModelFilterOpen(true);
-                      setAddModelDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            </div>
+            <SidebarFilterSectionHeader
+              icon={User}
+              label="依模型篩選"
+              selectedCount={selectedModelCount}
+              open={isModelFilterOpen}
+              editing={isModelEditMode}
+              editLabel="編輯模型清單"
+              doneLabel="完成編輯模型"
+              addLabel="新增模型"
+              onToggleOpen={() => setIsModelFilterOpen((current) => !current)}
+              onToggleEditing={() => {
+                const nextEditMode = !isModelEditMode;
+                setIsModelEditMode(nextEditMode);
+                if (nextEditMode) {
+                  setIsModelFilterOpen(true);
+                }
+              }}
+              onAdd={() => {
+                setIsModelFilterOpen(true);
+                setAddModelDialogOpen(true);
+              }}
+            />
             {isModelFilterOpen && (
               <div className="space-y-1">
                 {models.map((model) => (
-                  <div
+                  <SidebarFilterRow
                     key={model.id}
-                    data-model-id={model.id}
-                    className={cn(
-                      "relative grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
-                      "hover:bg-sidebar-accent",
-                      filters.modelIds.includes(model.id) && "bg-sidebar-accent",
-                      isModelEditMode && "grid-cols-[auto_auto_minmax(0,1fr)_auto]",
-                      draggedModelId === model.id && "scale-[0.98] opacity-40",
-                      modelDropTarget?.id === model.id &&
-                        draggedModelId !== model.id &&
-                        "bg-sidebar-accent/80",
-                      modelDropTarget?.id === model.id &&
-                        modelDropTarget.placement === "before" &&
-                        "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
-                      modelDropTarget?.id === model.id &&
-                        modelDropTarget.placement === "after" &&
-                        "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
-                    )}
-                  >
-                    {isModelEditMode && (
-                      <button
-                        type="button"
-                        className="flex !size-6 !cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground active:!cursor-grabbing"
-                        title="拖曳排序"
-                        aria-label="拖曳排序"
-                        onClick={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => handleModelDragStart(event, model.id)}
-                      >
-                        <GripVertical className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <Checkbox
-                      checked={filters.modelIds.includes(model.id)}
-                      onCheckedChange={() => toggleModelFilter(model.id)}
-                    />
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
-                      onClick={() => toggleModelFilter(model.id)}
-                    >
-                      {model.display_name || model.name}
-                    </button>
-                    {isModelEditMode && (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="!size-7"
-                          title="編輯模型"
-                          aria-label="編輯模型"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleEditModel(model);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="!size-7"
-                          title="刪除模型"
-                          aria-label="刪除模型"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setDeleteTarget({
-                              type: "model",
-                              id: model.id,
-                              label: model.display_name || model.name,
-                            });
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                    kind="model"
+                    id={model.id}
+                    label={model.display_name || model.name}
+                    checked={selectedModelIds.has(model.id)}
+                    editing={isModelEditMode}
+                    dragging={draggedModelId === model.id}
+                    dropTarget={modelDropTarget}
+                    editLabel="編輯模型"
+                    deleteLabel="刪除模型"
+                    onToggle={() => toggleModelFilter(model.id)}
+                    onEdit={() => handleEditModel(model)}
+                    onDelete={() =>
+                      setDeleteTarget({
+                        type: "model",
+                        id: model.id,
+                        label: model.display_name || model.name,
+                      })
+                    }
+                    onDragStart={handleModelDragStart}
+                  />
                 ))}
               </div>
             )}
           </div>
 
           <div>
-            <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-              <button
-                type="button"
-                className="flex h-8 min-w-0 items-center gap-2 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
-                aria-expanded={isTagFilterOpen}
-                onClick={() => setIsTagFilterOpen((current) => !current)}
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 shrink-0 transition-transform",
-                    !isTagFilterOpen && "-rotate-90",
-                  )}
-                />
-                <Tag className="h-4 w-4 shrink-0" />
-                <span className="truncate">依標籤篩選</span>
-                {selectedTagCount > 0 && (
-                  <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
-                    已選 {selectedTagCount}
-                  </span>
-                )}
-              </button>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "!size-7 text-muted-foreground hover:text-sidebar-foreground",
-                    isTagEditMode && "bg-sidebar-accent text-sidebar-foreground",
-                  )}
-                  title={isTagEditMode ? "完成編輯標籤" : "編輯標籤清單"}
-                  aria-label={isTagEditMode ? "完成編輯標籤" : "編輯標籤清單"}
-                  onClick={() => {
-                    const nextEditMode = !isTagEditMode;
-                    setIsTagEditMode(nextEditMode);
-                    if (nextEditMode) {
-                      setIsTagFilterOpen(true);
-                    }
-                  }}
-                >
-                  {isTagEditMode ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : (
-                    <Pencil className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-                {isTagEditMode && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="!size-7 text-muted-foreground hover:text-sidebar-foreground"
-                    title="新增標籤"
-                    aria-label="新增標籤"
-                    onClick={() => {
-                      setIsTagFilterOpen(true);
-                      setAddTagDialogOpen(true);
-                    }}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            </div>
+            <SidebarFilterSectionHeader
+              icon={Tag}
+              label="依標籤篩選"
+              selectedCount={selectedTagCount}
+              open={isTagFilterOpen}
+              editing={isTagEditMode}
+              editLabel="編輯標籤清單"
+              doneLabel="完成編輯標籤"
+              addLabel="新增標籤"
+              onToggleOpen={() => setIsTagFilterOpen((current) => !current)}
+              onToggleEditing={() => {
+                const nextEditMode = !isTagEditMode;
+                setIsTagEditMode(nextEditMode);
+                if (nextEditMode) {
+                  setIsTagFilterOpen(true);
+                }
+              }}
+              onAdd={() => {
+                setIsTagFilterOpen(true);
+                setAddTagDialogOpen(true);
+              }}
+            />
             {isTagFilterOpen && (
               <div className="space-y-1">
                 {tags.map((tag) => (
-                  <div
+                  <SidebarFilterRow
                     key={tag.id}
-                    data-tag-id={tag.id}
-                    className={cn(
-                      "relative grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
-                      "hover:bg-sidebar-accent",
-                      filters.tagIds.includes(tag.id) && "bg-sidebar-accent",
-                      isTagEditMode && "grid-cols-[auto_auto_auto_minmax(0,1fr)_auto]",
-                      draggedTagId === tag.id && "scale-[0.98] opacity-40",
-                      tagDropTarget?.id === tag.id &&
-                        draggedTagId !== tag.id &&
-                        "bg-sidebar-accent/80",
-                      tagDropTarget?.id === tag.id &&
-                        tagDropTarget.placement === "before" &&
-                        "before:absolute before:top-0 before:left-2 before:right-2 before:h-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-['']",
-                      tagDropTarget?.id === tag.id &&
-                        tagDropTarget.placement === "after" &&
-                        "after:absolute after:right-2 after:bottom-0 after:left-2 after:h-0.5 after:translate-y-1/2 after:rounded-full after:bg-primary after:content-['']",
-                    )}
-                  >
-                    {isTagEditMode && (
-                      <button
-                        type="button"
-                        className="flex !size-6 !cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground active:!cursor-grabbing"
-                        title="拖曳排序"
-                        aria-label="拖曳排序"
-                        onClick={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => handleTagDragStart(event, tag.id)}
-                      >
-                        <GripVertical className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <Checkbox
-                      checked={filters.tagIds.includes(tag.id)}
-                      onCheckedChange={() => toggleTagFilter(tag.id)}
-                    />
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
-                      onClick={() => toggleTagFilter(tag.id)}
-                    >
-                      {tag.name}
-                    </button>
-                    {isTagEditMode && (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="!size-7"
-                          title="編輯標籤"
-                          aria-label="編輯標籤"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleEditTag(tag);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="!size-7"
-                          title="刪除標籤"
-                          aria-label="刪除標籤"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setDeleteTarget({
-                              type: "tag",
-                              id: tag.id,
-                              label: tag.name,
-                            });
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                    kind="tag"
+                    id={tag.id}
+                    label={tag.name}
+                    checked={selectedTagIds.has(tag.id)}
+                    editing={isTagEditMode}
+                    dragging={draggedTagId === tag.id}
+                    dropTarget={tagDropTarget}
+                    swatchColor={tag.color}
+                    editLabel="編輯標籤"
+                    deleteLabel="刪除標籤"
+                    onToggle={() => toggleTagFilter(tag.id)}
+                    onEdit={() => handleEditTag(tag)}
+                    onDelete={() =>
+                      setDeleteTarget({
+                        type: "tag",
+                        id: tag.id,
+                        label: tag.name,
+                      })
+                    }
+                    onDragStart={handleTagDragStart}
+                  />
                 ))}
               </div>
             )}

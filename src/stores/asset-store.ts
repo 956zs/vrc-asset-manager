@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
+import { toggleId } from "@/lib/id-list";
 import type {
   Asset,
   AssetFilters,
@@ -112,8 +113,6 @@ type AssetStore = {
   clearAssetEditRequest: () => void;
   openRelatedAssetSearch: (assetId: number) => void;
   closeRelatedAssetSearch: () => void;
-  getFilteredAssets: () => Asset[];
-  getSelectedAsset: () => Asset | null;
 };
 
 const defaultFilters: AssetFilters = {
@@ -121,6 +120,16 @@ const defaultFilters: AssetFilters = {
   modelIds: [],
   tagIds: [],
 };
+
+let assetLoadGeneration = 0;
+
+const nextAssetLoadGeneration = () => {
+  assetLoadGeneration += 1;
+  return assetLoadGeneration;
+};
+
+const isCurrentAssetLoad = (generation: number) =>
+  generation === assetLoadGeneration;
 
 const toMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -169,8 +178,22 @@ const cleanFilters = (filters: AssetFilters) => ({
   tagIds: filters.tagIds,
 });
 
-const toggleId = (values: number[], id: number) =>
-  values.includes(id) ? values.filter((value) => value !== id) : [...values, id];
+const loadBackendAssets = async (filters: AssetFilters) => {
+  const assets = await invoke<BackendAsset[]>("get_assets", {
+    filters: cleanFilters(filters),
+  });
+  return assets.map(toAsset);
+};
+
+const errorState = (
+  error: unknown,
+  state: Partial<
+    Pick<AssetStore, "assets" | "models" | "tags" | "loading" | "saving">
+  > = {},
+) => ({
+  ...state,
+  error: toMessage(error),
+});
 
 const orderedByIds = <T extends { id: number }>(items: T[], ids: number[]) => {
   const order = new Map(ids.map((id, index) => [id, index]));
@@ -201,6 +224,9 @@ const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
     })),
 });
 
+export const selectSelectedAsset = (state: AssetStore) =>
+  state.assets.find((asset) => asset.id === state.selectedAssetId) ?? null;
+
 export const useAssetStore = create<AssetStore>((set, get) => ({
   assets: [],
   models: [],
@@ -220,41 +246,48 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   notice: null,
 
   loadAll: async () => {
+    const generation = nextAssetLoadGeneration();
     set({ loading: true, error: null });
     try {
-      const filters = cleanFilters(get().filters);
       const [models, tags, assets] = await Promise.all([
         invoke<BackendModel[]>("get_models"),
         invoke<BackendTag[]>("get_tags"),
-        invoke<BackendAsset[]>("get_assets", { filters }),
+        loadBackendAssets(get().filters),
       ]);
+      if (!isCurrentAssetLoad(generation)) {
+        return;
+      }
+
       set({
         models: models.map(toModel),
         tags: tags.map(toTag),
-        assets: assets.map(toAsset),
+        assets,
         loading: false,
       });
     } catch (error) {
-      set({ error: toMessage(error), loading: false });
+      if (isCurrentAssetLoad(generation)) {
+        set(errorState(error, { loading: false }));
+      }
     }
   },
 
   loadAssets: async () => {
+    const generation = nextAssetLoadGeneration();
     set({ loading: true, error: null });
     try {
-      const filters = cleanFilters(get().filters);
-      const assets = await invoke<BackendAsset[]>("get_assets", { filters });
-      set({ assets: assets.map(toAsset), loading: false });
+      const assets = await loadBackendAssets(get().filters);
+      if (isCurrentAssetLoad(generation)) {
+        set({ assets, loading: false });
+      }
     } catch (error) {
-      set({ error: toMessage(error), loading: false });
+      if (isCurrentAssetLoad(generation)) {
+        set(errorState(error, { loading: false }));
+      }
     }
   },
 
   getAllAssets: async () => {
-    const assets = await invoke<BackendAsset[]>("get_assets", {
-      filters: { modelIds: [], tagIds: [] },
-    });
-    return assets.map(toAsset);
+    return loadBackendAssets(defaultFilters);
   },
 
   clearError: () => set({ error: null }),
@@ -319,7 +352,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         saving: false,
       });
     } catch (error) {
-      set({ error: toMessage(error), saving: false });
+      set(errorState(error, { saving: false }));
       throw error;
     }
   },
@@ -339,7 +372,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       await get().loadAssets();
       set({ saving: false });
     } catch (error) {
-      set({ error: toMessage(error), saving: false });
+      set(errorState(error, { saving: false }));
       throw error;
     }
   },
@@ -351,7 +384,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       await get().loadAssets();
       set({ selectedAssetId: null, saving: false });
     } catch (error) {
-      set({ error: toMessage(error), saving: false });
+      set(errorState(error, { saving: false }));
       throw error;
     }
   },
@@ -364,7 +397,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       });
       set((state) => ({ models: [...state.models, toModel(model)] }));
     } catch (error) {
-      set({ error: toMessage(error) });
+      set(errorState(error));
       throw error;
     }
   },
@@ -384,7 +417,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }));
       await get().loadAssets();
     } catch (error) {
-      set({ error: toMessage(error) });
+      set(errorState(error));
       throw error;
     }
   },
@@ -402,7 +435,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }));
       await get().loadAssets();
     } catch (error) {
-      set({ error: toMessage(error) });
+      set(errorState(error));
       throw error;
     }
   },
@@ -413,7 +446,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       const tag = await invoke<BackendTag>("create_tag", { input: { name, color } });
       set((state) => ({ tags: [...state.tags, toTag(tag)] }));
     } catch (error) {
-      set({ error: toMessage(error) });
+      set(errorState(error));
       throw error;
     }
   },
@@ -430,7 +463,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }));
       await get().loadAssets();
     } catch (error) {
-      set({ error: toMessage(error) });
+      set(errorState(error));
       throw error;
     }
   },
@@ -448,7 +481,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }));
       await get().loadAssets();
     } catch (error) {
-      set({ error: toMessage(error) });
+      set(errorState(error));
       throw error;
     }
   },
@@ -469,11 +502,10 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     try {
       await invoke("reorder_models", { input: { modelIds } });
     } catch (error) {
-      set({
+      set(errorState(error, {
         models: previousModels,
         assets: previousAssets,
-        error: toMessage(error),
-      });
+      }));
       throw error;
     }
   },
@@ -494,11 +526,10 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     try {
       await invoke("reorder_tags", { input: { tagIds } });
     } catch (error) {
-      set({
+      set(errorState(error, {
         tags: previousTags,
         assets: previousAssets,
-        error: toMessage(error),
-      });
+      }));
       throw error;
     }
   },
@@ -515,7 +546,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案${vccBackupText}`,
       });
     } catch (error) {
-      set({ error: toMessage(error), saving: false });
+      set(errorState(error, { saving: false }));
       throw error;
     }
   },
@@ -534,7 +565,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案`,
       });
     } catch (error) {
-      set({ error: toMessage(error), saving: false });
+      set(errorState(error, { saving: false }));
       throw error;
     }
   },
@@ -549,11 +580,4 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   clearAssetEditRequest: () => set({ editingAssetRequestId: null }),
   openRelatedAssetSearch: (assetId) => set({ relatedAssetSearchId: assetId }),
   closeRelatedAssetSearch: () => set({ relatedAssetSearchId: null }),
-
-  getFilteredAssets: () => get().assets,
-
-  getSelectedAsset: () => {
-    const { assets, selectedAssetId } = get();
-    return assets.find((asset) => asset.id === selectedAssetId) ?? null;
-  },
 }));
