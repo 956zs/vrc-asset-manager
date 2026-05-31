@@ -5,6 +5,14 @@ pub struct DbState {
     pub conn: Mutex<Connection>,
 }
 
+const LEGACY_VCC_OFFICIAL_URL: &str = "https://vrchat.github.io/packages/index.json";
+const VCC_OFFICIAL_URL: &str = "https://packages.vrchat.com/official";
+const VCC_CURATED_URL: &str = "https://packages.vrchat.com/curated";
+const BUILTIN_VCC_REPOSITORIES: [(&str, &str); 2] = [
+    ("VRChat Official", VCC_OFFICIAL_URL),
+    ("VRChat Curated", VCC_CURATED_URL),
+];
+
 pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::error::Error>> {
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -14,7 +22,7 @@ pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::e
     conn.pragma_update(None, "foreign_keys", "ON")?;
     conn.execute_batch(include_str!("../migrations/001_initial.sql"))?;
     migrate_sort_order(&conn)?;
-    seed_vcc_repositories(&conn)?;
+    ensure_vcc_repositories(&conn)?;
     if seed_demo {
         seed_demo_data(&conn)?;
     }
@@ -22,6 +30,30 @@ pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::e
     Ok(DbState {
         conn: Mutex::new(conn),
     })
+}
+
+pub(crate) fn ensure_vcc_repositories(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE vcc_repositories
+         SET name = 'VRChat Official',
+             url = ?,
+             updated_at = datetime('now')
+         WHERE url = ?
+           AND NOT EXISTS (
+               SELECT 1 FROM vcc_repositories
+               WHERE url = ?
+           )",
+        params![VCC_OFFICIAL_URL, LEGACY_VCC_OFFICIAL_URL, VCC_OFFICIAL_URL],
+    )?;
+
+    for (name, url) in BUILTIN_VCC_REPOSITORIES {
+        conn.execute(
+            "INSERT OR IGNORE INTO vcc_repositories (name, url) VALUES (?, ?)",
+            params![name, url],
+        )?;
+    }
+
+    Ok(())
 }
 
 fn demo_thumbnail(accent: &str) -> String {
@@ -344,32 +376,6 @@ fn seed_demo_vcc(demo_root: &std::path::Path, conn: &Connection) -> rusqlite::Re
   }
 }
 "#,
-        )?;
-    }
-
-    Ok(())
-}
-
-fn seed_vcc_repositories(conn: &Connection) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE vcc_repositories
-         SET name = 'VRChat Official',
-             url = 'https://packages.vrchat.com/official',
-             updated_at = datetime('now')
-         WHERE url = 'https://vrchat.github.io/packages/index.json'
-           AND NOT EXISTS (
-               SELECT 1 FROM vcc_repositories
-               WHERE url = 'https://packages.vrchat.com/official'
-           )",
-        [],
-    )?;
-    for (name, url) in [
-        ("VRChat Official", "https://packages.vrchat.com/official"),
-        ("VRChat Curated", "https://packages.vrchat.com/curated"),
-    ] {
-        conn.execute(
-            "INSERT OR IGNORE INTO vcc_repositories (name, url) VALUES (?, ?)",
-            params![name, url],
         )?;
     }
 

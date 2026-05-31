@@ -12,8 +12,8 @@ use std::{
 use tauri::State;
 
 use super::{
-    booth, connection, db_error, models::list_models_for_asset, normalize_optional,
-    tags::list_tags_for_asset, CommandResult,
+    booth, connection, db_error, ensure_affected, models::list_models_for_asset,
+    normalize_optional, require_trimmed, tags::list_tags_for_asset, CommandResult,
 };
 
 #[derive(Debug)]
@@ -431,11 +431,7 @@ pub fn scan_asset_health(db: State<'_, DbState>) -> CommandResult<AssetHealthSum
 
 #[tauri::command]
 pub fn create_asset(input: CreateAssetInput, db: State<'_, DbState>) -> CommandResult<Asset> {
-    let file_path = input.file_path.trim().to_string();
-    if file_path.is_empty() {
-        return Err("File path is required".to_string());
-    }
-
+    let file_path = require_trimmed(&input.file_path, "File path is required")?;
     let name = asset_name_from_path(&file_path);
     let display_name = normalize_optional(input.display_name);
     let booth_url = normalize_optional(input.booth_url);
@@ -473,11 +469,7 @@ pub fn update_asset(
     input: UpdateAssetInput,
     db: State<'_, DbState>,
 ) -> CommandResult<Asset> {
-    let file_path = input.file_path.trim().to_string();
-    if file_path.is_empty() {
-        return Err("File path is required".to_string());
-    }
-
+    let file_path = require_trimmed(&input.file_path, "File path is required")?;
     let name = asset_name_from_path(&file_path);
     let display_name = normalize_optional(input.display_name);
     let booth_url = normalize_optional(input.booth_url);
@@ -495,9 +487,7 @@ pub fn update_asset(
         )
         .map_err(db_error)?;
 
-    if affected == 0 {
-        return Err("Asset was not found".to_string());
-    }
+    ensure_affected(affected, "Asset was not found")?;
 
     replace_asset_relations(
         &tx,

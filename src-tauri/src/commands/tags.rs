@@ -5,7 +5,9 @@ use crate::{
 use rusqlite::{params, Connection, Row};
 use tauri::State;
 
-use super::{connection, db_error, CommandResult};
+use super::{
+    connection, db_error, ensure_affected, normalize_tag_color, require_trimmed, CommandResult,
+};
 
 fn tag_from_row(row: &Row<'_>) -> rusqlite::Result<Tag> {
     Ok(Tag {
@@ -21,6 +23,14 @@ fn next_sort_order(conn: &Connection) -> rusqlite::Result<i64> {
         "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tags",
         [],
         |row| row.get(0),
+    )
+}
+
+fn get_tag_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Tag> {
+    conn.query_row(
+        "SELECT id, name, color, sort_order FROM tags WHERE id = ?",
+        params![id],
+        tag_from_row,
     )
 }
 
@@ -53,17 +63,8 @@ pub fn get_tags(db: State<'_, DbState>) -> CommandResult<Vec<Tag>> {
 
 #[tauri::command]
 pub fn create_tag(input: CreateTagInput, db: State<'_, DbState>) -> CommandResult<Tag> {
-    let name = input.name.trim().to_string();
-    if name.is_empty() {
-        return Err("Tag name is required".to_string());
-    }
-
-    let color = if input.color.trim().is_empty() {
-        "#6B7280".to_string()
-    } else {
-        input.color.trim().to_string()
-    };
-
+    let name = require_trimmed(&input.name, "Tag name is required")?;
+    let color = normalize_tag_color(&input.color);
     let conn = connection(&db)?;
     let sort_order = next_sort_order(&conn).map_err(db_error)?;
     conn.execute(
@@ -73,26 +74,13 @@ pub fn create_tag(input: CreateTagInput, db: State<'_, DbState>) -> CommandResul
     .map_err(db_error)?;
 
     let id = conn.last_insert_rowid();
-    let mut stmt = conn
-        .prepare("SELECT id, name, color, sort_order FROM tags WHERE id = ?")
-        .map_err(db_error)?;
-
-    stmt.query_row(params![id], tag_from_row).map_err(db_error)
+    get_tag_by_id(&conn, id).map_err(db_error)
 }
 
 #[tauri::command]
 pub fn update_tag(id: i64, input: UpdateTagInput, db: State<'_, DbState>) -> CommandResult<Tag> {
-    let name = input.name.trim().to_string();
-    if name.is_empty() {
-        return Err("Tag name is required".to_string());
-    }
-
-    let color = if input.color.trim().is_empty() {
-        "#6B7280".to_string()
-    } else {
-        input.color.trim().to_string()
-    };
-
+    let name = require_trimmed(&input.name, "Tag name is required")?;
+    let color = normalize_tag_color(&input.color);
     let conn = connection(&db)?;
     let affected = conn
         .execute(
@@ -101,15 +89,8 @@ pub fn update_tag(id: i64, input: UpdateTagInput, db: State<'_, DbState>) -> Com
         )
         .map_err(db_error)?;
 
-    if affected == 0 {
-        return Err("Tag was not found".to_string());
-    }
-
-    let mut stmt = conn
-        .prepare("SELECT id, name, color, sort_order FROM tags WHERE id = ?")
-        .map_err(db_error)?;
-
-    stmt.query_row(params![id], tag_from_row).map_err(db_error)
+    ensure_affected(affected, "Tag was not found")?;
+    get_tag_by_id(&conn, id).map_err(db_error)
 }
 
 #[tauri::command]
@@ -134,9 +115,7 @@ pub fn reorder_tags(input: ReorderTagsInput, db: State<'_, DbState>) -> CommandR
             let affected = stmt
                 .execute(params![index as i64 + 1, tag_id])
                 .map_err(db_error)?;
-            if affected == 0 {
-                return Err("Tag was not found".to_string());
-            }
+            ensure_affected(affected, "Tag was not found")?;
         }
     }
 

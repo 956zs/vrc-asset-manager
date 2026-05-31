@@ -16,7 +16,9 @@ use std::{
 };
 use tauri::State;
 
-use super::{connection, db_error, normalize_optional, CommandResult};
+use super::{
+    connection, db_error, normalize_optional, require_trimmed, CommandResult, HTTP_USER_AGENT,
+};
 
 #[derive(Debug, Clone)]
 struct RepositorySource {
@@ -67,12 +69,7 @@ fn project_name_from_path(path: &Path) -> String {
 }
 
 fn normalize_project_path(path: &str) -> CommandResult<PathBuf> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        return Err("Project path is required".to_string());
-    }
-
-    let path = PathBuf::from(trimmed);
+    let path = PathBuf::from(require_trimmed(path, "Project path is required")?);
     if !path.is_dir() {
         return Err("Project folder does not exist".to_string());
     }
@@ -294,7 +291,7 @@ fn packages_from_repository_manifest(
 fn read_repository_source_packages(source: &RepositorySource) -> Result<Vec<VccPackage>, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(10))
-        .user_agent("VRC Asset Manager/0.1")
+        .user_agent(HTTP_USER_AGENT)
         .build()
         .map_err(db_error)?;
     let response = client
@@ -654,10 +651,7 @@ pub fn add_vcc_repository(
     input: AddVccRepositoryInput,
     db: State<'_, DbState>,
 ) -> CommandResult<VccRepository> {
-    let Some(url) = normalize_repository_url(&input.url) else {
-        return Err("Repository URL is required".to_string());
-    };
-
+    let url = require_trimmed(&input.url, "Repository URL is required")?;
     let name = normalize_optional(input.name).unwrap_or_else(|| repository_name_from_url(&url));
     let conn = connection(&db)?;
     upsert_vcc_repository(&conn, &name, &url).map_err(db_error)?;

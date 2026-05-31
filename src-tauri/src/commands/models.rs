@@ -5,7 +5,9 @@ use crate::{
 use rusqlite::{params, Connection, Row};
 use tauri::State;
 
-use super::{connection, db_error, normalize_optional, CommandResult};
+use super::{
+    connection, db_error, ensure_affected, normalize_optional, require_trimmed, CommandResult,
+};
 
 fn model_from_row(row: &Row<'_>) -> rusqlite::Result<Model> {
     Ok(Model {
@@ -22,6 +24,14 @@ fn next_sort_order(conn: &Connection) -> rusqlite::Result<i64> {
         "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM models",
         [],
         |row| row.get(0),
+    )
+}
+
+fn get_model_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Model> {
+    conn.query_row(
+        "SELECT id, name, display_name, sort_order, created_at FROM models WHERE id = ?",
+        params![id],
+        model_from_row,
     )
 }
 
@@ -61,11 +71,7 @@ pub fn get_models(db: State<'_, DbState>) -> CommandResult<Vec<Model>> {
 
 #[tauri::command]
 pub fn create_model(input: CreateModelInput, db: State<'_, DbState>) -> CommandResult<Model> {
-    let name = input.name.trim().to_string();
-    if name.is_empty() {
-        return Err("Model name is required".to_string());
-    }
-
+    let name = require_trimmed(&input.name, "Model name is required")?;
     let display_name = normalize_optional(input.display_name);
     let conn = connection(&db)?;
     let sort_order = next_sort_order(&conn).map_err(db_error)?;
@@ -76,12 +82,7 @@ pub fn create_model(input: CreateModelInput, db: State<'_, DbState>) -> CommandR
     .map_err(db_error)?;
 
     let id = conn.last_insert_rowid();
-    let mut stmt = conn
-        .prepare("SELECT id, name, display_name, sort_order, created_at FROM models WHERE id = ?")
-        .map_err(db_error)?;
-
-    stmt.query_row(params![id], model_from_row)
-        .map_err(db_error)
+    get_model_by_id(&conn, id).map_err(db_error)
 }
 
 #[tauri::command]
@@ -90,11 +91,7 @@ pub fn update_model(
     input: UpdateModelInput,
     db: State<'_, DbState>,
 ) -> CommandResult<Model> {
-    let name = input.name.trim().to_string();
-    if name.is_empty() {
-        return Err("Model name is required".to_string());
-    }
-
+    let name = require_trimmed(&input.name, "Model name is required")?;
     let display_name = normalize_optional(input.display_name);
     let conn = connection(&db)?;
     let affected = conn
@@ -104,16 +101,8 @@ pub fn update_model(
         )
         .map_err(db_error)?;
 
-    if affected == 0 {
-        return Err("Model was not found".to_string());
-    }
-
-    let mut stmt = conn
-        .prepare("SELECT id, name, display_name, sort_order, created_at FROM models WHERE id = ?")
-        .map_err(db_error)?;
-
-    stmt.query_row(params![id], model_from_row)
-        .map_err(db_error)
+    ensure_affected(affected, "Model was not found")?;
+    get_model_by_id(&conn, id).map_err(db_error)
 }
 
 #[tauri::command]
@@ -138,9 +127,7 @@ pub fn reorder_models(input: ReorderModelsInput, db: State<'_, DbState>) -> Comm
             let affected = stmt
                 .execute(params![index as i64 + 1, model_id])
                 .map_err(db_error)?;
-            if affected == 0 {
-                return Err("Model was not found".to_string());
-            }
+            ensure_affected(affected, "Model was not found")?;
         }
     }
 

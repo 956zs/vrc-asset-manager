@@ -1,4 +1,7 @@
-use crate::{db::DbState, types::VccProjectSnapshot};
+use crate::{
+    db::{ensure_vcc_repositories, DbState},
+    types::VccProjectSnapshot,
+};
 use rusqlite::{params, Connection, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -600,29 +603,7 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
             .map_err(db_error)?;
         }
     }
-    tx.execute(
-        "UPDATE vcc_repositories
-         SET name = 'VRChat Official',
-             url = 'https://packages.vrchat.com/official',
-             updated_at = datetime('now')
-         WHERE url = 'https://vrchat.github.io/packages/index.json'
-           AND NOT EXISTS (
-               SELECT 1 FROM vcc_repositories
-               WHERE url = 'https://packages.vrchat.com/official'
-           )",
-        [],
-    )
-    .map_err(db_error)?;
-    for (name, url) in [
-        ("VRChat Official", "https://packages.vrchat.com/official"),
-        ("VRChat Curated", "https://packages.vrchat.com/curated"),
-    ] {
-        tx.execute(
-            "INSERT OR IGNORE INTO vcc_repositories (name, url) VALUES (?, ?)",
-            params![name, url],
-        )
-        .map_err(db_error)?;
-    }
+    ensure_vcc_repositories(tx).map_err(db_error)?;
 
     {
         let mut stmt = tx
