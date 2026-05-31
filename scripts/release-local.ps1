@@ -50,8 +50,15 @@ function Read-Json($Path) {
 }
 
 function Test-ReleaseExists($Gh, $Tag, $Repo) {
-  & $Gh release view $Tag --repo $Repo *> $null
-  return $LASTEXITCODE -eq 0
+  $previousErrorActionPreference = $ErrorActionPreference
+
+  try {
+    $ErrorActionPreference = "Continue"
+    & $Gh release view $Tag --repo $Repo *> $null
+    return $LASTEXITCODE -eq 0
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
 }
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
