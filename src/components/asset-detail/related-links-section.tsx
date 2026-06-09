@@ -21,65 +21,88 @@ type AssetDetailRelatedLinksSectionProps = {
   onOpen: (url: string) => void;
 };
 
-export function AssetDetailRelatedLinksSection({
-  isEditing,
-  relatedLinks,
+function EditableRelatedLinks({
   editedRelatedLinks,
   onAdd,
   onCreateFirst,
   onUpdate,
   onRemove,
+}: Omit<AssetDetailRelatedLinksSectionProps, "isEditing" | "relatedLinks" | "onOpen">) {
+  return (
+    <RelatedLinksEditor
+      links={editedRelatedLinks}
+      layout="stacked"
+      actionsLayout="grid"
+      actionButtonClassName="h-8 w-full px-2 text-xs"
+      labelClassName="text-sm font-medium text-muted-foreground"
+      onAdd={onAdd}
+      onCreateFirst={onCreateFirst}
+      onUpdate={onUpdate}
+      onRemove={onRemove}
+    />
+  );
+}
+
+function ReadonlyRelatedLinkRow({
+  link,
   onOpen,
-}: AssetDetailRelatedLinksSectionProps) {
+}: {
+  link: AssetLink;
+  onOpen: (url: string) => void;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <div className="min-w-0 flex-1" data-context-url={link.url}>
+        <p className="truncate text-sm font-medium text-foreground">{link.label}</p>
+        <p className="break-all text-xs text-muted-foreground">{link.url}</p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        title="開啟連結"
+        aria-label="開啟連結"
+        data-context-url={link.url}
+        onClick={() => onOpen(link.url)}
+      >
+        <ExternalLink className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function ReadonlyRelatedLinks({
+  relatedLinks,
+  onOpen,
+}: Pick<AssetDetailRelatedLinksSectionProps, "relatedLinks" | "onOpen">) {
+  return (
+    <>
+      <label className="text-sm font-medium text-muted-foreground">相關連結</label>
+      <div className="mt-2 min-w-0 space-y-2">
+        {relatedLinks.length > 0 ? (
+          relatedLinks.map((link) => (
+            <ReadonlyRelatedLinkRow key={link.id} link={link} onOpen={onOpen} />
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">未設定</p>
+        )}
+      </div>
+    </>
+  );
+}
+
+export function AssetDetailRelatedLinksSection(
+  props: AssetDetailRelatedLinksSectionProps,
+) {
   return (
     <div className="min-w-0">
-      {isEditing ? (
-        <RelatedLinksEditor
-          links={editedRelatedLinks}
-          layout="stacked"
-          actionsLayout="grid"
-          actionButtonClassName="h-8 w-full px-2 text-xs"
-          labelClassName="text-sm font-medium text-muted-foreground"
-          onAdd={onAdd}
-          onCreateFirst={onCreateFirst}
-          onUpdate={onUpdate}
-          onRemove={onRemove}
-        />
+      {props.isEditing ? (
+        <EditableRelatedLinks {...props} />
       ) : (
-        <>
-          <label className="text-sm font-medium text-muted-foreground">
-            相關連結
-          </label>
-          <div className="mt-2 min-w-0 space-y-2">
-            {relatedLinks.length > 0 ? (
-              relatedLinks.map((link) => (
-                <div key={link.id} className="flex min-w-0 items-start gap-2">
-                  <div className="min-w-0 flex-1" data-context-url={link.url}>
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {link.label}
-                    </p>
-                    <p className="break-all text-xs text-muted-foreground">
-                      {link.url}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    title="開啟連結"
-                    aria-label="開啟連結"
-                    data-context-url={link.url}
-                    onClick={() => onOpen(link.url)}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">未設定</p>
-            )}
-          </div>
-        </>
+        <ReadonlyRelatedLinks
+          relatedLinks={props.relatedLinks}
+          onOpen={props.onOpen}
+        />
       )}
     </div>
   );

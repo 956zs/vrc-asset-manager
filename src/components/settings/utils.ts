@@ -17,7 +17,7 @@ export const releaseUrl = "https://github.com/956zs/vrc-asset-manager/releases";
 export const toMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-export const isPrereleaseVersion = (version: string | null) =>
+const isPrereleaseVersion = (version: string | null) =>
   Boolean(version && /-(alpha|beta|rc|dev|preview)/i.test(version));
 
 const releaseJsonUnavailablePatterns = [
@@ -36,12 +36,10 @@ export const isReleaseJsonUnavailable = (message: string) => {
   );
 };
 
-export const formatUpdateError = (
-  error: unknown,
+export const formatUpdateErrorMessage = (
+  message: string,
   appVersion: string | null,
 ) => {
-  const message = toMessage(error);
-
   if (isReleaseJsonUnavailable(message)) {
     return isPrereleaseVersion(appVersion)
       ? "目前 beta 版沒有可用的公開更新資訊。Draft / prerelease 不會透過 stable 更新端點推送，請到 GitHub Releases 手動確認。"

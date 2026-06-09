@@ -1,16 +1,153 @@
 use rusqlite::{params, Connection};
-use std::{env, fs, path::PathBuf, sync::Mutex};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 pub struct DbState {
     pub conn: Mutex<Connection>,
 }
 
-const LEGACY_VCC_OFFICIAL_URL: &str = "https://vrchat.github.io/packages/index.json";
 const VCC_OFFICIAL_URL: &str = "https://packages.vrchat.com/official";
 const VCC_CURATED_URL: &str = "https://packages.vrchat.com/curated";
 const BUILTIN_VCC_REPOSITORIES: [(&str, &str); 2] = [
     ("VRChat Official", VCC_OFFICIAL_URL),
     ("VRChat Curated", VCC_CURATED_URL),
+];
+const DEMO_ASSET_FOLDERS: [&str; 6] = [
+    "Aurora_Layered_Coat",
+    "Pulse_Expression_Pack",
+    "Studio_Light_Rig",
+    "Nebula_Toon_Shader",
+    "Compact_Inventory_Helper",
+    "Rainy_Day_Accessories",
+];
+const DEMO_MODELS: [(i64, &str, &str, i64); 5] = [
+    (1, "nova", "Nova Demo Base", 1),
+    (2, "mio", "Mio Demo Base", 2),
+    (3, "luna", "Luna Demo Base", 3),
+    (4, "rin", "Rin Demo Base", 4),
+    (
+        5,
+        "layout-long-name",
+        "Very Long Demo Base Name For Layout Testing",
+        5,
+    ),
+];
+const DEMO_TAGS: [(i64, &str, &str, i64); 6] = [
+    (1, "Outfit", "#22C55E", 1),
+    (2, "Utility", "#3B82F6", 2),
+    (3, "Gesture", "#F97316", 3),
+    (4, "Shader", "#A855F7", 4),
+    (5, "Free", "#14B8A6", 5),
+    (6, "Quest", "#F59E0B", 6),
+];
+const DEMO_ASSETS: [(i64, &str, &str, &str, &str, &str); 6] = [
+    (
+        1,
+        "Aurora_Layered_Coat",
+        "Aurora Layered Coat",
+        "https://example.com/assets/aurora-layered-coat",
+        "#22C55E",
+        "Demo outfit entry with fake paths and links.",
+    ),
+    (
+        2,
+        "Pulse_Expression_Pack",
+        "Pulse Expression Pack",
+        "https://example.com/assets/pulse-expression-pack",
+        "#F97316",
+        "Demo expression pack for screenshots.",
+    ),
+    (
+        3,
+        "Studio_Light_Rig",
+        "Studio Light Rig",
+        "https://example.com/assets/studio-light-rig",
+        "#3B82F6",
+        "Demo utility tool with related links.",
+    ),
+    (
+        4,
+        "Nebula_Toon_Shader",
+        "Nebula Toon Shader Preset",
+        "https://example.com/assets/nebula-toon-shader",
+        "#A855F7",
+        "Demo shader preset.",
+    ),
+    (
+        5,
+        "Compact_Inventory_Helper",
+        "Compact Inventory Helper",
+        "https://example.com/assets/compact-inventory-helper",
+        "#14B8A6",
+        "Demo helper tool.",
+    ),
+    (
+        6,
+        "Rainy_Day_Accessories",
+        "Rainy Day Accessories",
+        "https://example.com/assets/rainy-day-accessories",
+        "#F59E0B",
+        "Demo accessory pack.",
+    ),
+];
+const DEMO_ASSET_MODELS: [(i64, i64); 11] = [
+    (1, 1),
+    (1, 2),
+    (2, 1),
+    (2, 3),
+    (3, 1),
+    (3, 2),
+    (3, 3),
+    (4, 5),
+    (5, 1),
+    (6, 2),
+    (6, 4),
+];
+const DEMO_ASSET_TAGS: [(i64, i64); 11] = [
+    (1, 1),
+    (1, 6),
+    (2, 3),
+    (2, 5),
+    (3, 2),
+    (3, 4),
+    (4, 4),
+    (5, 2),
+    (5, 5),
+    (6, 1),
+    (6, 5),
+];
+const DEMO_ASSET_LINKS: [(i64, i64, &str, &str, i64); 4] = [
+    (
+        1,
+        1,
+        "Forum thread",
+        "https://example.com/demo/aurora-thread",
+        1,
+    ),
+    (
+        2,
+        1,
+        "Setup notes",
+        "https://example.com/demo/aurora-setup",
+        2,
+    ),
+    (
+        3,
+        3,
+        "Helper plugin",
+        "https://example.com/demo/light-rig-helper",
+        1,
+    ),
+    (
+        4,
+        5,
+        "Documentation",
+        "https://example.com/demo/inventory-docs",
+        1,
+    ),
 ];
 
 pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::error::Error>> {
@@ -33,19 +170,6 @@ pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::e
 }
 
 pub(crate) fn ensure_vcc_repositories(conn: &Connection) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE vcc_repositories
-         SET name = 'VRChat Official',
-             url = ?,
-             updated_at = datetime('now')
-         WHERE url = ?
-           AND NOT EXISTS (
-               SELECT 1 FROM vcc_repositories
-               WHERE url = ?
-           )",
-        params![VCC_OFFICIAL_URL, LEGACY_VCC_OFFICIAL_URL, VCC_OFFICIAL_URL],
-    )?;
-
     for (name, url) in BUILTIN_VCC_REPOSITORIES {
         conn.execute(
             "INSERT OR IGNORE INTO vcc_repositories (name, url) VALUES (?, ?)",
@@ -59,7 +183,22 @@ pub(crate) fn ensure_vcc_repositories(conn: &Connection) -> rusqlite::Result<()>
 fn demo_thumbnail(accent: &str) -> String {
     let accent = accent.trim_start_matches('#');
     format!(
-        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='56' fill='%23070b12'/%3E%3Ccircle cx='150' cy='170' r='92' fill='%23{}' fill-opacity='.72'/%3E%3Ccircle cx='338' cy='302' r='130' fill='%23{}' fill-opacity='.38'/%3E%3Cpath d='M108 370h296' stroke='%23f8fafc' stroke-opacity='.35' stroke-width='18' stroke-linecap='round'/%3E%3Cpath d='M142 404h228' stroke='%23f8fafc' stroke-opacity='.18' stroke-width='14' stroke-linecap='round'/%3E%3C/svg%3E",
+        concat!(
+            "data:image/svg+xml,",
+            "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E",
+            "%3Crect width='512' height='512' rx='48' fill='%23070b12'/%3E",
+            "%3Crect x='72' y='76' width='368' height='296' rx='36' fill='%23111827' ",
+            "stroke='%23f8fafc' stroke-opacity='.12' stroke-width='6'/%3E",
+            "%3Cpath d='M144 326h224' stroke='%23f8fafc' stroke-opacity='.32' ",
+            "stroke-width='16' stroke-linecap='round'/%3E",
+            "%3Cpath d='M174 360h164' stroke='%23f8fafc' stroke-opacity='.16' ",
+            "stroke-width='12' stroke-linecap='round'/%3E",
+            "%3Ccircle cx='256' cy='210' r='72' fill='%23{}' fill-opacity='.82'/%3E",
+            "%3Cpath d='M256 154l28 56-28 56-28-56z' fill='%23f8fafc' ",
+            "fill-opacity='.5'/%3E",
+            "%3Ccircle cx='356' cy='136' r='24' fill='%23{}' fill-opacity='.34'/%3E",
+            "%3C/svg%3E"
+        ),
         accent, accent
     )
 }
@@ -78,42 +217,44 @@ fn seed_demo_data(conn: &Connection) -> rusqlite::Result<()> {
         return Ok(());
     }
 
-    let demo_root = env::var_os("VRC_ASSET_MANAGER_DEMO_ROOT")
+    let demo_root = demo_root();
+    let asset_root = demo_root.join("assets");
+    seed_demo_asset_files(&asset_root)?;
+    seed_demo_models(conn)?;
+    seed_demo_tags(conn)?;
+    seed_demo_assets(conn, &asset_root)?;
+    seed_demo_asset_models(conn)?;
+    seed_demo_asset_tags(conn)?;
+    seed_demo_asset_links(conn)?;
+    seed_demo_vcc(&demo_root, conn)?;
+
+    Ok(())
+}
+
+fn demo_root() -> PathBuf {
+    env::var_os("VRC_ASSET_MANAGER_DEMO_ROOT")
         .map(PathBuf::from)
         .or_else(|| {
             env::var_os("VRC_ASSET_MANAGER_DB_PATH")
                 .map(PathBuf::from)
                 .and_then(|path| path.parent().map(PathBuf::from))
         })
-        .unwrap_or_else(|| env::temp_dir().join("vrc-asset-manager-demo"));
-    let asset_root = demo_root.join("assets");
+        .unwrap_or_else(|| env::temp_dir().join("vrc-asset-manager-demo"))
+}
 
-    for folder in [
-        "Aurora_Layered_Coat",
-        "Pulse_Expression_Pack",
-        "Studio_Light_Rig",
-        "Nebula_Toon_Shader",
-        "Compact_Inventory_Helper",
-        "Rainy_Day_Accessories",
-    ] {
+fn seed_demo_asset_files(asset_root: &Path) -> rusqlite::Result<()> {
+    for folder in DEMO_ASSET_FOLDERS {
         write_demo_file(
             asset_root.join(folder).join("README.txt"),
             "Demo placeholder. This is not a real VRChat asset.",
         )?;
     }
 
-    for (id, name, display_name, sort_order) in [
-        (1, "nova", "Nova Demo Base", 1),
-        (2, "mio", "Mio Demo Base", 2),
-        (3, "luna", "Luna Demo Base", 3),
-        (4, "rin", "Rin Demo Base", 4),
-        (
-            5,
-            "layout-long-name",
-            "Very Long Demo Base Name For Layout Testing",
-            5,
-        ),
-    ] {
+    Ok(())
+}
+
+fn seed_demo_models(conn: &Connection) -> rusqlite::Result<()> {
+    for (id, name, display_name, sort_order) in DEMO_MODELS {
         conn.execute(
             "INSERT OR IGNORE INTO models (id, name, display_name, sort_order)
              VALUES (?, ?, ?, ?)",
@@ -121,14 +262,11 @@ fn seed_demo_data(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
-    for (id, name, color, sort_order) in [
-        (1, "Outfit", "#22C55E", 1),
-        (2, "Utility", "#3B82F6", 2),
-        (3, "Gesture", "#F97316", 3),
-        (4, "Shader", "#A855F7", 4),
-        (5, "Free", "#14B8A6", 5),
-        (6, "Quest", "#F59E0B", 6),
-    ] {
+    Ok(())
+}
+
+fn seed_demo_tags(conn: &Connection) -> rusqlite::Result<()> {
+    for (id, name, color, sort_order) in DEMO_TAGS {
         conn.execute(
             "INSERT OR IGNORE INTO tags (id, name, color, sort_order)
              VALUES (?, ?, ?, ?)",
@@ -136,133 +274,55 @@ fn seed_demo_data(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
-    for (id, folder, display_name, booth_url, thumbnail, note) in [
-        (
-            1,
-            "Aurora_Layered_Coat",
-            "Aurora Layered Coat",
-            "https://example.com/assets/aurora-layered-coat",
-            demo_thumbnail("#22C55E"),
-            "Demo outfit entry with fake paths and links.",
-        ),
-        (
-            2,
-            "Pulse_Expression_Pack",
-            "Pulse Expression Pack",
-            "https://example.com/assets/pulse-expression-pack",
-            demo_thumbnail("#F97316"),
-            "Demo expression pack for screenshots.",
-        ),
-        (
-            3,
-            "Studio_Light_Rig",
-            "Studio Light Rig",
-            "https://example.com/assets/studio-light-rig",
-            demo_thumbnail("#3B82F6"),
-            "Demo utility tool with related links.",
-        ),
-        (
-            4,
-            "Nebula_Toon_Shader",
-            "Nebula Toon Shader Preset",
-            "https://example.com/assets/nebula-toon-shader",
-            demo_thumbnail("#A855F7"),
-            "Demo shader preset.",
-        ),
-        (
-            5,
-            "Compact_Inventory_Helper",
-            "Compact Inventory Helper",
-            "https://example.com/assets/compact-inventory-helper",
-            demo_thumbnail("#14B8A6"),
-            "Demo helper tool.",
-        ),
-        (
-            6,
-            "Rainy_Day_Accessories",
-            "Rainy Day Accessories",
-            "https://example.com/assets/rainy-day-accessories",
-            demo_thumbnail("#F59E0B"),
-            "Demo accessory pack.",
-        ),
-    ] {
+    Ok(())
+}
+
+fn seed_demo_assets(conn: &Connection, asset_root: &Path) -> rusqlite::Result<()> {
+    for (id, folder, display_name, booth_url, accent, note) in DEMO_ASSETS {
         let path = asset_root.join(folder).to_string_lossy().to_string();
         conn.execute(
             "INSERT OR IGNORE INTO assets
                 (id, name, display_name, file_path, booth_url, thumbnail_url, note)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
-            params![id, folder, display_name, path, booth_url, thumbnail, note],
+            params![
+                id,
+                folder,
+                display_name,
+                path,
+                booth_url,
+                demo_thumbnail(accent),
+                note
+            ],
         )?;
     }
 
-    for (asset_id, model_id) in [
-        (1, 1),
-        (1, 2),
-        (2, 1),
-        (2, 3),
-        (3, 1),
-        (3, 2),
-        (3, 3),
-        (4, 5),
-        (5, 1),
-        (6, 2),
-        (6, 4),
-    ] {
+    Ok(())
+}
+
+fn seed_demo_asset_models(conn: &Connection) -> rusqlite::Result<()> {
+    for (asset_id, model_id) in DEMO_ASSET_MODELS {
         conn.execute(
             "INSERT OR IGNORE INTO asset_models (asset_id, model_id) VALUES (?, ?)",
             params![asset_id, model_id],
         )?;
     }
 
-    for (asset_id, tag_id) in [
-        (1, 1),
-        (1, 6),
-        (2, 3),
-        (2, 5),
-        (3, 2),
-        (3, 4),
-        (4, 4),
-        (5, 2),
-        (5, 5),
-        (6, 1),
-        (6, 5),
-    ] {
+    Ok(())
+}
+
+fn seed_demo_asset_tags(conn: &Connection) -> rusqlite::Result<()> {
+    for (asset_id, tag_id) in DEMO_ASSET_TAGS {
         conn.execute(
             "INSERT OR IGNORE INTO asset_tags (asset_id, tag_id) VALUES (?, ?)",
             params![asset_id, tag_id],
         )?;
     }
 
-    for (id, asset_id, label, url, sort_order) in [
-        (
-            1,
-            1,
-            "Forum thread",
-            "https://example.com/demo/aurora-thread",
-            1,
-        ),
-        (
-            2,
-            1,
-            "Setup notes",
-            "https://example.com/demo/aurora-setup",
-            2,
-        ),
-        (
-            3,
-            3,
-            "Helper plugin",
-            "https://example.com/demo/light-rig-helper",
-            1,
-        ),
-        (
-            4,
-            5,
-            "Documentation",
-            "https://example.com/demo/inventory-docs",
-            1,
-        ),
-    ] {
+    Ok(())
+}
+
+fn seed_demo_asset_links(conn: &Connection) -> rusqlite::Result<()> {
+    for (id, asset_id, label, url, sort_order) in DEMO_ASSET_LINKS {
         conn.execute(
             "INSERT OR IGNORE INTO asset_links (id, asset_id, label, url, sort_order)
              VALUES (?, ?, ?, ?, ?)",
@@ -270,14 +330,20 @@ fn seed_demo_data(conn: &Connection) -> rusqlite::Result<()> {
         )?;
     }
 
-    seed_demo_vcc(&demo_root, conn)?;
+    Ok(())
+}
+
+fn seed_demo_vcc(demo_root: &Path, conn: &Connection) -> rusqlite::Result<()> {
+    let project_root = demo_root.join("projects").join("Aurora_Showcase_Project");
+    let packages_root = project_root.join("Packages");
+    seed_demo_vcc_project_files(&packages_root)?;
+    seed_demo_vcc_project_row(conn, &project_root)?;
+    seed_demo_vcc_repository_cache()?;
 
     Ok(())
 }
 
-fn seed_demo_vcc(demo_root: &std::path::Path, conn: &Connection) -> rusqlite::Result<()> {
-    let project_root = demo_root.join("projects").join("Aurora_Showcase_Project");
-    let packages_root = project_root.join("Packages");
+fn seed_demo_vcc_project_files(packages_root: &Path) -> rusqlite::Result<()> {
     write_demo_file(
         packages_root.join("vpm-manifest.json"),
         r#"{
@@ -320,6 +386,10 @@ fn seed_demo_vcc(demo_root: &std::path::Path, conn: &Connection) -> rusqlite::Re
         r#"{"displayName":"Pose Helper Demo","version":"1.1.0"}"#,
     )?;
 
+    Ok(())
+}
+
+fn seed_demo_vcc_project_row(conn: &Connection, project_root: &Path) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT OR IGNORE INTO vcc_projects (id, name, path)
          VALUES (?, ?, ?)",
@@ -330,11 +400,23 @@ fn seed_demo_vcc(demo_root: &std::path::Path, conn: &Connection) -> rusqlite::Re
         ],
     )?;
 
+    Ok(())
+}
+
+fn seed_demo_vcc_repository_cache() -> rusqlite::Result<()> {
     if let Some(local_app_data) = env::var_os("LOCALAPPDATA").map(PathBuf::from) {
         let repos_dir = local_app_data.join("VRChatCreatorCompanion").join("Repos");
-        write_demo_file(
-            repos_dir.join("official-demo.json"),
-            r#"{
+        write_demo_official_repo_cache(&repos_dir)?;
+        write_demo_curated_repo_cache(&repos_dir)?;
+    }
+
+    Ok(())
+}
+
+fn write_demo_official_repo_cache(repos_dir: &Path) -> rusqlite::Result<()> {
+    write_demo_file(
+        repos_dir.join("official-demo.json"),
+        r#"{
   "repo": {
     "name": "VRChat Official",
     "url": "https://packages.vrchat.com/official",
@@ -350,10 +432,13 @@ fn seed_demo_vcc(demo_root: &std::path::Path, conn: &Connection) -> rusqlite::Re
   }
 }
 "#,
-        )?;
-        write_demo_file(
-            repos_dir.join("curated-demo.json"),
-            r#"{
+    )
+}
+
+fn write_demo_curated_repo_cache(repos_dir: &Path) -> rusqlite::Result<()> {
+    write_demo_file(
+        repos_dir.join("curated-demo.json"),
+        r#"{
   "repo": {
     "name": "VRChat Curated",
     "url": "https://packages.vrchat.com/curated",
@@ -376,10 +461,7 @@ fn seed_demo_vcc(demo_root: &std::path::Path, conn: &Connection) -> rusqlite::Re
   }
 }
 "#,
-        )?;
-    }
-
-    Ok(())
+    )
 }
 
 fn has_column(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {

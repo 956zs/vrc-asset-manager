@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "demo": "powershell -ExecutionPolicy Bypass -File scripts/demo-dev.ps1",
+    "demo:linux": "bash scripts/demo-dev-linux.sh",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "hooks:install": "powershell -ExecutionPolicy Bypass -File scripts/install-git-hooks.ps1",

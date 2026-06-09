@@ -10,7 +10,42 @@ import type {
 } from "./types";
 import { toRepository, toSnapshot } from "./types";
 
-export function useVccProjects() {
+type StateSetter<T> = (value: T | ((current: T) => T)) => void;
+
+type VccProjectState = {
+  busyProjectId: number | null;
+  collapsedProjectIds: Set<number>;
+  deleteRepositoryTarget: VccRepository | null;
+  deleteTarget: VccProjectSnapshot | null;
+  error: string | null;
+  loading: boolean;
+  packageFilter: PackageFilter;
+  repositories: VccRepository[];
+  repositoriesCollapsed: boolean;
+  repositoryName: string;
+  repositoryUrl: string;
+  snapshots: VccProjectSnapshot[];
+  setBusyProjectId: (projectId: number | null) => void;
+  setCollapsedProjectIds: StateSetter<Set<number>>;
+  setDeleteRepositoryTarget: (target: VccRepository | null) => void;
+  setDeleteTarget: (target: VccProjectSnapshot | null) => void;
+  setError: (error: string | null) => void;
+  setLoading: (loading: boolean) => void;
+  setPackageFilter: (filter: PackageFilter) => void;
+  setRepositories: (repositories: VccRepository[]) => void;
+  setRepositoriesCollapsed: StateSetter<boolean>;
+  setRepositoryName: (name: string) => void;
+  setRepositoryUrl: (url: string) => void;
+  setSnapshots: StateSetter<VccProjectSnapshot[]>;
+};
+
+type VccLoadActions = {
+  loadProjects: () => Promise<void>;
+  loadRepositories: () => Promise<void>;
+  syncRepositories: () => Promise<void>;
+};
+
+function useVccProjectState(): VccProjectState {
   const [snapshots, setSnapshots] = useState<VccProjectSnapshot[]>([]);
   const [repositories, setRepositories] = useState<VccRepository[]>([]);
   const [repositoryName, setRepositoryName] = useState("");
@@ -27,203 +62,232 @@ export function useVccProjects() {
     () => new Set(),
   );
 
+  return {
+    snapshots, repositories, repositoryName, repositoryUrl, loading,
+    busyProjectId, error, deleteTarget, deleteRepositoryTarget, packageFilter,
+    repositoriesCollapsed, collapsedProjectIds, setSnapshots, setRepositories,
+    setRepositoryName, setRepositoryUrl, setLoading, setBusyProjectId, setError,
+    setDeleteTarget, setDeleteRepositoryTarget, setPackageFilter,
+    setRepositoriesCollapsed, setCollapsedProjectIds,
+  };
+}
+
+function useVccLoadActions(state: VccProjectState): VccLoadActions {
   const loadProjects = async () => {
-    setLoading(true);
-    setError(null);
+    state.setLoading(true);
+    state.setError(null);
     try {
       const nextSnapshots = await invoke<BackendVccProjectSnapshot[]>(
         "scan_vcc_projects",
       );
-      setSnapshots(nextSnapshots.map(toSnapshot));
+      state.setSnapshots(nextSnapshots.map(toSnapshot));
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     } finally {
-      setLoading(false);
+      state.setLoading(false);
     }
   };
-
   const loadRepositories = async () => {
     const nextRepositories = await invoke<BackendVccRepository[]>(
       "get_vcc_repositories",
     );
-    setRepositories(nextRepositories.map(toRepository));
+    state.setRepositories(nextRepositories.map(toRepository));
   };
-
-  const syncRepositories = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const nextRepositories = await invoke<BackendVccRepository[]>(
-        "sync_vcc_repositories",
-      );
-      setRepositories(nextRepositories.map(toRepository));
-      await loadProjects();
-    } catch (currentError) {
-      setError(String(currentError));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const syncRepositories = createSyncRepositoriesAction(state, loadProjects);
 
   useEffect(() => {
     void Promise.all([loadRepositories(), loadProjects()]);
   }, []);
 
-  const addProject = async () => {
+  return { loadProjects, loadRepositories, syncRepositories };
+}
+
+function createSyncRepositoriesAction(
+  state: VccProjectState,
+  loadProjects: () => Promise<void>,
+) {
+  return async () => {
+    state.setLoading(true);
+    state.setError(null);
+    try {
+      const repositories = await invoke<BackendVccRepository[]>(
+        "sync_vcc_repositories",
+      );
+      state.setRepositories(repositories.map(toRepository));
+      await loadProjects();
+    } catch (currentError) {
+      state.setError(String(currentError));
+    } finally {
+      state.setLoading(false);
+    }
+  };
+}
+
+function createAddProjectAction(
+  state: VccProjectState,
+  loadProjects: () => Promise<void>,
+) {
+  return async () => {
     const selected = await openDialog({
       title: "選擇 VCC / Unity 專案資料夾",
       multiple: false,
       directory: true,
     });
+    if (typeof selected !== "string") return;
 
-    if (typeof selected !== "string") {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
+    state.setLoading(true);
+    state.setError(null);
     try {
-      await invoke<BackendVccProject>("add_vcc_project", {
-        input: { path: selected },
-      });
+      await invoke<BackendVccProject>("add_vcc_project", { input: { path: selected } });
       await loadProjects();
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     } finally {
-      setLoading(false);
+      state.setLoading(false);
     }
   };
+}
 
-  const scanProject = async (projectId: number) => {
-    setBusyProjectId(projectId);
-    setError(null);
+function createScanProjectAction(state: VccProjectState) {
+  return async (projectId: number) => {
+    state.setBusyProjectId(projectId);
+    state.setError(null);
     try {
       const snapshot = await invoke<BackendVccProjectSnapshot>("scan_vcc_project", {
         id: projectId,
       });
-      setSnapshots((current) =>
+      state.setSnapshots((current) =>
         current.map((item) =>
           item.project.id === projectId ? toSnapshot(snapshot) : item,
         ),
       );
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     } finally {
-      setBusyProjectId(null);
+      state.setBusyProjectId(null);
     }
   };
+}
 
-  const deleteProject = async () => {
-    if (!deleteTarget) {
-      return;
-    }
+function createDeleteProjectAction(state: VccProjectState) {
+  return async () => {
+    if (!state.deleteTarget) return;
 
-    setBusyProjectId(deleteTarget.project.id);
-    setError(null);
+    const projectId = state.deleteTarget.project.id;
+    state.setBusyProjectId(projectId);
+    state.setError(null);
     try {
-      await invoke("delete_vcc_project", { id: deleteTarget.project.id });
-      setSnapshots((current) =>
-        current.filter((snapshot) => snapshot.project.id !== deleteTarget.project.id),
+      await invoke("delete_vcc_project", { id: projectId });
+      state.setSnapshots((current) =>
+        current.filter((snapshot) => snapshot.project.id !== projectId),
       );
-      setDeleteTarget(null);
+      state.setDeleteTarget(null);
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     } finally {
-      setBusyProjectId(null);
+      state.setBusyProjectId(null);
     }
   };
+}
 
-  const addRepository = async () => {
-    if (!repositoryUrl.trim()) {
-      return;
-    }
+function createAddRepositoryAction(state: VccProjectState, loaders: VccLoadActions) {
+  return async () => {
+    if (!state.repositoryUrl.trim()) return;
 
-    setLoading(true);
-    setError(null);
+    state.setLoading(true);
+    state.setError(null);
     try {
       await invoke<BackendVccRepository>("add_vcc_repository", {
         input: {
-          name: repositoryName.trim() || null,
-          url: repositoryUrl.trim(),
+          name: state.repositoryName.trim() || null,
+          url: state.repositoryUrl.trim(),
         },
       });
-      setRepositoryName("");
-      setRepositoryUrl("");
-      await loadRepositories();
-      await loadProjects();
+      state.setRepositoryName("");
+      state.setRepositoryUrl("");
+      await loaders.loadRepositories();
+      await loaders.loadProjects();
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     } finally {
-      setLoading(false);
+      state.setLoading(false);
     }
   };
+}
 
-  const deleteRepository = async () => {
-    if (!deleteRepositoryTarget) {
-      return;
-    }
+function createDeleteRepositoryAction(state: VccProjectState, loaders: VccLoadActions) {
+  return async () => {
+    if (!state.deleteRepositoryTarget) return;
 
-    setLoading(true);
-    setError(null);
+    state.setLoading(true);
+    state.setError(null);
     try {
-      await invoke("delete_vcc_repository", { id: deleteRepositoryTarget.id });
-      setDeleteRepositoryTarget(null);
-      await loadRepositories();
-      await loadProjects();
+      await invoke("delete_vcc_repository", { id: state.deleteRepositoryTarget.id });
+      state.setDeleteRepositoryTarget(null);
+      await loaders.loadRepositories();
+      await loaders.loadProjects();
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     } finally {
-      setLoading(false);
+      state.setLoading(false);
     }
   };
+}
 
-  const openProject = async (path: string) => {
+function createOpenProjectAction(state: VccProjectState) {
+  return async (path: string) => {
     try {
       await invoke("open_file_location", { path });
     } catch (currentError) {
-      setError(String(currentError));
+      state.setError(String(currentError));
     }
   };
+}
 
-  const toggleProjectCollapsed = (projectId: number) => {
-    setCollapsedProjectIds((current) => {
-      const next = new Set(current);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
-      return next;
-    });
-  };
+function toggleCollapsedProjectId(current: Set<number>, projectId: number) {
+  const next = new Set(current);
+  if (next.has(projectId)) next.delete(projectId);
+  else next.add(projectId);
+  return next;
+}
 
+function createVccProjectsResult(state: VccProjectState, loaders: VccLoadActions) {
   return {
-    snapshots,
-    repositories,
-    repositoryName,
-    repositoryUrl,
-    loading,
-    busyProjectId,
-    error,
-    deleteTarget,
-    deleteRepositoryTarget,
-    packageFilter,
-    repositoriesCollapsed,
-    collapsedProjectIds,
-    setRepositoryName,
-    setRepositoryUrl,
-    setDeleteTarget,
-    setDeleteRepositoryTarget,
-    setPackageFilter,
-    setRepositoriesCollapsed,
-    loadProjects,
-    syncRepositories,
-    addProject,
-    scanProject,
-    deleteProject,
-    addRepository,
-    deleteRepository,
-    openProject,
-    toggleProjectCollapsed,
+    snapshots: state.snapshots,
+    repositories: state.repositories,
+    repositoryName: state.repositoryName,
+    repositoryUrl: state.repositoryUrl,
+    loading: state.loading,
+    busyProjectId: state.busyProjectId,
+    error: state.error,
+    deleteTarget: state.deleteTarget,
+    deleteRepositoryTarget: state.deleteRepositoryTarget,
+    packageFilter: state.packageFilter,
+    repositoriesCollapsed: state.repositoriesCollapsed,
+    collapsedProjectIds: state.collapsedProjectIds,
+    setRepositoryName: state.setRepositoryName,
+    setRepositoryUrl: state.setRepositoryUrl,
+    setDeleteTarget: state.setDeleteTarget,
+    setDeleteRepositoryTarget: state.setDeleteRepositoryTarget,
+    setPackageFilter: state.setPackageFilter,
+    setRepositoriesCollapsed: state.setRepositoriesCollapsed,
+    loadProjects: loaders.loadProjects,
+    syncRepositories: loaders.syncRepositories,
+    addProject: createAddProjectAction(state, loaders.loadProjects),
+    scanProject: createScanProjectAction(state),
+    deleteProject: createDeleteProjectAction(state),
+    addRepository: createAddRepositoryAction(state, loaders),
+    deleteRepository: createDeleteRepositoryAction(state, loaders),
+    openProject: createOpenProjectAction(state),
+    toggleProjectCollapsed: (projectId: number) =>
+      state.setCollapsedProjectIds((current) =>
+        toggleCollapsedProjectId(current, projectId),
+      ),
   };
+}
+
+export function useVccProjects() {
+  const state = useVccProjectState();
+  const loaders = useVccLoadActions(state);
+  return createVccProjectsResult(state, loaders);
 }

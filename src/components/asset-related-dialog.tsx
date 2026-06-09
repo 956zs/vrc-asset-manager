@@ -22,48 +22,101 @@ type RelatedAsset = {
   reasons: string[];
 };
 
-const displayAssetName = (asset: Asset) => asset.display_name || asset.name;
-
-const tokenize = (value: string) =>
-  value
-    .toLowerCase()
-    .split(/[\s_\-()[\]{}.,，。/\\]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2);
-
-const buildRelatedAssets = (source: Asset, assets: Asset[]): RelatedAsset[] => {
-  const sourceModelIds = new Set(source.models.map((model) => model.id));
-  const sourceTagIds = new Set(source.tags.map((tag) => tag.id));
-  const sourceTokens = new Set(tokenize(displayAssetName(source)));
-
-  return assets
-    .filter((asset) => asset.id !== source.id)
-    .map((asset) => {
-      const sharedModels = asset.models.filter((model) => sourceModelIds.has(model.id));
-      const sharedTags = asset.tags.filter((tag) => sourceTagIds.has(tag.id));
-      const sharedTokens = tokenize(displayAssetName(asset)).filter((token) =>
-        sourceTokens.has(token),
-      );
-      const score =
-        sharedModels.length * 4 + sharedTags.length * 3 + sharedTokens.length;
-      const reasons = [
-        ...sharedModels.map((model) => `模型：${model.display_name || model.name}`),
-        ...sharedTags.map((tag) => `標籤：${tag.name}`),
-        ...sharedTokens.slice(0, 2).map((token) => `名稱：${token}`),
-      ];
-
-      return { asset, score, reasons };
-    })
-    .filter((result) => result.score > 0)
-    .sort((left, right) => {
-      if (right.score !== left.score) {
-        return right.score - left.score;
-      }
-      return displayAssetName(left.asset).localeCompare(displayAssetName(right.asset));
-    });
+type RelatedAssetLookup = {
+  sourceModelIds: Set<number>;
+  sourceTagIds: Set<number>;
+  sourceTokens: Set<string>;
 };
 
-export function AssetRelatedDialog() {
+const displayAssetName = (asset: Asset) => asset.display_name || asset.name;
+
+const tokenize = (value: string) => {
+  const tokens: string[] = [];
+
+  for (const token of value.toLowerCase().split(/[\s_\-()[\]{}.,，。/\\]+/)) {
+    const trimmedToken = token.trim();
+    if (trimmedToken.length >= 2) {
+      tokens.push(trimmedToken);
+    }
+  }
+
+  return tokens;
+};
+
+const buildRelatedAssetLookup = (source: Asset): RelatedAssetLookup => ({
+  sourceModelIds: new Set(source.models.map((model) => model.id)),
+  sourceTagIds: new Set(source.tags.map((tag) => tag.id)),
+  sourceTokens: new Set(tokenize(displayAssetName(source))),
+});
+
+const scoreRelatedAsset = (
+  asset: Asset,
+  lookup: RelatedAssetLookup,
+): RelatedAsset | null => {
+  const reasons: string[] = [];
+  let score = 0;
+
+  for (const model of asset.models) {
+    if (lookup.sourceModelIds.has(model.id)) {
+      score += 4;
+      reasons.push(`模型：${model.display_name || model.name}`);
+    }
+  }
+
+  for (const tag of asset.tags) {
+    if (lookup.sourceTagIds.has(tag.id)) {
+      score += 3;
+      reasons.push(`標籤：${tag.name}`);
+    }
+  }
+
+  let tokenReasonCount = 0;
+  for (const token of tokenize(displayAssetName(asset))) {
+    if (lookup.sourceTokens.has(token)) {
+      score += 1;
+      if (tokenReasonCount < 2) {
+        reasons.push(`名稱：${token}`);
+      }
+      tokenReasonCount += 1;
+    }
+  }
+
+  return score > 0 ? { asset, score, reasons } : null;
+};
+
+const buildRelatedAssets = (source: Asset, assets: Asset[]): RelatedAsset[] => {
+  const lookup = buildRelatedAssetLookup(source);
+  const relatedAssets: RelatedAsset[] = [];
+
+  for (const asset of assets) {
+    if (asset.id === source.id) {
+      continue;
+    }
+
+    const relatedAsset = scoreRelatedAsset(asset, lookup);
+    if (relatedAsset) {
+      relatedAssets.push(relatedAsset);
+    }
+  }
+
+  return relatedAssets.sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+    return displayAssetName(left.asset).localeCompare(displayAssetName(right.asset));
+  });
+};
+
+type AssetRelatedDialogController = {
+  loading: boolean;
+  open: boolean;
+  relatedAssets: RelatedAsset[];
+  sourceAsset: Asset | null;
+  closeRelatedAssetSearch: () => void;
+  onSelectAsset: (assetId: number) => void;
+};
+
+function useAssetRelatedDialogController(): AssetRelatedDialogController {
   const {
     relatedAssetSearchId,
     closeRelatedAssetSearch,
@@ -97,9 +150,161 @@ export function AssetRelatedDialog() {
     [assets, sourceAsset],
   );
 
+  return {
+    loading,
+    open: relatedAssetSearchId !== null,
+    relatedAssets,
+    sourceAsset,
+    closeRelatedAssetSearch,
+    onSelectAsset: (assetId) => {
+      selectAsset(assetId);
+      closeRelatedAssetSearch();
+    },
+  };
+}
+
+function SourceAssetSummary({ asset }: { asset: Asset | null }) {
+  if (!asset) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-muted/40 p-3">
+      <p className="text-xs text-muted-foreground">來源素材</p>
+      <p className="mt-1 truncate text-sm font-medium text-foreground">
+        {displayAssetName(asset)}
+      </p>
+    </div>
+  );
+}
+
+function LoadingRelatedAssets() {
+  return (
+    <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+      <Search className="h-4 w-4 animate-pulse" />
+      搜尋中
+    </div>
+  );
+}
+
+function RelatedAssetThumbnail({ asset }: { asset: Asset }) {
+  return (
+    <div className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-muted">
+      {asset.thumbnail_url ? (
+        <img
+          src={asset.thumbnail_url}
+          alt={displayAssetName(asset)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <ImageIcon className="h-6 w-6 text-muted-foreground/60" />
+      )}
+    </div>
+  );
+}
+
+function RelatedAssetReasons({ reasons }: { reasons: string[] }) {
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {reasons.slice(0, 4).map((reason) => (
+        <Badge key={reason} variant="secondary" className="text-[11px]">
+          {reason}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function RelatedAssetRow({
+  relatedAsset,
+  onSelectAsset,
+}: {
+  relatedAsset: RelatedAsset;
+  onSelectAsset: (assetId: number) => void;
+}) {
+  const { asset, reasons } = relatedAsset;
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-card p-2 text-left transition-colors",
+        "hover:border-primary/60 hover:bg-accent/50",
+      )}
+      onClick={() => onSelectAsset(asset.id)}
+    >
+      <RelatedAssetThumbnail asset={asset} />
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-card-foreground">
+          {displayAssetName(asset)}
+        </p>
+        <RelatedAssetReasons reasons={reasons} />
+      </div>
+      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+    </button>
+  );
+}
+
+function RelatedAssetsList({
+  relatedAssets,
+  onSelectAsset,
+}: Pick<AssetRelatedDialogController, "relatedAssets" | "onSelectAsset">) {
+  if (relatedAssets.length === 0) {
+    return (
+      <div className="py-10 text-center text-sm text-muted-foreground">
+        沒有找到明顯相關的素材
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {relatedAssets.map((relatedAsset) => (
+        <RelatedAssetRow
+          key={relatedAsset.asset.id}
+          relatedAsset={relatedAsset}
+          onSelectAsset={onSelectAsset}
+        />
+      ))}
+    </>
+  );
+}
+
+function RelatedAssetsScrollArea({
+  loading,
+  relatedAssets,
+  onSelectAsset,
+}: Pick<
+  AssetRelatedDialogController,
+  "loading" | "relatedAssets" | "onSelectAsset"
+>) {
+  return (
+    <ScrollArea className="min-h-0 max-h-[56vh]">
+      <div className="space-y-2 pr-3">
+        {loading ? (
+          <LoadingRelatedAssets />
+        ) : (
+          <RelatedAssetsList
+            relatedAssets={relatedAssets}
+            onSelectAsset={onSelectAsset}
+          />
+        )}
+      </div>
+    </ScrollArea>
+  );
+}
+
+function AssetRelatedDialogLayout({
+  loading,
+  open,
+  relatedAssets,
+  sourceAsset,
+  closeRelatedAssetSearch,
+  onSelectAsset,
+}: AssetRelatedDialogController) {
   return (
     <Dialog
-      open={relatedAssetSearchId !== null}
+      open={open}
       onOpenChange={(open) => {
         if (!open) {
           closeRelatedAssetSearch();
@@ -113,71 +318,12 @@ export function AssetRelatedDialog() {
             依相同模型、標籤與名稱關鍵字尋找可能相關的素材
           </DialogDescription>
         </DialogHeader>
-
-        {sourceAsset && (
-          <div className="rounded-md border border-border bg-muted/40 p-3">
-            <p className="text-xs text-muted-foreground">來源素材</p>
-            <p className="mt-1 truncate text-sm font-medium text-foreground">
-              {displayAssetName(sourceAsset)}
-            </p>
-          </div>
-        )}
-
-        <ScrollArea className="min-h-0 max-h-[56vh]">
-          <div className="space-y-2 pr-3">
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-                <Search className="h-4 w-4 animate-pulse" />
-                搜尋中
-              </div>
-            ) : relatedAssets.length > 0 ? (
-              relatedAssets.map(({ asset, reasons }) => (
-                <button
-                  key={asset.id}
-                  type="button"
-                  className={cn(
-                    "grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-card p-2 text-left transition-colors",
-                    "hover:border-primary/60 hover:bg-accent/50",
-                  )}
-                  onClick={() => {
-                    selectAsset(asset.id);
-                    closeRelatedAssetSearch();
-                  }}
-                >
-                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-muted">
-                    {asset.thumbnail_url ? (
-                      <img
-                        src={asset.thumbnail_url}
-                        alt={displayAssetName(asset)}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <ImageIcon className="h-6 w-6 text-muted-foreground/60" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-card-foreground">
-                      {displayAssetName(asset)}
-                    </p>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {reasons.slice(0, 4).map((reason) => (
-                        <Badge key={reason} variant="secondary" className="text-[11px]">
-                          {reason}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              ))
-            ) : (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                沒有找到明顯相關的素材
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-
+        <SourceAssetSummary asset={sourceAsset} />
+        <RelatedAssetsScrollArea
+          loading={loading}
+          relatedAssets={relatedAssets}
+          onSelectAsset={onSelectAsset}
+        />
         <div className="flex justify-end">
           <Button type="button" variant="outline" onClick={closeRelatedAssetSearch}>
             關閉
@@ -186,4 +332,8 @@ export function AssetRelatedDialog() {
       </DialogContent>
     </Dialog>
   );
+}
+
+export function AssetRelatedDialog() {
+  return <AssetRelatedDialogLayout {...useAssetRelatedDialogController()} />;
 }

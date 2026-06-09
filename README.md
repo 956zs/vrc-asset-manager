@@ -18,6 +18,9 @@
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-v2-24c8db?style=flat-square" />
   <img alt="Frontend" src="https://img.shields.io/badge/frontend-React%20%2B%20TypeScript-61dafb?style=flat-square" />
   <img alt="Database" src="https://img.shields.io/badge/storage-SQLite-94a3b8?style=flat-square" />
+  <a href="https://github.com/956zs/v0-vrc-asset-manager">
+    <img alt="UI reference" src="https://img.shields.io/badge/UI%20reference-v0--vrc--asset--manager-8b5cf6?style=flat-square" />
+  </a>
 </p>
 
 <p align="center">
@@ -30,6 +33,8 @@
   <a href="#quick-start">快速開始</a>
   ·
   <a href="#privacy">隱私與資料</a>
+  ·
+  <a href="#ui-reference">UI 參考</a>
   ·
   <a href="#release">發佈流程</a>
 </p>
@@ -108,6 +113,20 @@ VRC Asset Manager 是一個 Windows 桌面應用程式，用來整理 VRChat 創
 - Rust toolchain
 - Tauri v2 的 Windows 建置環境
 
+### Clone
+
+此專案把 UI 參考 repo 掛在 `references/v0-vrc-asset-manager` submodule。第一次 clone 請一併抓取 submodule：
+
+```bash
+git clone --recurse-submodules https://github.com/956zs/vrc-asset-manager.git
+```
+
+如果已經用一般 `git clone` 下載專案，請在 repo 內初始化 submodule：
+
+```bash
+git submodule update --init --recursive
+```
+
 ### 開發模式
 
 ```bash
@@ -127,6 +146,12 @@ vrc_asset_manager.sqlite3
 
 ```bash
 npm run demo
+```
+
+Linux 開發環境可使用同一份隔離 demo data 啟動 Tauri 視窗：
+
+```bash
+npm run demo:linux
 ```
 
 Demo 模式會把測試資料放在 `.demo-data/`，並暫時重新指定 `LOCALAPPDATA`，避免讀取真實 VCC 設定。
@@ -167,6 +192,12 @@ VRC Asset Manager 採用 local-first 設計。
 - VCC 掃描只讀取使用者選取或本機設定中可見的專案與 repository 資料。
 
 匯出的存檔可能包含本機路徑與專案位置，公開分享前請先確認內容。
+
+## <a id="ui-reference"></a>UI 參考
+
+前端 UI 以 [v0-vrc-asset-manager](https://github.com/956zs/v0-vrc-asset-manager) 作為設計參考，並依照本專案的 Tauri、SQLite 與本機素材管理流程重新實作。
+
+參考 repo 已掛在 [`references/v0-vrc-asset-manager`](references/v0-vrc-asset-manager) submodule，GitHub 會在檔案列表中顯示對應的外部 repo 連結。
 
 ## 技術架構
 

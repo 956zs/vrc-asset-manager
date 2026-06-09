@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export type CommandPaletteItemKind = "action" | "asset" | "model" | "tag";
+type CommandPaletteItemKind = "action" | "asset" | "model" | "tag";
 
 export type CommandPaletteItem = {
   id: string;

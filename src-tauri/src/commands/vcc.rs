@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use rusqlite::{params, Connection, Row};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
@@ -407,12 +407,85 @@ fn read_repository_catalog(repositories: &[VccRepository]) -> Vec<VccPackage> {
     packages.into_values().collect()
 }
 
-fn read_package_json(project_path: &Path, package_id: &str) -> Option<Value> {
-    let package_json_path = project_path
-        .join("Packages")
-        .join(package_id)
-        .join("package.json");
+fn read_package_json(packages_dir: &Path, package_id: &str) -> Option<Value> {
+    let package_json_path = packages_dir.join(package_id).join("package.json");
     read_json_if_exists(&package_json_path).ok().flatten()
+}
+
+fn manifest_dependencies(manifest: Option<&Value>) -> Option<&Map<String, Value>> {
+    manifest
+        .and_then(|value| value.get("dependencies"))
+        .and_then(Value::as_object)
+}
+
+fn catalog_package_map(catalog_packages: &[VccPackage]) -> BTreeMap<String, VccPackage> {
+    catalog_packages
+        .iter()
+        .map(|package| (package.package_id.clone(), package.clone()))
+        .collect()
+}
+
+fn merge_vpm_dependencies(
+    packages: &mut BTreeMap<String, VccPackage>,
+    dependencies: &Map<String, Value>,
+) {
+    for (package_id, dependency) in dependencies {
+        packages
+            .entry(package_id.clone())
+            .and_modify(|package| {
+                package.display_name = string_field(dependency, &["displayName", "name"])
+                    .or_else(|| package.display_name.clone());
+                package.requested_version = dependency_version(dependency);
+                package.source = dependency_source(dependency).or_else(|| package.source.clone());
+            })
+            .or_insert(VccPackage {
+                package_id: package_id.clone(),
+                display_name: string_field(dependency, &["displayName", "name"]),
+                requested_version: dependency_version(dependency),
+                installed_version: None,
+                latest_version: None,
+                source: dependency_source(dependency),
+                installed: false,
+                available: false,
+            });
+    }
+}
+
+fn merge_unity_dependencies(
+    packages_dir: &Path,
+    packages: &mut BTreeMap<String, VccPackage>,
+    dependencies: &Map<String, Value>,
+) {
+    for (package_id, dependency) in dependencies {
+        if !packages.contains_key(package_id) && !packages_dir.join(package_id).is_dir() {
+            continue;
+        }
+
+        packages.entry(package_id.clone()).or_insert(VccPackage {
+            package_id: package_id.clone(),
+            display_name: None,
+            requested_version: dependency.as_str().map(ToString::to_string),
+            installed_version: None,
+            latest_version: None,
+            source: None,
+            installed: false,
+            available: false,
+        });
+    }
+}
+
+fn apply_installed_package_state(packages_dir: &Path, package: &mut VccPackage) {
+    if let Some(package_json) = read_package_json(packages_dir, &package.package_id) {
+        package.display_name = package
+            .display_name
+            .clone()
+            .or_else(|| string_field(&package_json, &["displayName", "name"]));
+        package.installed_version = string_field(&package_json, &["version"]);
+        package.installed = true;
+        package.available = true;
+    } else {
+        package.installed = packages_dir.join(&package.package_id).is_dir();
+    }
 }
 
 fn dependency_packages(
@@ -421,82 +494,19 @@ fn dependency_packages(
     unity_manifest: Option<&Value>,
     catalog_packages: &[VccPackage],
 ) -> Vec<VccPackage> {
-    let mut package_ids = BTreeSet::new();
-    let mut packages: BTreeMap<String, VccPackage> = BTreeMap::new();
+    let packages_dir = project_path.join("Packages");
+    let mut packages = catalog_package_map(catalog_packages);
 
-    for package in catalog_packages {
-        package_ids.insert(package.package_id.clone());
-        packages.insert(package.package_id.clone(), package.clone());
+    if let Some(dependencies) = manifest_dependencies(vpm_manifest) {
+        merge_vpm_dependencies(&mut packages, dependencies);
     }
 
-    if let Some(dependencies) = vpm_manifest
-        .and_then(|manifest| manifest.get("dependencies"))
-        .and_then(Value::as_object)
-    {
-        for (package_id, dependency) in dependencies {
-            package_ids.insert(package_id.clone());
-            packages
-                .entry(package_id.clone())
-                .and_modify(|package| {
-                    package.display_name = string_field(dependency, &["displayName", "name"])
-                        .or_else(|| package.display_name.clone());
-                    package.requested_version = dependency_version(dependency);
-                    package.source =
-                        dependency_source(dependency).or_else(|| package.source.clone());
-                })
-                .or_insert(VccPackage {
-                    package_id: package_id.clone(),
-                    display_name: string_field(dependency, &["displayName", "name"]),
-                    requested_version: dependency_version(dependency),
-                    installed_version: None,
-                    latest_version: None,
-                    source: dependency_source(dependency),
-                    installed: false,
-                    available: false,
-                });
-        }
+    if let Some(dependencies) = manifest_dependencies(unity_manifest) {
+        merge_unity_dependencies(&packages_dir, &mut packages, dependencies);
     }
 
-    if let Some(dependencies) = unity_manifest
-        .and_then(|manifest| manifest.get("dependencies"))
-        .and_then(Value::as_object)
-    {
-        for package_id in dependencies.keys() {
-            if package_ids.contains(package_id)
-                || project_path.join("Packages").join(package_id).is_dir()
-            {
-                package_ids.insert(package_id.clone());
-                packages.entry(package_id.clone()).or_insert(VccPackage {
-                    package_id: package_id.clone(),
-                    display_name: None,
-                    requested_version: dependencies
-                        .get(package_id)
-                        .and_then(Value::as_str)
-                        .map(ToString::to_string),
-                    installed_version: None,
-                    latest_version: None,
-                    source: None,
-                    installed: false,
-                    available: false,
-                });
-            }
-        }
-    }
-
-    for package_id in package_ids {
-        if let Some(package) = packages.get_mut(&package_id) {
-            if let Some(package_json) = read_package_json(project_path, &package_id) {
-                package.display_name = package
-                    .display_name
-                    .clone()
-                    .or_else(|| string_field(&package_json, &["displayName", "name"]));
-                package.installed_version = string_field(&package_json, &["version"]);
-                package.installed = true;
-                package.available = true;
-            } else {
-                package.installed = project_path.join("Packages").join(&package_id).is_dir();
-            }
-        }
+    for package in packages.values_mut() {
+        apply_installed_package_state(&packages_dir, package);
     }
 
     packages.into_values().collect()

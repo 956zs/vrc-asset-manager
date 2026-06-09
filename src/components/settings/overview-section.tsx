@@ -42,63 +42,136 @@ export function OverviewSection({
 }: OverviewSectionProps) {
   return (
     <section className="flex min-h-full flex-col gap-4">
-      <div className="grid items-stretch gap-3 sm:grid-cols-3">
-        <OverviewMetric icon={PackageSearch} label="素材" value={assetCount} />
-        <OverviewMetric icon={User} label="模型" value={modelCount} />
-        <OverviewMetric icon={Tag} label="標籤" value={tagCount} />
-      </div>
-
-      <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-2">
-        <ActionPanel
-          icon={Download}
-          title="更新狀態"
-          badge={appVersion ? `v${appVersion}` : "版本未知"}
-          description={updateDescription}
-          tone={updateStatus === "available" ? "accent" : undefined}
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              disabled={updateStatus === "checking" || updateStatus === "downloading"}
-              onClick={() => void onCheckUpdate()}
-            >
-              <RefreshCw className="h-4 w-4" />
-              檢查
-            </Button>
-          }
-          onOpen={() => onOpenTab("updates")}
-        />
-
-        <ActionPanel
-          icon={ShieldCheck}
-          title="素材健康"
-          badge={
-            healthSummary
-              ? `${healthSummary.issues.length} 個問題`
-              : "尚未掃描"
-          }
-          description={
-            healthSummary
-              ? `${healthSummary.ok}/${healthSummary.total} 個素材正常`
-              : "檢查缺失、空檔案與無法讀取的素材"
-          }
-          tone={healthSummary && healthSummary.issues.length > 0 ? "warn" : undefined}
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              disabled={healthLoading}
-              onClick={() => void onScanHealth()}
-            >
-              <RefreshCw className="h-4 w-4" />
-              掃描
-            </Button>
-          }
-          onOpen={() => onOpenTab("health")}
-        />
-      </div>
+      <OverviewMetrics
+        assetCount={assetCount}
+        modelCount={modelCount}
+        tagCount={tagCount}
+      />
+      <OverviewActionPanels
+        appVersion={appVersion}
+        updateStatus={updateStatus}
+        updateDescription={updateDescription}
+        healthSummary={healthSummary}
+        healthLoading={healthLoading}
+        onCheckUpdate={onCheckUpdate}
+        onScanHealth={onScanHealth}
+        onOpenTab={onOpenTab}
+      />
     </section>
   );
+}
+
+function OverviewMetrics({
+  assetCount,
+  modelCount,
+  tagCount,
+}: Pick<OverviewSectionProps, "assetCount" | "modelCount" | "tagCount">) {
+  return (
+    <div className="grid items-stretch gap-3 sm:grid-cols-3">
+      <OverviewMetric icon={PackageSearch} label="素材" value={assetCount} />
+      <OverviewMetric icon={User} label="模型" value={modelCount} />
+      <OverviewMetric icon={Tag} label="標籤" value={tagCount} />
+    </div>
+  );
+}
+
+function OverviewActionPanels(props: Omit<
+  OverviewSectionProps,
+  "assetCount" | "modelCount" | "tagCount"
+>) {
+  return (
+    <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-2">
+      <UpdateActionPanel {...props} />
+      <HealthActionPanel {...props} />
+    </div>
+  );
+}
+
+function UpdateActionPanel({
+  appVersion,
+  updateStatus,
+  updateDescription,
+  onCheckUpdate,
+  onOpenTab,
+}: Pick<
+  OverviewSectionProps,
+  "appVersion" | "updateStatus" | "updateDescription" | "onCheckUpdate" | "onOpenTab"
+>) {
+  return (
+    <ActionPanel
+      icon={Download}
+      title="更新狀態"
+      badge={appVersion ? `v${appVersion}` : "版本未知"}
+      description={updateDescription}
+      tone={updateStatus === "available" ? "accent" : undefined}
+      action={<UpdateCheckButton updateStatus={updateStatus} onCheckUpdate={onCheckUpdate} />}
+      onOpen={() => onOpenTab("updates")}
+    />
+  );
+}
+
+function UpdateCheckButton({
+  updateStatus,
+  onCheckUpdate,
+}: Pick<OverviewSectionProps, "updateStatus" | "onCheckUpdate">) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={updateStatus === "checking" || updateStatus === "downloading"}
+      onClick={() => void onCheckUpdate()}
+    >
+      <RefreshCw className="h-4 w-4" />
+      檢查
+    </Button>
+  );
+}
+
+function HealthActionPanel({
+  healthSummary,
+  healthLoading,
+  onScanHealth,
+  onOpenTab,
+}: Pick<
+  OverviewSectionProps,
+  "healthSummary" | "healthLoading" | "onScanHealth" | "onOpenTab"
+>) {
+  return (
+    <ActionPanel
+      icon={ShieldCheck}
+      title="素材健康"
+      badge={healthSummary ? `${healthSummary.issues.length} 個問題` : "尚未掃描"}
+      description={getHealthDescription(healthSummary)}
+      tone={healthSummary && healthSummary.issues.length > 0 ? "warn" : undefined}
+      action={<HealthScanButton healthLoading={healthLoading} onScanHealth={onScanHealth} />}
+      onOpen={() => onOpenTab("health")}
+    />
+  );
+}
+
+function HealthScanButton({
+  healthLoading,
+  onScanHealth,
+}: Pick<OverviewSectionProps, "healthLoading" | "onScanHealth">) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      disabled={healthLoading}
+      onClick={() => void onScanHealth()}
+    >
+      <RefreshCw className="h-4 w-4" />
+      掃描
+    </Button>
+  );
+}
+
+function getHealthDescription(healthSummary: AssetHealthSummary | null) {
+  if (!healthSummary) {
+    return "檢查缺失、空檔案與無法讀取的素材";
+  }
+
+  return `${healthSummary.ok}/${healthSummary.total} 個素材正常`;
 }
 
 function OverviewMetric({

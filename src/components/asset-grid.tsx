@@ -32,7 +32,7 @@ export function AssetGrid() {
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="p-4">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] items-start gap-4">
           {assets.map((asset) => (
             <AssetCard
               key={asset.id}

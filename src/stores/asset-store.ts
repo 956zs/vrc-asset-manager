@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { create } from "zustand";
+import { create, type StateCreator } from "zustand";
 import { toggleId } from "@/lib/id-list";
 import type {
   Asset,
@@ -63,7 +63,7 @@ type BackendSaveSummary = {
   vccCachedRepositories: number;
 };
 
-type AssetStore = {
+export type AssetStore = {
   assets: Asset[];
   models: Model[];
   tags: Tag[];
@@ -115,10 +115,51 @@ type AssetStore = {
   closeRelatedAssetSearch: () => void;
 };
 
+type AssetStoreSet = Parameters<StateCreator<AssetStore>>[0];
+type AssetStoreGet = Parameters<StateCreator<AssetStore>>[1];
+type AssetStoreStateFields = Pick<
+  AssetStore,
+  | "assets"
+  | "models"
+  | "tags"
+  | "filters"
+  | "selectedAssetId"
+  | "isAddAssetDialogOpen"
+  | "isAddModelDialogOpen"
+  | "isAddTagDialogOpen"
+  | "editingModel"
+  | "editingTag"
+  | "editingAssetRequestId"
+  | "relatedAssetSearchId"
+  | "loading"
+  | "saving"
+  | "error"
+  | "notice"
+>;
+
 const defaultFilters: AssetFilters = {
   search: "",
   modelIds: [],
   tagIds: [],
+};
+
+const initialAssetStoreState: AssetStoreStateFields = {
+  assets: [],
+  models: [],
+  tags: [],
+  filters: defaultFilters,
+  selectedAssetId: null,
+  isAddAssetDialogOpen: false,
+  isAddModelDialogOpen: false,
+  isAddTagDialogOpen: false,
+  editingModel: null,
+  editingTag: null,
+  editingAssetRequestId: null,
+  relatedAssetSearchId: null,
+  loading: false,
+  saving: false,
+  error: null,
+  notice: null,
 };
 
 let assetLoadGeneration = 0;
@@ -196,7 +237,9 @@ const errorState = (
 });
 
 const orderedByIds = <T extends { id: number }>(items: T[], ids: number[]) => {
-  const order = new Map(ids.map((id, index) => [id, index]));
+  const order = new Map<number, number>();
+  ids.forEach((id, index) => order.set(id, index));
+
   return [...items]
     .sort((first, second) => {
       const firstOrder = order.get(first.id) ?? Number.MAX_SAFE_INTEGER;
@@ -224,27 +267,21 @@ const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
     })),
 });
 
+const toCreateBackendInput = (asset: CreateAssetInput) => ({
+  displayName: asset.display_name,
+  filePath: asset.file_path,
+  boothUrl: asset.booth_url,
+  thumbnailUrl: asset.thumbnail_url,
+  note: asset.note,
+  modelIds: asset.model_ids,
+  tagIds: asset.tag_ids,
+  relatedLinks: asset.related_links,
+});
+
 export const selectSelectedAsset = (state: AssetStore) =>
   state.assets.find((asset) => asset.id === state.selectedAssetId) ?? null;
 
-export const useAssetStore = create<AssetStore>((set, get) => ({
-  assets: [],
-  models: [],
-  tags: [],
-  filters: defaultFilters,
-  selectedAssetId: null,
-  isAddAssetDialogOpen: false,
-  isAddModelDialogOpen: false,
-  isAddTagDialogOpen: false,
-  editingModel: null,
-  editingTag: null,
-  editingAssetRequestId: null,
-  relatedAssetSearchId: null,
-  loading: false,
-  saving: false,
-  error: null,
-  notice: null,
-
+const createLoadActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
   loadAll: async () => {
     const generation = nextAssetLoadGeneration();
     set({ loading: true, error: null });
@@ -254,330 +291,340 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         invoke<BackendTag[]>("get_tags"),
         loadBackendAssets(get().filters),
       ]);
-      if (!isCurrentAssetLoad(generation)) {
-        return;
-      }
+      if (!isCurrentAssetLoad(generation)) return;
 
-      set({
-        models: models.map(toModel),
-        tags: tags.map(toTag),
-        assets,
-        loading: false,
-      });
+      set({ models: models.map(toModel), tags: tags.map(toTag), assets, loading: false });
     } catch (error) {
-      if (isCurrentAssetLoad(generation)) {
-        set(errorState(error, { loading: false }));
-      }
+      if (isCurrentAssetLoad(generation)) set(errorState(error, { loading: false }));
     }
   },
-
   loadAssets: async () => {
     const generation = nextAssetLoadGeneration();
     set({ loading: true, error: null });
     try {
       const assets = await loadBackendAssets(get().filters);
-      if (isCurrentAssetLoad(generation)) {
-        set({ assets, loading: false });
-      }
+      if (isCurrentAssetLoad(generation)) set({ assets, loading: false });
     } catch (error) {
-      if (isCurrentAssetLoad(generation)) {
-        set(errorState(error, { loading: false }));
-      }
+      if (isCurrentAssetLoad(generation)) set(errorState(error, { loading: false }));
     }
   },
+  getAllAssets: async () => loadBackendAssets(defaultFilters),
+});
 
-  getAllAssets: async () => {
-    return loadBackendAssets(defaultFilters);
-  },
-
+const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
   clearError: () => set({ error: null }),
   clearNotice: () => set({ notice: null }),
-
-  setSearchFilter: (search) => {
+  setSearchFilter: (search: string) => {
     set((state) => ({ filters: { ...state.filters, search } }));
     void get().loadAssets();
   },
-
-  setFilters: (filters) => {
+  setFilters: (filters: AssetFilters) => {
     set({ filters: { ...filters } });
     void get().loadAssets();
   },
-
-  toggleModelFilter: (modelId) => {
+  toggleModelFilter: (modelId: number) => {
     set((state) => ({
-      filters: {
-        ...state.filters,
-        modelIds: toggleId(state.filters.modelIds, modelId),
-      },
+      filters: { ...state.filters, modelIds: toggleId(state.filters.modelIds, modelId) },
     }));
     void get().loadAssets();
   },
-
-  toggleTagFilter: (tagId) => {
+  toggleTagFilter: (tagId: number) => {
     set((state) => ({
-      filters: {
-        ...state.filters,
-        tagIds: toggleId(state.filters.tagIds, tagId),
-      },
+      filters: { ...state.filters, tagIds: toggleId(state.filters.tagIds, tagId) },
     }));
     void get().loadAssets();
   },
-
   clearFilters: () => {
     set({ filters: { ...defaultFilters } });
     void get().loadAssets();
   },
+  selectAsset: (assetId: number | null) => set({ selectedAssetId: assetId }),
+});
 
-  selectAsset: (assetId) => set({ selectedAssetId: assetId }),
+const createAddAssetAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  asset: CreateAssetInput,
+) => {
+  set({ saving: true, error: null });
+  try {
+    const created = await invoke<BackendAsset>("create_asset", {
+      input: toCreateBackendInput(asset),
+    });
+    await get().loadAssets();
+    set({ selectedAssetId: created.id, isAddAssetDialogOpen: false, saving: false });
+  } catch (error) {
+    set(errorState(error, { saving: false }));
+    throw error;
+  }
+};
 
-  addAsset: async (asset) => {
-    set({ saving: true, error: null });
-    try {
-      const created = await invoke<BackendAsset>("create_asset", {
-        input: {
-          displayName: asset.display_name,
-          filePath: asset.file_path,
-          boothUrl: asset.booth_url,
-          thumbnailUrl: asset.thumbnail_url,
-          note: asset.note,
-          modelIds: asset.model_ids,
-          tagIds: asset.tag_ids,
-          relatedLinks: asset.related_links,
-        },
-      });
-      await get().loadAssets();
-      set({
-        selectedAssetId: created.id,
-        isAddAssetDialogOpen: false,
-        saving: false,
-      });
-    } catch (error) {
-      set(errorState(error, { saving: false }));
-      throw error;
-    }
-  },
+const createUpdateAssetAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  id: number,
+  updates: UpdateAssetInput,
+) => {
+  const asset = get().assets.find((current) => current.id === id);
+  if (!asset) return;
 
-  updateAsset: async (id, updates) => {
-    const asset = get().assets.find((current) => current.id === id);
-    if (!asset) {
-      return;
-    }
+  set({ saving: true, error: null });
+  try {
+    await invoke<BackendAsset>("update_asset", { id, input: toBackendInput(asset, updates) });
+    await get().loadAssets();
+    set({ saving: false });
+  } catch (error) {
+    set(errorState(error, { saving: false }));
+    throw error;
+  }
+};
 
-    set({ saving: true, error: null });
-    try {
-      await invoke<BackendAsset>("update_asset", {
-        id,
-        input: toBackendInput(asset, updates),
-      });
-      await get().loadAssets();
-      set({ saving: false });
-    } catch (error) {
-      set(errorState(error, { saving: false }));
-      throw error;
-    }
-  },
+const createDeleteAssetAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  id: number,
+) => {
+  set({ saving: true, error: null });
+  try {
+    await invoke("delete_asset", { id });
+    await get().loadAssets();
+    set({ selectedAssetId: null, saving: false });
+  } catch (error) {
+    set(errorState(error, { saving: false }));
+    throw error;
+  }
+};
 
-  deleteAsset: async (id) => {
-    set({ saving: true, error: null });
-    try {
-      await invoke("delete_asset", { id });
-      await get().loadAssets();
-      set({ selectedAssetId: null, saving: false });
-    } catch (error) {
-      set(errorState(error, { saving: false }));
-      throw error;
-    }
-  },
+const createAssetActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
+  addAsset: createAddAssetAction(set, get),
+  updateAsset: createUpdateAssetAction(set, get),
+  deleteAsset: createDeleteAssetAction(set, get),
+});
 
-  addModel: async (name, displayName) => {
-    set({ error: null });
-    try {
-      const model = await invoke<BackendModel>("create_model", {
-        input: { name, displayName: displayName || null },
-      });
-      set((state) => ({ models: [...state.models, toModel(model)] }));
-    } catch (error) {
-      set(errorState(error));
-      throw error;
-    }
-  },
+const createModelActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
+  addModel: createAddModelAction(set),
+  updateModel: createUpdateModelAction(set, get),
+  deleteModel: createDeleteModelAction(set, get),
+});
 
-  updateModel: async (id, name, displayName) => {
-    set({ error: null });
-    try {
-      const model = await invoke<BackendModel>("update_model", {
-        id,
-        input: { name, displayName: displayName || null },
-      });
-      set((state) => ({
-        models: state.models.map((current) =>
-          current.id === id ? toModel(model) : current,
-        ),
-        editingModel: null,
-      }));
-      await get().loadAssets();
-    } catch (error) {
-      set(errorState(error));
-      throw error;
-    }
-  },
+const createAddModelAction = (set: AssetStoreSet) => async (
+  name: string,
+  displayName?: string,
+) => {
+  set({ error: null });
+  try {
+    const model = await invoke<BackendModel>("create_model", {
+      input: { name, displayName: displayName || null },
+    });
+    set((state) => ({ models: [...state.models, toModel(model)] }));
+  } catch (error) {
+    set(errorState(error));
+    throw error;
+  }
+};
 
-  deleteModel: async (id) => {
-    set({ error: null });
-    try {
-      await invoke("delete_model", { id });
-      set((state) => ({
-        models: state.models.filter((model) => model.id !== id),
-        filters: {
-          ...state.filters,
-          modelIds: state.filters.modelIds.filter((modelId) => modelId !== id),
-        },
-      }));
-      await get().loadAssets();
-    } catch (error) {
-      set(errorState(error));
-      throw error;
-    }
-  },
-
-  addTag: async (name, color) => {
-    set({ error: null });
-    try {
-      const tag = await invoke<BackendTag>("create_tag", { input: { name, color } });
-      set((state) => ({ tags: [...state.tags, toTag(tag)] }));
-    } catch (error) {
-      set(errorState(error));
-      throw error;
-    }
-  },
-
-  updateTag: async (id, name, color) => {
-    set({ error: null });
-    try {
-      const tag = await invoke<BackendTag>("update_tag", { id, input: { name, color } });
-      set((state) => ({
-        tags: state.tags.map((current) =>
-          current.id === id ? toTag(tag) : current,
-        ),
-        editingTag: null,
-      }));
-      await get().loadAssets();
-    } catch (error) {
-      set(errorState(error));
-      throw error;
-    }
-  },
-
-  deleteTag: async (id) => {
-    set({ error: null });
-    try {
-      await invoke("delete_tag", { id });
-      set((state) => ({
-        tags: state.tags.filter((tag) => tag.id !== id),
-        filters: {
-          ...state.filters,
-          tagIds: state.filters.tagIds.filter((tagId) => tagId !== id),
-        },
-      }));
-      await get().loadAssets();
-    } catch (error) {
-      set(errorState(error));
-      throw error;
-    }
-  },
-
-  reorderModels: async (modelIds) => {
-    const previousModels = get().models;
-    const previousAssets = get().assets;
-
+const createUpdateModelAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  id: number,
+  name: string,
+  displayName?: string,
+) => {
+  set({ error: null });
+  try {
+    const model = await invoke<BackendModel>("update_model", {
+      id,
+      input: { name, displayName: displayName || null },
+    });
     set((state) => ({
-      error: null,
-      models: orderedByIds(state.models, modelIds),
-      assets: state.assets.map((asset) => ({
-        ...asset,
-        models: orderedByIds(asset.models, modelIds),
-      })),
+      models: state.models.map((current) => current.id === id ? toModel(model) : current),
+      editingModel: null,
     }));
+    await get().loadAssets();
+  } catch (error) {
+    set(errorState(error));
+    throw error;
+  }
+};
 
-    try {
-      await invoke("reorder_models", { input: { modelIds } });
-    } catch (error) {
-      set(errorState(error, {
-        models: previousModels,
-        assets: previousAssets,
-      }));
-      throw error;
-    }
-  },
-
-  reorderTags: async (tagIds) => {
-    const previousTags = get().tags;
-    const previousAssets = get().assets;
-
+const createDeleteModelAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  id: number,
+) => {
+  set({ error: null });
+  try {
+    await invoke("delete_model", { id });
     set((state) => ({
-      error: null,
-      tags: orderedByIds(state.tags, tagIds),
-      assets: state.assets.map((asset) => ({
-        ...asset,
-        tags: orderedByIds(asset.tags, tagIds),
-      })),
+      models: state.models.filter((model) => model.id !== id),
+      filters: { ...state.filters, modelIds: state.filters.modelIds.filter((item) => item !== id) },
     }));
+    await get().loadAssets();
+  } catch (error) {
+    set(errorState(error));
+    throw error;
+  }
+};
 
-    try {
-      await invoke("reorder_tags", { input: { tagIds } });
-    } catch (error) {
-      set(errorState(error, {
-        tags: previousTags,
-        assets: previousAssets,
-      }));
-      throw error;
-    }
-  },
+const createTagActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
+  addTag: createAddTagAction(set),
+  updateTag: createUpdateTagAction(set, get),
+  deleteTag: createDeleteTagAction(set, get),
+});
 
-  exportSave: async (path) => {
-    set({ saving: true, error: null, notice: null });
-    try {
-      const summary = await invoke<BackendSaveSummary>("export_save", { path });
-      const vccBackupText = summary.vccBackupPath
-        ? `，VCC 備份 ${summary.vccBackupFiles} 個檔案`
-        : "";
-      set({
-        saving: false,
-        notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案${vccBackupText}`,
-      });
-    } catch (error) {
-      set(errorState(error, { saving: false }));
-      throw error;
-    }
-  },
+const createAddTagAction = (set: AssetStoreSet) => async (name: string, color: string) => {
+  set({ error: null });
+  try {
+    const tag = await invoke<BackendTag>("create_tag", { input: { name, color } });
+    set((state) => ({ tags: [...state.tags, toTag(tag)] }));
+  } catch (error) {
+    set(errorState(error));
+    throw error;
+  }
+};
 
-  importSave: async (path) => {
-    set({ saving: true, error: null, notice: null });
-    try {
-      const summary = await invoke<BackendSaveSummary>("import_save", { path });
-      set({
-        filters: { ...defaultFilters },
-        selectedAssetId: null,
-      });
-      await get().loadAll();
-      set({
-        saving: false,
-        notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案`,
-      });
-    } catch (error) {
-      set(errorState(error, { saving: false }));
-      throw error;
-    }
-  },
+const createUpdateTagAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  id: number,
+  name: string,
+  color: string,
+) => {
+  set({ error: null });
+  try {
+    const tag = await invoke<BackendTag>("update_tag", { id, input: { name, color } });
+    set((state) => ({
+      tags: state.tags.map((current) => current.id === id ? toTag(tag) : current),
+      editingTag: null,
+    }));
+    await get().loadAssets();
+  } catch (error) {
+    set(errorState(error));
+    throw error;
+  }
+};
 
-  setAddAssetDialogOpen: (open) => set({ isAddAssetDialogOpen: open }),
-  setAddModelDialogOpen: (open) => set({ isAddModelDialogOpen: open }),
-  setAddTagDialogOpen: (open) => set({ isAddTagDialogOpen: open }),
-  setEditingModel: (model) => set({ editingModel: model }),
-  setEditingTag: (tag) => set({ editingTag: tag }),
-  requestAssetEdit: (assetId) =>
+const createDeleteTagAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  id: number,
+) => {
+  set({ error: null });
+  try {
+    await invoke("delete_tag", { id });
+    set((state) => ({
+      tags: state.tags.filter((tag) => tag.id !== id),
+      filters: { ...state.filters, tagIds: state.filters.tagIds.filter((item) => item !== id) },
+    }));
+    await get().loadAssets();
+  } catch (error) {
+    set(errorState(error));
+    throw error;
+  }
+};
+
+const createReorderActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
+  reorderModels: createReorderModelsAction(set, get),
+  reorderTags: createReorderTagsAction(set, get),
+});
+
+const createReorderModelsAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  modelIds: number[],
+) => {
+  const previousModels = get().models;
+  const previousAssets = get().assets;
+
+  set((state) => ({
+    error: null,
+    models: orderedByIds(state.models, modelIds),
+    assets: state.assets.map((asset) => ({
+      ...asset,
+      models: orderedByIds(asset.models, modelIds),
+    })),
+  }));
+
+  try {
+    await invoke("reorder_models", { input: { modelIds } });
+  } catch (error) {
+    set(errorState(error, { models: previousModels, assets: previousAssets }));
+    throw error;
+  }
+};
+
+const createReorderTagsAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  tagIds: number[],
+) => {
+  const previousTags = get().tags;
+  const previousAssets = get().assets;
+
+  set((state) => ({
+    error: null,
+    tags: orderedByIds(state.tags, tagIds),
+    assets: state.assets.map((asset) => ({
+      ...asset,
+      tags: orderedByIds(asset.tags, tagIds),
+    })),
+  }));
+
+  try {
+    await invoke("reorder_tags", { input: { tagIds } });
+  } catch (error) {
+    set(errorState(error, { tags: previousTags, assets: previousAssets }));
+    throw error;
+  }
+};
+
+const createSaveActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
+  exportSave: createExportSaveAction(set),
+  importSave: createImportSaveAction(set, get),
+});
+
+const createExportSaveAction = (set: AssetStoreSet) => async (path: string) => {
+  set({ saving: true, error: null, notice: null });
+  try {
+    const summary = await invoke<BackendSaveSummary>("export_save", { path });
+    const vccBackupText = summary.vccBackupPath
+      ? `，VCC 備份 ${summary.vccBackupFiles} 個檔案`
+      : "";
+    set({
+      saving: false,
+      notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案${vccBackupText}`,
+    });
+  } catch (error) {
+    set(errorState(error, { saving: false }));
+    throw error;
+  }
+};
+
+const createImportSaveAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
+  path: string,
+) => {
+  set({ saving: true, error: null, notice: null });
+  try {
+    const summary = await invoke<BackendSaveSummary>("import_save", { path });
+    set({ filters: { ...defaultFilters }, selectedAssetId: null });
+    await get().loadAll();
+    set({
+      saving: false,
+      notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案`,
+    });
+  } catch (error) {
+    set(errorState(error, { saving: false }));
+    throw error;
+  }
+};
+
+const createDialogActions = (set: AssetStoreSet) => ({
+  setAddAssetDialogOpen: (open: boolean) => set({ isAddAssetDialogOpen: open }),
+  setAddModelDialogOpen: (open: boolean) => set({ isAddModelDialogOpen: open }),
+  setAddTagDialogOpen: (open: boolean) => set({ isAddTagDialogOpen: open }),
+  setEditingModel: (model: Model | null) => set({ editingModel: model }),
+  setEditingTag: (tag: Tag | null) => set({ editingTag: tag }),
+  requestAssetEdit: (assetId: number) =>
     set({ selectedAssetId: assetId, editingAssetRequestId: assetId }),
   clearAssetEditRequest: () => set({ editingAssetRequestId: null }),
-  openRelatedAssetSearch: (assetId) => set({ relatedAssetSearchId: assetId }),
+  openRelatedAssetSearch: (assetId: number) => set({ relatedAssetSearchId: assetId }),
   closeRelatedAssetSearch: () => set({ relatedAssetSearchId: null }),
-}));
+});
+
+const createAssetStore = (set: AssetStoreSet, get: AssetStoreGet): AssetStore => ({
+  ...initialAssetStoreState,
+  ...createLoadActions(set, get),
+  ...createFilterActions(set, get),
+  ...createAssetActions(set, get),
+  ...createModelActions(set, get),
+  ...createTagActions(set, get),
+  ...createReorderActions(set, get),
+  ...createSaveActions(set, get),
+  ...createDialogActions(set),
+});
+
+export const useAssetStore = create<AssetStore>((set, get) =>
+  createAssetStore(set, get),
+);

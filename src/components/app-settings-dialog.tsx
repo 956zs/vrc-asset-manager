@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import appIconUrl from "@/assets/app-icon.png";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,7 +31,7 @@ import { OverviewSection } from "./settings/overview-section";
 import { UpdateSection } from "./settings/update-section";
 import {
   formatPercent,
-  formatUpdateError,
+  formatUpdateErrorMessage,
   isReleaseJsonUnavailable,
   releaseUrl,
   toMessage,
@@ -56,29 +56,77 @@ const tabs: Array<{
   { id: "about", label: "關於", icon: Info },
 ];
 
-export function AppSettingsDialog({
-  open,
-  onOpenChange,
-  showAssets,
-}: AppSettingsDialogProps) {
-  const assets = useAssetStore((state) => state.assets);
-  const models = useAssetStore((state) => state.models);
-  const tags = useAssetStore((state) => state.tags);
-  const getAllAssets = useAssetStore((state) => state.getAllAssets);
-  const selectAsset = useAssetStore((state) => state.selectAsset);
-  const requestAssetEdit = useAssetStore((state) => state.requestAssetEdit);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("overview");
+type AppMetadata = {
+  appName: string;
+  appVersion: string | null;
+  assetCount: number;
+};
+
+type SettingsStats = {
+  assetCount: number;
+  modelCount: number;
+  tagCount: number;
+};
+
+type UpdateController = {
+  update: Update | null;
+  updateStatus: UpdateStatus;
+  updateMessage: string | null;
+  updateDescription: string;
+  downloadPercent: number | null;
+  onCheckUpdate: () => Promise<void>;
+  onInstallUpdate: () => Promise<void>;
+  onOpenReleases: () => void;
+};
+
+type UpdateDescriptionState = {
+  status: UpdateStatus;
+  update: Update | null;
+  message: string | null;
+  downloadPercent: number | null;
+};
+
+type HealthController = {
+  summary: AssetHealthSummary | null;
+  loading: boolean;
+  error: string | null;
+  onScan: () => Promise<void>;
+  onOpenIssueLocation: (issue: AssetHealthIssue) => Promise<void>;
+  onEditIssueAsset: (issue: AssetHealthIssue) => void;
+};
+
+type SettingsLayoutProps = AppMetadata & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  activeTab: SettingsTab;
+  stats: SettingsStats;
+  update: UpdateController;
+  health: HealthController;
+  onOpenTab: (tab: SettingsTab) => void;
+};
+
+type UpdateSetters = {
+  setUpdate: (update: Update | null) => void;
+  setUpdateStatus: (status: UpdateStatus) => void;
+  setUpdateMessage: (message: string | null) => void;
+  setDownloadedBytes: (bytes: number | ((current: number) => number)) => void;
+  setDownloadTotalBytes: (bytes: number | null) => void;
+};
+
+type HealthSetters = {
+  setHealthSummary: (summary: AssetHealthSummary | null) => void;
+  setHealthLoading: (loading: boolean) => void;
+  setHealthError: (error: string | null) => void;
+};
+
+function useAppMetadata(
+  open: boolean,
+  storeAssetCount: number,
+  getAllAssets: () => Promise<unknown[]>,
+): AppMetadata {
   const [appName, setAppName] = useState("VRC Asset Manager");
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [assetCount, setAssetCount] = useState<number | null>(null);
-  const [update, setUpdate] = useState<Update | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
-  const [downloadedBytes, setDownloadedBytes] = useState(0);
-  const [downloadTotalBytes, setDownloadTotalBytes] = useState<number | null>(null);
-  const [healthSummary, setHealthSummary] = useState<AssetHealthSummary | null>(null);
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -93,177 +141,326 @@ export function AppSettingsDialog({
       })
       .catch(() => {
         setAppVersion(null);
-        setAssetCount(assets.length);
+        setAssetCount(storeAssetCount);
       });
-  }, [assets.length, getAllAssets, open]);
+  }, [storeAssetCount, getAllAssets, open]);
 
-  const downloadPercent = formatPercent(downloadedBytes, downloadTotalBytes);
-  const updateDescription = useMemo(() => {
-    if (updateStatus === "checking") {
-      return "正在連線到 GitHub Releases";
-    }
+  return { appName, appVersion, assetCount: assetCount ?? storeAssetCount };
+}
 
-    if (updateStatus === "available" && update) {
-      return `可更新至 ${update.version}`;
-    }
+function useUpdateDescription({
+  status,
+  update,
+  message,
+  downloadPercent,
+}: UpdateDescriptionState) {
+  return useMemo(() => {
+    if (status === "checking") return "正在連線到 GitHub Releases";
+    if (status === "available" && update) return `可更新至 ${update.version}`;
+    if (status === "current") return "目前已是最新版本";
+    if (status === "unavailable") return "目前沒有可用的公開更新資訊";
+    if (status === "installed") return "更新已安裝，重新啟動後生效";
+    if (status !== "downloading") return message ?? "尚未檢查更新";
+    return downloadPercent === null ? "正在下載更新" : `正在下載更新 ${downloadPercent}%`;
+  }, [downloadPercent, message, status, update]);
+}
 
-    if (updateStatus === "current") {
-      return "目前已是最新版本";
-    }
+function resetUpdateDownload(setters: UpdateSetters) {
+  setters.setDownloadedBytes(0);
+  setters.setDownloadTotalBytes(null);
+}
 
-    if (updateStatus === "unavailable") {
-      return "目前沒有可用的公開更新資訊";
-    }
-
-    if (updateStatus === "downloading") {
-      return downloadPercent === null
-        ? "正在下載更新"
-        : `正在下載更新 ${downloadPercent}%`;
-    }
-
-    if (updateStatus === "installed") {
-      return "更新已安裝，重新啟動後生效";
-    }
-
-    return updateMessage ?? "尚未檢查更新";
-  }, [downloadPercent, update, updateMessage, updateStatus]);
-
-  const handleCheckUpdate = async () => {
-    setUpdateStatus("checking");
-    setUpdateMessage(null);
-    setUpdate(null);
-    setDownloadedBytes(0);
-    setDownloadTotalBytes(null);
+function createCheckUpdateHandler(
+  appVersion: string | null,
+  setActiveTab: (tab: SettingsTab) => void,
+  setters: UpdateSetters,
+) {
+  return async () => {
+    setters.setUpdateStatus("checking");
+    setters.setUpdateMessage(null);
+    setters.setUpdate(null);
+    resetUpdateDownload(setters);
 
     try {
       const nextUpdate = await check();
-      if (nextUpdate) {
-        setUpdate(nextUpdate);
-        setUpdateStatus("available");
-        setActiveTab("updates");
-        return;
-      }
-
-      setUpdateStatus("current");
+      setters.setUpdate(nextUpdate);
+      setters.setUpdateStatus(nextUpdate ? "available" : "current");
+      if (nextUpdate) setActiveTab("updates");
     } catch (error) {
-      const message = formatUpdateError(error, appVersion);
-      setUpdateStatus(isReleaseJsonUnavailable(toMessage(error)) ? "unavailable" : "error");
-      setUpdateMessage(message);
+      const message = toMessage(error);
+      setters.setUpdateStatus(isReleaseJsonUnavailable(message) ? "unavailable" : "error");
+      setters.setUpdateMessage(formatUpdateErrorMessage(message, appVersion));
       setActiveTab("updates");
     }
   };
+}
 
-  const handleInstallUpdate = async () => {
+function createInstallUpdateHandler(update: Update | null, setters: UpdateSetters) {
+  return async () => {
     if (!update) {
       return;
     }
 
-    setUpdateStatus("downloading");
-    setUpdateMessage(null);
-    setDownloadedBytes(0);
-    setDownloadTotalBytes(null);
+    setters.setUpdateStatus("downloading");
+    setters.setUpdateMessage(null);
+    resetUpdateDownload(setters);
 
     try {
       await update.downloadAndInstall((event: DownloadEvent) => {
         if (event.event === "Started") {
-          setDownloadedBytes(0);
-          setDownloadTotalBytes(event.data.contentLength ?? null);
+          resetUpdateDownload(setters);
+          setters.setDownloadTotalBytes(event.data.contentLength ?? null);
         } else if (event.event === "Progress") {
-          setDownloadedBytes((current) => current + event.data.chunkLength);
+          setters.setDownloadedBytes((current) => current + event.data.chunkLength);
         }
       });
-      setUpdateStatus("installed");
-      setUpdateMessage("更新已安裝");
+      setters.setUpdateStatus("installed");
+      setters.setUpdateMessage("更新已安裝");
     } catch (error) {
-      setUpdateStatus("error");
-      setUpdateMessage(toMessage(error));
+      setters.setUpdateStatus("error");
+      setters.setUpdateMessage(toMessage(error));
     }
   };
+}
 
-  const handleScanHealth = async () => {
-    setHealthLoading(true);
-    setHealthError(null);
+function useUpdateController(
+  appVersion: string | null,
+  setActiveTab: (tab: SettingsTab) => void,
+): UpdateController {
+  const [update, setUpdate] = useState<Update | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [downloadedBytes, setDownloadedBytes] = useState(0);
+  const [downloadTotalBytes, setDownloadTotalBytes] = useState<number | null>(null);
+  const setters = {
+    setUpdate,
+    setUpdateStatus,
+    setUpdateMessage,
+    setDownloadedBytes,
+    setDownloadTotalBytes,
+  };
+  const downloadPercent = formatPercent(downloadedBytes, downloadTotalBytes);
+
+  return {
+    update,
+    updateStatus,
+    updateMessage,
+    downloadPercent,
+    updateDescription: useUpdateDescription({
+      status: updateStatus,
+      update,
+      message: updateMessage,
+      downloadPercent,
+    }),
+    onCheckUpdate: createCheckUpdateHandler(appVersion, setActiveTab, setters),
+    onInstallUpdate: createInstallUpdateHandler(update, setters),
+    onOpenReleases: () => void openUrl(releaseUrl),
+  };
+}
+
+function createHealthScanHandler(
+  setActiveTab: (tab: SettingsTab) => void,
+  setters: HealthSetters,
+) {
+  return async () => {
+    setters.setHealthLoading(true);
+    setters.setHealthError(null);
 
     try {
-      const summary = await invoke<AssetHealthSummary>("scan_asset_health");
-      setHealthSummary(summary);
-      setActiveTab("health");
+      setters.setHealthSummary(await invoke<AssetHealthSummary>("scan_asset_health"));
     } catch (error) {
-      setHealthError(toMessage(error));
-      setActiveTab("health");
+      setters.setHealthError(toMessage(error));
     } finally {
-      setHealthLoading(false);
+      setters.setHealthLoading(false);
+      setActiveTab("health");
     }
   };
+}
 
-  const handleOpenIssueLocation = async (issue: AssetHealthIssue) => {
+function createIssueLocationHandler(setters: HealthSetters) {
+  return async (issue: AssetHealthIssue) => {
     try {
       await invoke("open_file_location", { path: issue.filePath });
     } catch (error) {
-      setHealthError(toMessage(error));
+      setters.setHealthError(toMessage(error));
     }
   };
+}
 
-  const handleEditIssueAsset = (issue: AssetHealthIssue) => {
-    showAssets();
-    selectAsset(issue.assetId);
-    requestAssetEdit(issue.assetId);
-    onOpenChange(false);
+function useHealthController(
+  props: AppSettingsDialogProps,
+  setActiveTab: (tab: SettingsTab) => void,
+): HealthController {
+  const selectAsset = useAssetStore((state) => state.selectAsset);
+  const requestAssetEdit = useAssetStore((state) => state.requestAssetEdit);
+  const [summary, setHealthSummary] = useState<AssetHealthSummary | null>(null);
+  const [loading, setHealthLoading] = useState(false);
+  const [error, setHealthError] = useState<string | null>(null);
+  const setters = { setHealthSummary, setHealthLoading, setHealthError };
+
+  return {
+    summary,
+    loading,
+    error,
+    onScan: createHealthScanHandler(setActiveTab, setters),
+    onOpenIssueLocation: createIssueLocationHandler(setters),
+    onEditIssueAsset: (issue) => {
+      props.showAssets();
+      selectAsset(issue.assetId);
+      requestAssetEdit(issue.assetId);
+      props.onOpenChange(false);
+    },
   };
+}
 
-  const content = {
-    overview: (
-      <OverviewSection
-        appVersion={appVersion}
-        assetCount={assetCount ?? assets.length}
-        modelCount={models.length}
-        tagCount={tags.length}
-        updateStatus={updateStatus}
-        updateDescription={updateDescription}
-        healthSummary={healthSummary}
-        healthLoading={healthLoading}
-        onCheckUpdate={handleCheckUpdate}
-        onScanHealth={handleScanHealth}
-        onOpenTab={setActiveTab}
-      />
-    ),
-    updates: (
-      <UpdateSection
-        appVersion={appVersion}
-        update={update}
-        updateStatus={updateStatus}
-        updateMessage={updateMessage}
-        updateDescription={updateDescription}
-        downloadPercent={downloadPercent}
-        onCheckUpdate={handleCheckUpdate}
-        onInstallUpdate={handleInstallUpdate}
-        onOpenReleases={() => void openUrl(releaseUrl)}
-      />
-    ),
-    health: (
-      <HealthSection
-        summary={healthSummary}
-        loading={healthLoading}
-        error={healthError}
-        onScan={handleScanHealth}
-        onOpenIssueLocation={handleOpenIssueLocation}
-        onEditIssueAsset={handleEditIssueAsset}
-      />
-    ),
-    about: (
-      <AboutSection
-        appName={appName}
-        appVersion={appVersion}
-        assetCount={assetCount ?? assets.length}
-        modelCount={models.length}
-        tagCount={tags.length}
-        onOpenReleases={() => void openUrl(releaseUrl)}
-      />
-    ),
-  } satisfies Record<SettingsTab, ReactNode>;
-
+function SettingsHeaderBrand({ appName, appVersion }: Pick<AppMetadata, "appName" | "appVersion">) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <div className="flex min-w-0 items-center gap-3">
+      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted shadow-sm">
+        <img src={appIconUrl} alt="" aria-hidden="true" className="h-full w-full object-cover" />
+      </div>
+      <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold text-foreground">設定中心</h2>
+        <p className="truncate text-xs text-muted-foreground">
+          {appName}
+          {appVersion ? ` · v${appVersion}` : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SettingsTabList({
+  activeTab,
+  onOpenTab,
+}: {
+  activeTab: SettingsTab;
+  onOpenTab: (tab: SettingsTab) => void;
+}) {
+  return (
+    <div className="grid w-full max-w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted/50 p-1 sm:grid-cols-4 lg:w-auto">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const selected = activeTab === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            className={cn(
+              "flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors",
+              "justify-center sm:min-w-[104px]",
+              selected && "bg-background text-foreground shadow-sm",
+            )}
+            onClick={() => onOpenTab(tab.id)}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SettingsHeader(props: SettingsLayoutProps) {
+  return (
+    <div className="min-h-0 border-b border-border bg-background px-5 py-4">
+      <div className="grid items-center gap-4 lg:grid-cols-[minmax(220px,1fr)_auto_auto]">
+        <SettingsHeaderBrand appName={props.appName} appVersion={props.appVersion} />
+        <SettingsTabList activeTab={props.activeTab} onOpenTab={props.onOpenTab} />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          title="關閉"
+          aria-label="關閉"
+          className="absolute top-3 right-3 lg:static"
+          onClick={() => props.onOpenChange(false)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsOverviewContent({
+  stats,
+  appVersion,
+  update,
+  health,
+  onOpenTab,
+}: SettingsLayoutProps) {
+  return (
+    <OverviewSection
+      appVersion={appVersion}
+      {...stats}
+      updateStatus={update.updateStatus}
+      updateDescription={update.updateDescription}
+      healthSummary={health.summary}
+      healthLoading={health.loading}
+      onCheckUpdate={update.onCheckUpdate}
+      onScanHealth={health.onScan}
+      onOpenTab={onOpenTab}
+    />
+  );
+}
+
+function SettingsUpdateContent({ appVersion, update }: SettingsLayoutProps) {
+  return (
+    <UpdateSection
+      appVersion={appVersion}
+      update={update.update}
+      updateStatus={update.updateStatus}
+      updateMessage={update.updateMessage}
+      updateDescription={update.updateDescription}
+      downloadPercent={update.downloadPercent}
+      onCheckUpdate={update.onCheckUpdate}
+      onInstallUpdate={update.onInstallUpdate}
+      onOpenReleases={update.onOpenReleases}
+    />
+  );
+}
+
+function SettingsHealthContent({ health }: SettingsLayoutProps) {
+  return (
+    <HealthSection
+      summary={health.summary}
+      loading={health.loading}
+      error={health.error}
+      onScan={health.onScan}
+      onOpenIssueLocation={health.onOpenIssueLocation}
+      onEditIssueAsset={health.onEditIssueAsset}
+    />
+  );
+}
+
+function SettingsAboutContent({
+  stats,
+  appName,
+  appVersion,
+  update,
+}: SettingsLayoutProps) {
+  return (
+    <AboutSection
+      {...stats}
+      appName={appName}
+      appVersion={appVersion}
+      onOpenReleases={update.onOpenReleases}
+    />
+  );
+}
+
+function SettingsContent(props: SettingsLayoutProps) {
+  if (props.activeTab === "updates") return <SettingsUpdateContent {...props} />;
+  if (props.activeTab === "health") return <SettingsHealthContent {...props} />;
+  if (props.activeTab === "about") return <SettingsAboutContent {...props} />;
+  return <SettingsOverviewContent {...props} />;
+}
+
+function AppSettingsLayout(props: SettingsLayoutProps) {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
         showCloseButton={false}
         className="grid h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:h-[760px] sm:max-h-[calc(100vh-2rem)] sm:max-w-[900px]"
@@ -271,75 +468,47 @@ export function AppSettingsDialog({
         <DialogHeader className="sr-only">
           <DialogTitle>設定 / 關於</DialogTitle>
           <DialogDescription>
-            {appName} {appVersion ? `v${appVersion}` : ""}
+            {props.appName} {props.appVersion ? `v${props.appVersion}` : ""}
           </DialogDescription>
         </DialogHeader>
-
-        <div className="min-h-0 border-b border-border bg-background px-5 py-4">
-          <div className="grid items-center gap-4 lg:grid-cols-[minmax(220px,1fr)_auto_auto]">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted shadow-sm">
-                <img
-                  src={appIconUrl}
-                  alt=""
-                  aria-hidden="true"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-foreground">
-                  設定中心
-                </h2>
-                <p className="truncate text-xs text-muted-foreground">
-                  {appName}
-                  {appVersion ? ` · v${appVersion}` : ""}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid w-full max-w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted/50 p-1 sm:grid-cols-4 lg:w-auto">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const selected = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    className={cn(
-                      "flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors",
-                      "justify-center sm:min-w-[104px]",
-                      selected && "bg-background text-foreground shadow-sm",
-                    )}
-                    onClick={() => setActiveTab(tab.id)}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              title="關閉"
-              aria-label="關閉"
-              className="absolute top-3 right-3 lg:static"
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
+        <SettingsHeader {...props} />
         <ScrollArea className="h-full min-h-0 bg-muted/20">
           <div className="flex min-h-full p-5">
-            <div className="min-h-full w-full">{content[activeTab]}</div>
+            <div className="min-h-full w-full">
+              <SettingsContent {...props} />
+            </div>
           </div>
         </ScrollArea>
       </DialogContent>
     </Dialog>
   );
+}
+
+function useAppSettingsController(props: AppSettingsDialogProps): SettingsLayoutProps {
+  const assets = useAssetStore((state) => state.assets);
+  const models = useAssetStore((state) => state.models);
+  const tags = useAssetStore((state) => state.tags);
+  const getAllAssets = useAssetStore((state) => state.getAllAssets);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("overview");
+  const metadata = useAppMetadata(props.open, assets.length, getAllAssets);
+  const update = useUpdateController(metadata.appVersion, setActiveTab);
+  const health = useHealthController(props, setActiveTab);
+
+  return {
+    ...props,
+    ...metadata,
+    activeTab,
+    update,
+    health,
+    stats: {
+      assetCount: metadata.assetCount,
+      modelCount: models.length,
+      tagCount: tags.length,
+    },
+    onOpenTab: setActiveTab,
+  };
+}
+
+export function AppSettingsDialog(props: AppSettingsDialogProps) {
+  return <AppSettingsLayout {...useAppSettingsController(props)} />;
 }

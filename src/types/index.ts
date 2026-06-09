@@ -89,7 +89,7 @@ export interface AssetLinkInput {
   url: string;
 }
 
-export interface VccProject {
+interface VccProject {
   id: number;
   name: string;
   path: string;
@@ -123,14 +123,4 @@ export interface VccRepository {
   url: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface CreateModelInput {
-  name: string;
-  display_name: string | null;
-}
-
-export interface CreateTagInput {
-  name: string;
-  color: string;
 }

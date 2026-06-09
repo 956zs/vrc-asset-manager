@@ -15,53 +15,57 @@ type AssetDetailTagSectionProps = {
   onToggle: (tagId: number) => void;
 };
 
-export function AssetDetailTagSection({
-  tags,
-  assetTags,
-  isEditing,
-  editedTagIds,
-  editedTagIdSet,
-  onSelectAll,
-  onClear,
-  onToggle,
-}: AssetDetailTagSectionProps) {
+function EditableTagSelection(props: Omit<AssetDetailTagSectionProps, "assetTags">) {
+  return (
+    <TagSelectionField
+      tags={props.tags}
+      selectedTagIds={props.editedTagIds}
+      selectedTagIdSet={props.editedTagIdSet}
+      actionsLayout="grid"
+      actionButtonClassName="h-8 w-full px-2 text-xs"
+      labelClassName="text-sm font-medium text-muted-foreground"
+      tagClassName="max-w-full cursor-pointer truncate transition-colors"
+      onSelectAll={props.onSelectAll}
+      onClear={props.onClear}
+      onToggle={props.onToggle}
+    />
+  );
+}
+
+function ReadonlyTagBadge({ tag }: { tag: Tag }) {
+  return (
+    <Badge
+      variant="outline"
+      className="max-w-full truncate"
+      style={{ borderColor: tag.color, color: tag.color }}
+    >
+      {tag.name}
+    </Badge>
+  );
+}
+
+function ReadonlyTagList({ assetTags }: { assetTags: Tag[] }) {
+  return (
+    <>
+      <label className="text-sm font-medium text-muted-foreground">標籤</label>
+      <div className="mt-2 flex min-w-0 flex-wrap gap-2">
+        {assetTags.length > 0 ? (
+          assetTags.map((tag) => <ReadonlyTagBadge key={tag.id} tag={tag} />)
+        ) : (
+          <p className="text-sm text-muted-foreground">未指定</p>
+        )}
+      </div>
+    </>
+  );
+}
+
+export function AssetDetailTagSection(props: AssetDetailTagSectionProps) {
   return (
     <div className="min-w-0">
-      {isEditing ? (
-        <TagSelectionField
-          tags={tags}
-          selectedTagIds={editedTagIds}
-          selectedTagIdSet={editedTagIdSet}
-          actionsLayout="grid"
-          actionButtonClassName="h-8 w-full px-2 text-xs"
-          labelClassName="text-sm font-medium text-muted-foreground"
-          tagClassName="max-w-full cursor-pointer truncate transition-colors"
-          onSelectAll={onSelectAll}
-          onClear={onClear}
-          onToggle={onToggle}
-        />
+      {props.isEditing ? (
+        <EditableTagSelection {...props} />
       ) : (
-        <>
-          <label className="text-sm font-medium text-muted-foreground">
-            標籤
-          </label>
-          <div className="mt-2 flex min-w-0 flex-wrap gap-2">
-            {assetTags.length > 0 ? (
-              assetTags.map((tag) => (
-                <Badge
-                  key={tag.id}
-                  variant="outline"
-                  className="max-w-full truncate"
-                  style={{ borderColor: tag.color, color: tag.color }}
-                >
-                  {tag.name}
-                </Badge>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">未指定</p>
-            )}
-          </div>
-        </>
+        <ReadonlyTagList assetTags={props.assetTags} />
       )}
     </div>
   );

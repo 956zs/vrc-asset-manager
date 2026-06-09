@@ -15,6 +15,26 @@ use super::{connection, db_error, CommandResult};
 
 const SAVE_SCHEMA_VERSION: u32 = 1;
 const VCC_BACKUP_SCHEMA_VERSION: u32 = 1;
+const EXPORT_MODELS_SQL: &str =
+    "SELECT id, name, display_name, sort_order, created_at FROM models ORDER BY sort_order, id";
+const EXPORT_TAGS_SQL: &str =
+    "SELECT id, name, color, sort_order FROM tags ORDER BY sort_order, id";
+const EXPORT_ASSETS_SQL: &str = "SELECT id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at
+             FROM assets
+             ORDER BY id";
+const EXPORT_ASSET_MODELS_SQL: &str =
+    "SELECT asset_id, model_id FROM asset_models ORDER BY asset_id, model_id";
+const EXPORT_ASSET_TAGS_SQL: &str =
+    "SELECT asset_id, tag_id FROM asset_tags ORDER BY asset_id, tag_id";
+const EXPORT_ASSET_LINKS_SQL: &str = "SELECT id, asset_id, label, url, sort_order
+             FROM asset_links
+             ORDER BY asset_id, sort_order, id";
+const EXPORT_VCC_PROJECTS_SQL: &str = "SELECT id, name, path, created_at, updated_at
+             FROM vcc_projects
+             ORDER BY name COLLATE NOCASE, path COLLATE NOCASE";
+const EXPORT_VCC_REPOSITORIES_SQL: &str = "SELECT id, name, url, created_at, updated_at
+             FROM vcc_repositories
+             ORDER BY name COLLATE NOCASE, url COLLATE NOCASE";
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -250,6 +270,19 @@ fn query_all<T>(
     rows.collect::<rusqlite::Result<Vec<_>>>()
 }
 
+fn archive_rows<T>(
+    conn: &Connection,
+    sql: &str,
+    mapper: fn(&Row<'_>) -> rusqlite::Result<T>,
+) -> CommandResult<Vec<T>> {
+    query_all(conn, sql, mapper).map_err(db_error)
+}
+
+fn export_timestamp(conn: &Connection) -> CommandResult<String> {
+    conn.query_row("SELECT datetime('now')", [], |row| row.get::<_, String>(0))
+        .map_err(db_error)
+}
+
 fn summary(
     path: String,
     archive: &SaveArchive,
@@ -283,70 +316,18 @@ fn require_path(path: &str) -> CommandResult<&Path> {
 }
 
 fn build_archive(conn: &Connection) -> CommandResult<SaveArchive> {
-    let exported_at = conn
-        .query_row("SELECT datetime('now')", [], |row| row.get::<_, String>(0))
-        .map_err(db_error)?;
-
     Ok(SaveArchive {
         schema_version: SAVE_SCHEMA_VERSION,
         app: "vrc-asset-manager".to_string(),
-        exported_at,
-        models: query_all(
-            conn,
-            "SELECT id, name, display_name, sort_order, created_at FROM models ORDER BY sort_order, id",
-            model_from_row,
-        )
-        .map_err(db_error)?,
-        tags: query_all(
-            conn,
-            "SELECT id, name, color, sort_order FROM tags ORDER BY sort_order, id",
-            tag_from_row,
-        )
-        .map_err(db_error)?,
-        assets: query_all(
-            conn,
-            "SELECT id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at
-             FROM assets
-             ORDER BY id",
-            asset_from_row,
-        )
-        .map_err(db_error)?,
-        asset_models: query_all(
-            conn,
-            "SELECT asset_id, model_id FROM asset_models ORDER BY asset_id, model_id",
-            asset_model_from_row,
-        )
-        .map_err(db_error)?,
-        asset_tags: query_all(
-            conn,
-            "SELECT asset_id, tag_id FROM asset_tags ORDER BY asset_id, tag_id",
-            asset_tag_from_row,
-        )
-        .map_err(db_error)?,
-        asset_links: query_all(
-            conn,
-            "SELECT id, asset_id, label, url, sort_order
-             FROM asset_links
-             ORDER BY asset_id, sort_order, id",
-            asset_link_from_row,
-        )
-        .map_err(db_error)?,
-        vcc_projects: query_all(
-            conn,
-            "SELECT id, name, path, created_at, updated_at
-             FROM vcc_projects
-             ORDER BY name COLLATE NOCASE, path COLLATE NOCASE",
-            vcc_project_from_row,
-        )
-        .map_err(db_error)?,
-        vcc_repositories: query_all(
-            conn,
-            "SELECT id, name, url, created_at, updated_at
-             FROM vcc_repositories
-             ORDER BY name COLLATE NOCASE, url COLLATE NOCASE",
-            vcc_repository_from_row,
-        )
-        .map_err(db_error)?,
+        exported_at: export_timestamp(conn)?,
+        models: archive_rows(conn, EXPORT_MODELS_SQL, model_from_row)?,
+        tags: archive_rows(conn, EXPORT_TAGS_SQL, tag_from_row)?,
+        assets: archive_rows(conn, EXPORT_ASSETS_SQL, asset_from_row)?,
+        asset_models: archive_rows(conn, EXPORT_ASSET_MODELS_SQL, asset_model_from_row)?,
+        asset_tags: archive_rows(conn, EXPORT_ASSET_TAGS_SQL, asset_tag_from_row)?,
+        asset_links: archive_rows(conn, EXPORT_ASSET_LINKS_SQL, asset_link_from_row)?,
+        vcc_projects: archive_rows(conn, EXPORT_VCC_PROJECTS_SQL, vcc_project_from_row)?,
+        vcc_repositories: archive_rows(conn, EXPORT_VCC_REPOSITORIES_SQL, vcc_repository_from_row)?,
         vcc_project_snapshots: snapshot_vcc_projects(conn)?,
     })
 }
@@ -372,45 +353,39 @@ fn relative_display(base: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-fn copy_backup_file(
-    source: &Path,
-    destination: &Path,
-    backup_dir: &Path,
-    copied_files: &mut Vec<String>,
-) -> CommandResult<bool> {
-    if !source.is_file() {
-        return Ok(false);
-    }
-
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(db_error)?;
-    }
-    fs::copy(source, destination).map_err(db_error)?;
-    copied_files.push(relative_display(backup_dir, destination));
-
-    Ok(true)
+struct VccBackupCopier<'a> {
+    backup_dir: &'a Path,
+    copied_files: &'a mut Vec<String>,
 }
 
-fn copy_vcc_local_backup(backup_dir: &Path) -> CommandResult<VccLocalBackup> {
-    let Some(app_data_dir) = vcc_app_data_dir() else {
-        return Ok(VccLocalBackup::default());
-    };
+impl VccBackupCopier<'_> {
+    fn copy_file(&mut self, source: &Path, destination: &Path) -> CommandResult<bool> {
+        if !source.is_file() {
+            return Ok(false);
+        }
 
-    let mut copied_files = Vec::new();
-    let local_backup_dir = backup_dir.join("vcc-local");
-    let settings_copied = copy_backup_file(
-        &app_data_dir.join("settings.json"),
-        &local_backup_dir.join("settings.json"),
-        backup_dir,
-        &mut copied_files,
-    )?;
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(db_error)?;
+        }
+        fs::copy(source, destination).map_err(db_error)?;
+        self.copied_files
+            .push(relative_display(self.backup_dir, destination));
 
-    let repos_dir = app_data_dir.join("Repos");
-    let backup_repos_dir = local_backup_dir.join("Repos");
-    let mut cached_repositories = 0;
-    if repos_dir.is_dir() {
-        fs::create_dir_all(&backup_repos_dir).map_err(db_error)?;
-        for entry in fs::read_dir(&repos_dir).map_err(db_error)? {
+        Ok(true)
+    }
+
+    fn copy_cached_repositories(
+        &mut self,
+        repos_dir: &Path,
+        backup_repos_dir: &Path,
+    ) -> CommandResult<usize> {
+        if !repos_dir.is_dir() {
+            return Ok(0);
+        }
+
+        fs::create_dir_all(backup_repos_dir).map_err(db_error)?;
+        let mut copied = 0;
+        for entry in fs::read_dir(repos_dir).map_err(db_error)? {
             let entry = entry.map_err(db_error)?;
             let source = entry.path();
             if source.extension().and_then(|extension| extension.to_str()) != Some("json") {
@@ -421,11 +396,36 @@ fn copy_vcc_local_backup(backup_dir: &Path) -> CommandResult<VccLocalBackup> {
                 continue;
             };
             let destination = backup_repos_dir.join(file_name);
-            if copy_backup_file(&source, &destination, backup_dir, &mut copied_files)? {
-                cached_repositories += 1;
+            if self.copy_file(&source, &destination)? {
+                copied += 1;
             }
         }
+
+        Ok(copied)
     }
+}
+
+fn copy_vcc_local_backup(backup_dir: &Path) -> CommandResult<VccLocalBackup> {
+    let Some(app_data_dir) = vcc_app_data_dir() else {
+        return Ok(VccLocalBackup::default());
+    };
+
+    let mut copied_files = Vec::new();
+    let local_backup_dir = backup_dir.join("vcc-local");
+    let repos_dir = app_data_dir.join("Repos");
+    let backup_repos_dir = local_backup_dir.join("Repos");
+    let (settings_copied, cached_repositories) = {
+        let mut copier = VccBackupCopier {
+            backup_dir,
+            copied_files: &mut copied_files,
+        };
+        let settings_copied = copier.copy_file(
+            &app_data_dir.join("settings.json"),
+            &local_backup_dir.join("settings.json"),
+        )?;
+        let cached_repositories = copier.copy_cached_repositories(&repos_dir, &backup_repos_dir)?;
+        (settings_copied, cached_repositories)
+    };
 
     Ok(VccLocalBackup {
         app_data_path: Some(app_data_dir.to_string_lossy().to_string()),
@@ -479,7 +479,7 @@ fn export_vcc_backup_bundle(
     })
 }
 
-fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResult<()> {
+fn clear_database(tx: &Transaction<'_>) -> CommandResult<()> {
     tx.execute("DELETE FROM vcc_repositories", [])
         .map_err(db_error)?;
     tx.execute("DELETE FROM vcc_projects", [])
@@ -498,153 +498,190 @@ fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResul
     )
     .map_err(db_error)?;
 
-    {
-        let mut stmt = tx
-            .prepare(
-                "INSERT INTO models (id, name, display_name, sort_order, created_at)
-                 VALUES (?, ?, ?, ?, ?)",
-            )
-            .map_err(db_error)?;
-        for (index, model) in archive.models.iter().enumerate() {
-            let sort_order = if model.sort_order > 0 {
-                model.sort_order
-            } else {
-                index as i64 + 1
-            };
-            stmt.execute(params![
-                model.id,
-                &model.name,
-                model.display_name.as_deref(),
-                sort_order,
-                &model.created_at
-            ])
-            .map_err(db_error)?;
-        }
-    }
+    Ok(())
+}
 
-    {
-        let mut stmt = tx
-            .prepare("INSERT INTO tags (id, name, color, sort_order) VALUES (?, ?, ?, ?)")
-            .map_err(db_error)?;
-        for (index, tag) in archive.tags.iter().enumerate() {
-            let sort_order = if tag.sort_order > 0 {
-                tag.sort_order
-            } else {
-                index as i64 + 1
-            };
-            stmt.execute(params![tag.id, &tag.name, &tag.color, sort_order])
-                .map_err(db_error)?;
-        }
+fn restored_sort_order(index: usize, sort_order: i64) -> i64 {
+    if sort_order > 0 {
+        sort_order
+    } else {
+        index as i64 + 1
     }
+}
 
-    {
-        let mut stmt = tx
-            .prepare(
-                "INSERT INTO assets
-                    (id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            )
-            .map_err(db_error)?;
-        for asset in &archive.assets {
-            stmt.execute(params![
-                asset.id,
-                &asset.name,
-                asset.display_name.as_deref(),
-                &asset.file_path,
-                asset.booth_url.as_deref(),
-                asset.thumbnail_url.as_deref(),
-                asset.note.as_deref(),
-                &asset.created_at,
-                &asset.updated_at
-            ])
-            .map_err(db_error)?;
-        }
-    }
+fn insert_models(tx: &Transaction<'_>, models: &[SaveModel]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare(
+            "INSERT INTO models (id, name, display_name, sort_order, created_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .map_err(db_error)?;
 
-    {
-        let mut stmt = tx
-            .prepare(
-                "INSERT INTO asset_links (id, asset_id, label, url, sort_order)
-                 VALUES (?, ?, ?, ?, ?)",
-            )
-            .map_err(db_error)?;
-        for (index, link) in archive.asset_links.iter().enumerate() {
-            let sort_order = if link.sort_order > 0 {
-                link.sort_order
-            } else {
-                index as i64 + 1
-            };
-            stmt.execute(params![
-                link.id,
-                link.asset_id,
-                &link.label,
-                &link.url,
-                sort_order
-            ])
-            .map_err(db_error)?;
-        }
-    }
-
-    {
-        let mut stmt = tx
-            .prepare(
-                "INSERT INTO vcc_repositories (id, name, url, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?)",
-            )
-            .map_err(db_error)?;
-        for repository in &archive.vcc_repositories {
-            stmt.execute(params![
-                repository.id,
-                &repository.name,
-                &repository.url,
-                &repository.created_at,
-                &repository.updated_at
-            ])
-            .map_err(db_error)?;
-        }
-    }
-    ensure_vcc_repositories(tx).map_err(db_error)?;
-
-    {
-        let mut stmt = tx
-            .prepare(
-                "INSERT INTO vcc_projects (id, name, path, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?)",
-            )
-            .map_err(db_error)?;
-        for project in &archive.vcc_projects {
-            stmt.execute(params![
-                project.id,
-                &project.name,
-                &project.path,
-                &project.created_at,
-                &project.updated_at
-            ])
-            .map_err(db_error)?;
-        }
-    }
-
-    {
-        let mut stmt = tx
-            .prepare("INSERT INTO asset_models (asset_id, model_id) VALUES (?, ?)")
-            .map_err(db_error)?;
-        for relation in &archive.asset_models {
-            stmt.execute(params![relation.asset_id, relation.model_id])
-                .map_err(db_error)?;
-        }
-    }
-
-    {
-        let mut stmt = tx
-            .prepare("INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)")
-            .map_err(db_error)?;
-        for relation in &archive.asset_tags {
-            stmt.execute(params![relation.asset_id, relation.tag_id])
-                .map_err(db_error)?;
-        }
+    for (index, model) in models.iter().enumerate() {
+        stmt.execute(params![
+            model.id,
+            &model.name,
+            model.display_name.as_deref(),
+            restored_sort_order(index, model.sort_order),
+            &model.created_at
+        ])
+        .map_err(db_error)?;
     }
 
     Ok(())
+}
+
+fn insert_tags(tx: &Transaction<'_>, tags: &[SaveTag]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare("INSERT INTO tags (id, name, color, sort_order) VALUES (?, ?, ?, ?)")
+        .map_err(db_error)?;
+
+    for (index, tag) in tags.iter().enumerate() {
+        stmt.execute(params![
+            tag.id,
+            &tag.name,
+            &tag.color,
+            restored_sort_order(index, tag.sort_order)
+        ])
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn insert_assets(tx: &Transaction<'_>, assets: &[SaveAsset]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare(
+            "INSERT INTO assets
+                (id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .map_err(db_error)?;
+
+    for asset in assets {
+        stmt.execute(params![
+            asset.id,
+            &asset.name,
+            asset.display_name.as_deref(),
+            &asset.file_path,
+            asset.booth_url.as_deref(),
+            asset.thumbnail_url.as_deref(),
+            asset.note.as_deref(),
+            &asset.created_at,
+            &asset.updated_at
+        ])
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn insert_asset_links(tx: &Transaction<'_>, links: &[SaveAssetLink]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare(
+            "INSERT INTO asset_links (id, asset_id, label, url, sort_order)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .map_err(db_error)?;
+
+    for (index, link) in links.iter().enumerate() {
+        stmt.execute(params![
+            link.id,
+            link.asset_id,
+            &link.label,
+            &link.url,
+            restored_sort_order(index, link.sort_order)
+        ])
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn insert_vcc_repositories(
+    tx: &Transaction<'_>,
+    repositories: &[SaveVccRepository],
+) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare(
+            "INSERT INTO vcc_repositories (id, name, url, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .map_err(db_error)?;
+
+    for repository in repositories {
+        stmt.execute(params![
+            repository.id,
+            &repository.name,
+            &repository.url,
+            &repository.created_at,
+            &repository.updated_at
+        ])
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn insert_vcc_projects(tx: &Transaction<'_>, projects: &[SaveVccProject]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare(
+            "INSERT INTO vcc_projects (id, name, path, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .map_err(db_error)?;
+
+    for project in projects {
+        stmt.execute(params![
+            project.id,
+            &project.name,
+            &project.path,
+            &project.created_at,
+            &project.updated_at
+        ])
+        .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn insert_asset_models(tx: &Transaction<'_>, relations: &[SaveAssetModel]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare("INSERT INTO asset_models (asset_id, model_id) VALUES (?, ?)")
+        .map_err(db_error)?;
+
+    for relation in relations {
+        stmt.execute(params![relation.asset_id, relation.model_id])
+            .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn insert_asset_tags(tx: &Transaction<'_>, relations: &[SaveAssetTag]) -> CommandResult<()> {
+    let mut stmt = tx
+        .prepare("INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)")
+        .map_err(db_error)?;
+
+    for relation in relations {
+        stmt.execute(params![relation.asset_id, relation.tag_id])
+            .map_err(db_error)?;
+    }
+
+    Ok(())
+}
+
+fn replace_database(tx: &Transaction<'_>, archive: &SaveArchive) -> CommandResult<()> {
+    clear_database(tx)?;
+    insert_models(tx, &archive.models)?;
+    insert_tags(tx, &archive.tags)?;
+    insert_assets(tx, &archive.assets)?;
+    insert_asset_links(tx, &archive.asset_links)?;
+    insert_vcc_repositories(tx, &archive.vcc_repositories)?;
+    ensure_vcc_repositories(tx).map_err(db_error)?;
+    insert_vcc_projects(tx, &archive.vcc_projects)?;
+    insert_asset_models(tx, &archive.asset_models)?;
+    insert_asset_tags(tx, &archive.asset_tags)
 }
 
 #[tauri::command]

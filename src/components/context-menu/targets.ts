@@ -129,12 +129,19 @@ export const getContextAsset = (target: EventTarget | null) => {
   };
 };
 
-export const clampMenuPosition = (
-  x: number,
-  y: number,
-  itemCount: number,
-  separatorCount: number,
-) => {
+type ClampMenuPositionOptions = {
+  x: number;
+  y: number;
+  itemCount: number;
+  separatorCount: number;
+};
+
+export const clampMenuPosition = ({
+  x,
+  y,
+  itemCount,
+  separatorCount,
+}: ClampMenuPositionOptions) => {
   const estimatedHeight = menuPadding * 2 + itemCount * rowHeight + separatorCount * 9;
   const maxX = Math.max(8, window.innerWidth - menuWidth - 8);
   const maxY = Math.max(8, window.innerHeight - estimatedHeight - 8);

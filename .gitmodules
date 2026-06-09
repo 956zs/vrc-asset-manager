@@ -1,0 +1,3 @@
+[submodule "references/v0-vrc-asset-manager"]
+	path = references/v0-vrc-asset-manager
+	url = https://github.com/956zs/v0-vrc-asset-manager

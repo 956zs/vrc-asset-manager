@@ -23,96 +23,149 @@ type HealthSectionProps = {
   onEditIssueAsset: (issue: AssetHealthIssue) => void;
 };
 
-export function HealthSection({
+type HealthIssueActions = Pick<
+  HealthSectionProps,
+  "onOpenIssueLocation" | "onEditIssueAsset"
+>;
+
+type HealthIssueListProps = {
+  issues: AssetHealthIssue[];
+} & HealthIssueActions;
+
+function HealthSummaryCard({
   summary,
   loading,
-  error,
   onScan,
-  onOpenIssueLocation,
-  onEditIssueAsset,
-}: HealthSectionProps) {
+}: Pick<HealthSectionProps, "summary" | "loading" | "onScan">) {
   const issueCount = summary?.issues.length ?? 0;
 
   return (
-    <section className="flex min-h-full flex-col gap-4">
-      <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-              <ShieldCheck className="h-4 w-4 text-primary" />
-              素材健康
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {summary
-                ? `${summary.ok}/${summary.total} 個素材正常，${issueCount} 個需要注意`
-                : "尚未掃描"}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={loading}
-            onClick={() => void onScan()}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            掃描素材
-          </Button>
+    <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            素材健康
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {summary
+              ? `${summary.ok}/${summary.total} 個素材正常，${issueCount} 個需要注意`
+              : "尚未掃描"}
+          </p>
         </div>
-
-        {summary && (
-          <div className="mt-4 grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4">
-            <HealthStat label="總數" value={summary.total} />
-            <HealthStat label="正常" value={summary.ok} tone="good" />
-            <HealthStat label="缺失" value={summary.missing} tone="warn" />
-            <HealthStat label="無法讀取" value={summary.unreadable} tone="warn" />
-          </div>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          disabled={loading}
+          onClick={() => void onScan()}
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          掃描素材
+        </Button>
       </div>
+      {summary && <HealthStatsGrid summary={summary} />}
+    </div>
+  );
+}
 
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          <TriangleAlert className="h-4 w-4" />
-          {error}
-        </div>
-      )}
+function HealthStatsGrid({ summary }: { summary: AssetHealthSummary }) {
+  return (
+    <div className="mt-4 grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4">
+      <HealthStat label="總數" value={summary.total} />
+      <HealthStat label="正常" value={summary.ok} tone="good" />
+      <HealthStat label="缺失" value={summary.missing} tone="warn" />
+      <HealthStat label="無法讀取" value={summary.unreadable} tone="warn" />
+    </div>
+  );
+}
 
-      {summary && issueCount === 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm text-foreground">
-          <CheckCircle2 className="h-4 w-4 text-primary" />
-          目前沒有偵測到素材路徑問題
-        </div>
-      )}
+function HealthErrorMessage({ error }: { error: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+      <TriangleAlert className="h-4 w-4" />
+      {error}
+    </div>
+  );
+}
 
-      {summary && issueCount > 0 && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium text-foreground">
-            <TriangleAlert className="h-4 w-4 text-destructive" />
-            需要處理的素材
-          </div>
-          <ScrollArea className="min-h-[220px] flex-1">
-            <div className="divide-y divide-border">
-              {summary.issues.map((issue) => (
-                <HealthIssueRow
-                  key={`${issue.assetId}-${issue.status}-${issue.filePath}`}
-                  issue={issue}
-                  onOpenIssueLocation={onOpenIssueLocation}
-                  onEditIssueAsset={onEditIssueAsset}
-                />
-              ))}
-            </div>
-          </ScrollArea>
+function HealthOkMessage() {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm text-foreground">
+      <CheckCircle2 className="h-4 w-4 text-primary" />
+      目前沒有偵測到素材路徑問題
+    </div>
+  );
+}
+
+function HealthIssueList({
+  issues,
+  onOpenIssueLocation,
+  onEditIssueAsset,
+}: HealthIssueListProps) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium text-foreground">
+        <TriangleAlert className="h-4 w-4 text-destructive" />
+        需要處理的素材
+      </div>
+      <ScrollArea className="min-h-[220px] flex-1">
+        <div className="divide-y divide-border">
+          {issues.map((issue) => (
+            <HealthIssueRow
+              key={`${issue.assetId}-${issue.status}-${issue.filePath}`}
+              issue={issue}
+              onOpenIssueLocation={onOpenIssueLocation}
+              onEditIssueAsset={onEditIssueAsset}
+            />
+          ))}
         </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+function HealthPlaceholder({ compact }: { compact?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex-1 rounded-lg border border-dashed border-border bg-background/50",
+        compact ? "min-h-[160px]" : "min-h-[220px]",
       )}
-      {summary && issueCount === 0 && (
-        <div className="min-h-[160px] flex-1 rounded-lg border border-dashed border-border bg-background/50" />
-      )}
-      {!summary && !error && (
-        <div className="min-h-[220px] flex-1 rounded-lg border border-dashed border-border bg-background/50" />
-      )}
+    />
+  );
+}
+
+function HealthDetails({
+  summary,
+  error,
+  onOpenIssueLocation,
+  onEditIssueAsset,
+}: Pick<HealthSectionProps, "summary" | "error"> & HealthIssueActions) {
+  const issueCount = summary?.issues.length ?? 0;
+
+  if (error) return <HealthErrorMessage error={error} />;
+  if (!summary) return <HealthPlaceholder />;
+  if (issueCount === 0) return <HealthOkMessage />;
+  return (
+    <HealthIssueList
+      issues={summary.issues}
+      onOpenIssueLocation={onOpenIssueLocation}
+      onEditIssueAsset={onEditIssueAsset}
+    />
+  );
+}
+
+export function HealthSection(props: HealthSectionProps) {
+  const issueCount = props.summary?.issues.length ?? 0;
+  return (
+    <section className="flex min-h-full flex-col gap-4">
+      <HealthSummaryCard {...props} />
+      <HealthDetails {...props} />
+      {props.summary && issueCount === 0 && <HealthPlaceholder compact />}
     </section>
   );
 }

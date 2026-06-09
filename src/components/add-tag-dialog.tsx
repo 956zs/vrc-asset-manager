@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAssetStore } from "@/stores/asset-store";
+import type { Tag } from "@/types";
 
-const presetColors = [
+const PRESET_COLORS = [
   "#f59e0b",
   "#8b5cf6",
   "#3b82f6",
@@ -26,141 +27,234 @@ const presetColors = [
   "#84cc16",
 ];
 
-export function AddTagDialog() {
-  const {
-    isAddTagDialogOpen,
-    editingTag,
-    setAddTagDialogOpen,
-    setEditingTag,
-    addTag,
-    updateTag,
-  } = useAssetStore();
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(presetColors[0]);
-  const isEditing = editingTag !== null;
-  const isOpen = isAddTagDialogOpen || isEditing;
+type TagDialogForm = {
+  canSubmit: boolean;
+  color: string;
+  name: string;
+  reset: () => void;
+  setColor: (color: string) => void;
+  setName: (name: string) => void;
+};
 
-  const resetForm = () => {
+type TagDialogController = {
+  form: TagDialogForm;
+  isEditing: boolean;
+  open: boolean;
+  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: () => Promise<void>;
+};
+
+function useTagDialogForm(editingTag: Tag | null, isOpen: boolean): TagDialogForm {
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(PRESET_COLORS[0]);
+  const reset = () => {
     setName("");
-    setColor(presetColors[0]);
+    setColor(PRESET_COLORS[0]);
   };
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen) return;
+    if (!editingTag) {
+      reset();
       return;
     }
-
-    if (editingTag) {
-      setName(editingTag.name);
-      setColor(editingTag.color);
-      return;
-    }
-
-    resetForm();
+    setName(editingTag.name);
+    setColor(editingTag.color);
   }, [editingTag, isOpen]);
 
-  const handleClose = () => {
-    setAddTagDialogOpen(false);
-    setEditingTag(null);
-    resetForm();
+  return {
+    canSubmit: name.trim().length > 0,
+    color,
+    name,
+    reset,
+    setColor,
+    setName,
   };
+}
 
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      return;
-    }
-
-    if (editingTag) {
-      await updateTag(editingTag.id, name.trim(), color);
+function useTagDialogController(): TagDialogController {
+  const store = useAssetStore();
+  const isEditing = store.editingTag !== null;
+  const open = store.isAddTagDialogOpen || isEditing;
+  const form = useTagDialogForm(store.editingTag, open);
+  const onClose = () => {
+    store.setAddTagDialogOpen(false);
+    store.setEditingTag(null);
+    form.reset();
+  };
+  const onSubmit = async () => {
+    if (!form.canSubmit) return;
+    if (store.editingTag) {
+      await store.updateTag(store.editingTag.id, form.name.trim(), form.color);
     } else {
-      await addTag(name.trim(), color);
+      await store.addTag(form.name.trim(), form.color);
     }
-    handleClose();
+    onClose();
   };
+
+  return {
+    form,
+    isEditing,
+    open,
+    onClose,
+    onOpenChange: (nextOpen) => {
+      if (!nextOpen) onClose();
+    },
+    onSubmit,
+  };
+}
+
+function TagNameField({ form }: { form: TagDialogForm }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">
+        標籤名稱 <span className="text-destructive">*</span>
+      </label>
+      <Input
+        value={form.name}
+        onChange={(event) => form.setName(event.target.value)}
+        placeholder="例：飾品"
+      />
+    </div>
+  );
+}
+
+function PresetColorButton({
+  color,
+  selectedColor,
+  onSelect,
+}: {
+  color: string;
+  selectedColor: string;
+  onSelect: (color: string) => void;
+}) {
+  const selected = selectedColor === color;
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          handleClose();
-        }
+    <button
+      type="button"
+      className="h-8 w-8 rounded-full border-2 transition-all"
+      title={`選擇顏色 ${color}`}
+      aria-label={`選擇顏色 ${color}`}
+      style={{
+        backgroundColor: color,
+        borderColor: selected ? "#fff" : "transparent",
+        boxShadow: selected ? `0 0 0 2px ${color}` : "none",
       }}
-    >
+      onClick={() => onSelect(color)}
+    />
+  );
+}
+
+function PresetColorGrid({ form }: { form: TagDialogForm }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {PRESET_COLORS.map((presetColor) => (
+        <PresetColorButton
+          key={presetColor}
+          color={presetColor}
+          selectedColor={form.color}
+          onSelect={form.setColor}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CustomColorInputs({ form }: { form: TagDialogForm }) {
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <Input
+        type="color"
+        value={form.color}
+        onChange={(event) => form.setColor(event.target.value)}
+        className="h-8 w-12 border-0 p-0"
+      />
+      <Input
+        value={form.color}
+        onChange={(event) => form.setColor(event.target.value)}
+        className="flex-1 font-mono text-sm"
+        placeholder="#000000"
+      />
+    </div>
+  );
+}
+
+function TagColorField({ form }: { form: TagDialogForm }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">標籤顏色</label>
+      <PresetColorGrid form={form} />
+      <CustomColorInputs form={form} />
+    </div>
+  );
+}
+
+function TagPreview({ form }: { form: TagDialogForm }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">預覽</label>
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex items-center rounded-md px-2 py-1 text-sm font-medium text-white"
+          style={{ backgroundColor: form.color }}
+        >
+          {form.name || "標籤名稱"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TagDialogFields({ form }: { form: TagDialogForm }) {
+  return (
+    <div className="space-y-4 py-4">
+      <TagNameField form={form} />
+      <TagColorField form={form} />
+      <TagPreview form={form} />
+    </div>
+  );
+}
+
+function TagDialogFooter({
+  form,
+  isEditing,
+  onClose,
+  onSubmit,
+}: Pick<TagDialogController, "form" | "isEditing" | "onClose" | "onSubmit">) {
+  return (
+    <DialogFooter>
+      <Button type="button" variant="outline" onClick={onClose}>
+        取消
+      </Button>
+      <Button type="button" onClick={() => void onSubmit()} disabled={!form.canSubmit}>
+        {isEditing ? "儲存標籤" : "新增標籤"}
+      </Button>
+    </DialogFooter>
+  );
+}
+
+function AddTagDialogLayout(props: TagDialogController) {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "編輯標籤" : "新增標籤"}</DialogTitle>
+          <DialogTitle>{props.isEditing ? "編輯標籤" : "新增標籤"}</DialogTitle>
           <DialogDescription>創建新的標籤來分類你的素材</DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              標籤名稱 <span className="text-destructive">*</span>
-            </label>
-            <Input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="例：飾品"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">標籤顏色</label>
-            <div className="flex flex-wrap gap-2">
-              {presetColors.map((presetColor) => (
-                <button
-                  key={presetColor}
-                  type="button"
-                  className="h-8 w-8 rounded-full border-2 transition-all"
-                  style={{
-                    backgroundColor: presetColor,
-                    borderColor: color === presetColor ? "#fff" : "transparent",
-                    boxShadow:
-                      color === presetColor ? `0 0 0 2px ${presetColor}` : "none",
-                  }}
-                  onClick={() => setColor(presetColor)}
-                />
-              ))}
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <Input
-                type="color"
-                value={color}
-                onChange={(event) => setColor(event.target.value)}
-                className="h-8 w-12 border-0 p-0"
-              />
-              <Input
-                value={color}
-                onChange={(event) => setColor(event.target.value)}
-                className="flex-1 font-mono text-sm"
-                placeholder="#000000"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">預覽</label>
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center rounded-md px-2 py-1 text-sm font-medium text-white"
-                style={{ backgroundColor: color }}
-              >
-                {name || "標籤名稱"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={handleClose}>
-            取消
-          </Button>
-          <Button type="button" onClick={() => void handleSubmit()} disabled={!name.trim()}>
-            {isEditing ? "儲存標籤" : "新增標籤"}
-          </Button>
-        </DialogFooter>
+        <TagDialogFields form={props.form} />
+        <TagDialogFooter
+          form={props.form}
+          isEditing={props.isEditing}
+          onClose={props.onClose}
+          onSubmit={props.onSubmit}
+        />
       </DialogContent>
     </Dialog>
   );
+}
+
+export function AddTagDialog() {
+  return <AddTagDialogLayout {...useTagDialogController()} />;
 }

@@ -8,7 +8,7 @@ export type BackendVccProject = {
   updatedAt: string;
 };
 
-export type BackendVccPackage = {
+type BackendVccPackage = {
   packageId: string;
   displayName: string | null;
   requestedVersion: string | null;
@@ -80,11 +80,21 @@ export const toRepository = (repository: BackendVccRepository): VccRepository =>
 });
 
 export const getPackageCounts = (packages: VccPackage[]) => {
-  const installedCount = packages.filter((packageInfo) => packageInfo.installed).length;
-  const availableCount = packages.filter((packageInfo) => packageInfo.available).length;
-  const missingCount = packages.filter(
-    (packageInfo) => packageInfo.requested_version && !packageInfo.installed,
-  ).length;
+  let installedCount = 0;
+  let availableCount = 0;
+  let missingCount = 0;
+
+  for (const packageInfo of packages) {
+    if (packageInfo.installed) {
+      installedCount += 1;
+    }
+    if (packageInfo.available) {
+      availableCount += 1;
+    }
+    if (packageInfo.requested_version && !packageInfo.installed) {
+      missingCount += 1;
+    }
+  }
 
   return { installedCount, availableCount, missingCount };
 };
@@ -110,5 +120,4 @@ export const filterPackages = (
 };
 
 export const isProtectedRepository = (repository: VccRepository) =>
-  repository.url.includes("vrchat.github.io/packages") ||
   repository.url.includes("packages.vrchat.com");
