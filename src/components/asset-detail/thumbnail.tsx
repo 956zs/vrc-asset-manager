@@ -13,12 +13,12 @@ export function AssetDetailThumbnail({
   displayName,
 }: AssetDetailThumbnailProps) {
   return (
-    <div className="relative aspect-video min-w-0 overflow-hidden rounded-lg bg-muted">
+    <div className="relative h-72 min-w-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
       {thumbnailUrl ? (
         <img
           src={thumbnailUrl}
           alt={displayName}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           onError={(event) => {
             event.currentTarget.style.display = "none";
             event.currentTarget.nextElementSibling?.classList.remove("hidden");

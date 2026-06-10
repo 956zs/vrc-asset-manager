@@ -166,6 +166,7 @@ mod tests {
         assert_eq!(actual_links.as_slice(), links);
     }
 
+    #[cfg(unix)]
     fn create_health_asset(db: &db::DbState, display_name: &str, file_path: PathBuf) {
         commands::assets::create_asset(
             CreateAssetInput {
@@ -183,6 +184,7 @@ mod tests {
         .expect("create health-check asset");
     }
 
+    #[cfg(unix)]
     fn issue_status<'a>(
         health: &'a commands::assets::AssetHealthSummary,
         display_name: &str,
