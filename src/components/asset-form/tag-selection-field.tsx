@@ -99,7 +99,7 @@ export function TagSelectionField({
   actionsLayout = "inline",
   actionButtonClassName = "h-7 px-2 text-xs",
   labelClassName = "text-sm font-medium",
-  tagClassName = "cursor-pointer transition-colors",
+  tagClassName = "min-w-0 !max-w-full !shrink cursor-pointer truncate transition-colors",
   onSelectAll,
   onClear,
   onToggle,

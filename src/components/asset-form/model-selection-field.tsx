@@ -30,7 +30,7 @@ function ModelOptionRow({ model, selected, onToggle }: ModelOptionRowProps) {
   const label = model.display_name || model.name;
 
   return (
-    <label className="flex cursor-pointer items-center gap-2">
+    <label className="flex min-w-0 max-w-full cursor-pointer items-center gap-2">
       <Checkbox
         checked={selected}
         onCheckedChange={() => onToggle(model.id)}

@@ -43,9 +43,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { isTauriRuntime } from "@/lib/tauri-runtime";
 import { cn } from "@/lib/utils";
 import { type AssetStore, useAssetStore } from "@/stores/asset-store";
-import type { AssetFilters, Model, Tag as AssetTag } from "@/types";
+import type { AssetCategory, AssetFilters, Model, Tag as AssetTag } from "@/types";
 
 type DeleteTarget =
   | {
@@ -237,6 +238,8 @@ type TagFilterSectionProps = {
 
 type SidebarFilterPanelProps = {
   onAddAsset: () => void;
+  category: AssetCategory | null;
+  onCategoryChange: (category: AssetCategory | null) => void;
   modelFilter: ModelFilterSectionProps;
   tagFilter: TagFilterSectionProps;
 };
@@ -344,12 +347,14 @@ type SidebarLayoutProps = Omit<SidebarShellProps, "children"> &
   SidebarOverlayLayerProps & {
     search: string;
     filterState: SidebarFilterState;
-    modelFilter: ModelFilterSectionProps;
-    tagFilter: TagFilterSectionProps;
-    saving: boolean;
+  modelFilter: ModelFilterSectionProps;
+  tagFilter: TagFilterSectionProps;
+  category: AssetCategory | null;
+  saving: boolean;
     appVersion: string | null;
     onSearchChange: (value: string) => void;
     onClearFilters: () => void;
+    onCategoryChange: (category: AssetCategory | null) => void;
     onAddAsset: () => void;
     onExport: () => void;
     onImport: () => void;
@@ -534,6 +539,11 @@ function useAppVersion() {
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isTauriRuntime()) {
+      setAppVersion(null);
+      return;
+    }
+
     void getVersion()
       .then(setAppVersion)
       .catch(() => setAppVersion(null));
@@ -557,7 +567,7 @@ function useSidebarFilterState(
     [filters.tagIds],
   );
   const hasActiveFilters = Boolean(
-    filters.search || selectedModelCount > 0 || selectedTagCount > 0,
+    filters.search || filters.category || selectedModelCount > 0 || selectedTagCount > 0,
   );
 
   return {
@@ -1295,6 +1305,45 @@ function AddAssetButton({ onClick }: AddAssetButtonProps) {
   );
 }
 
+const categoryRows: { value: AssetCategory | null; label: string }[] = [
+  { value: null, label: "全部" },
+  { value: "avatar", label: "素體" },
+  { value: "accessory", label: "素體配件" },
+  { value: "world", label: "世界" },
+];
+
+function CategoryFilterSection({
+  selected,
+  onChange,
+}: {
+  selected: AssetCategory | null;
+  onChange: (category: AssetCategory | null) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
+        <Package className="h-4 w-4" />
+        素材庫
+      </div>
+      <div className="space-y-1">
+        {categoryRows.map((row) => (
+          <button
+            key={row.value ?? "all"}
+            type="button"
+            className={cn(
+              "flex h-8 w-full items-center rounded-md px-3 text-left text-sm transition-colors hover:bg-sidebar-accent",
+              selected === row.value && "bg-sidebar-accent font-medium text-sidebar-foreground",
+            )}
+            onClick={() => onChange(row.value)}
+          >
+            {row.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ModelFilterSection(props: ModelFilterSectionProps) {
   return (
     <SidebarFilterListSection
@@ -1358,6 +1407,8 @@ function TagFilterSection(props: TagFilterSectionProps) {
 
 function SidebarFilterPanel({
   onAddAsset,
+  category,
+  onCategoryChange,
   modelFilter,
   tagFilter,
 }: SidebarFilterPanelProps) {
@@ -1365,6 +1416,7 @@ function SidebarFilterPanel({
     <ScrollArea className="min-h-0 flex-1">
       <div className="space-y-6 p-3">
         <AddAssetButton onClick={onAddAsset} />
+        <CategoryFilterSection selected={category} onChange={onCategoryChange} />
         <ModelFilterSection {...modelFilter} />
         <TagFilterSection {...tagFilter} />
       </div>
@@ -1520,7 +1572,7 @@ function SidebarShell({ sidebarRef, sidebarWidth, children }: SidebarShellProps)
       style={{
         width: sidebarWidth,
         minWidth: SIDEBAR_MIN_WIDTH,
-        maxWidth: SIDEBAR_MAX_WIDTH,
+        maxWidth: `min(${SIDEBAR_MAX_WIDTH}px, 34vw)`,
       }}
     >
       {children}
@@ -1589,6 +1641,8 @@ function SidebarLayout(props: SidebarLayoutProps) {
       />
       <SidebarFilterPanel
         onAddAsset={props.onAddAsset}
+        category={props.category}
+        onCategoryChange={props.onCategoryChange}
         modelFilter={props.modelFilter}
         tagFilter={props.tagFilter}
       />
@@ -1628,6 +1682,7 @@ function useSidebarController(): SidebarLayoutProps {
     filterState,
     modelFilter,
     tagFilter,
+    category: store.filters.category,
     saving: store.saving,
     appVersion,
     dragPreviewPosition: drag.dragPreviewPosition,
@@ -1637,6 +1692,7 @@ function useSidebarController(): SidebarLayoutProps {
     importPath: dialogs.importPath,
     onSearchChange: store.setSearchFilter,
     onClearFilters: store.clearFilters,
+    onCategoryChange: store.setCategoryFilter,
     onAddAsset: () => store.setAddAssetDialogOpen(true),
     onExport: () => void dialogs.handleExportSave(),
     onImport: () => void dialogs.handleSelectImportSave(),

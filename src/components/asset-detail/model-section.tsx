@@ -51,7 +51,7 @@ export function AssetDetailModelSection({
                 <Badge
                   key={model.id}
                   variant="secondary"
-                  className="max-w-full truncate"
+                  className="min-w-0 !max-w-full !shrink truncate"
                 >
                   {model.display_name || model.name}
                 </Badge>

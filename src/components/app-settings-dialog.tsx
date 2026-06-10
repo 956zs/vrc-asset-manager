@@ -1,12 +1,13 @@
 "use client";
 
 import { getName, getVersion } from "@tauri-apps/api/app";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeTauri } from "@/lib/tauri-runtime";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import {
   Activity,
   Download,
+  FolderCog,
   Info,
   ShieldCheck,
   X,
@@ -27,6 +28,7 @@ import { useAssetStore } from "@/stores/asset-store";
 import type { AssetHealthIssue, AssetHealthSummary } from "@/types";
 import { AboutSection } from "./settings/about-section";
 import { HealthSection } from "./settings/health-section";
+import { LibrarySection } from "./settings/library-section";
 import { OverviewSection } from "./settings/overview-section";
 import { UpdateSection } from "./settings/update-section";
 import {
@@ -51,6 +53,7 @@ const tabs: Array<{
   icon: typeof Info;
 }> = [
   { id: "overview", label: "總覽", icon: Activity },
+  { id: "library", label: "素材庫", icon: FolderCog },
   { id: "updates", label: "更新", icon: Download },
   { id: "health", label: "素材健康", icon: ShieldCheck },
   { id: "about", label: "關於", icon: Info },
@@ -267,7 +270,7 @@ function createHealthScanHandler(
     setters.setHealthError(null);
 
     try {
-      setters.setHealthSummary(await invoke<AssetHealthSummary>("scan_asset_health"));
+      setters.setHealthSummary(await invokeTauri<AssetHealthSummary>("scan_asset_health"));
     } catch (error) {
       setters.setHealthError(toMessage(error));
     } finally {
@@ -280,7 +283,7 @@ function createHealthScanHandler(
 function createIssueLocationHandler(setters: HealthSetters) {
   return async (issue: AssetHealthIssue) => {
     try {
-      await invoke("open_file_location", { path: issue.filePath });
+      await invokeTauri("open_file_location", { path: issue.filePath });
     } catch (error) {
       setters.setHealthError(toMessage(error));
     }
@@ -338,7 +341,7 @@ function SettingsTabList({
   onOpenTab: (tab: SettingsTab) => void;
 }) {
   return (
-    <div className="grid w-full max-w-full grid-cols-2 gap-1 rounded-lg border border-border bg-muted/50 p-1 sm:grid-cols-4 lg:w-auto">
+    <div className="flex w-full max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/50 p-1 lg:w-auto">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const selected = activeTab === tab.id;
@@ -347,8 +350,8 @@ function SettingsTabList({
             key={tab.id}
             type="button"
             className={cn(
-              "flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground transition-colors",
-              "justify-center sm:min-w-[104px]",
+              "flex h-8 min-w-[104px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 text-sm text-muted-foreground transition-colors",
+              tab.id === "health" && "min-w-[120px]",
               selected && "bg-background text-foreground shadow-sm",
             )}
             onClick={() => onOpenTab(tab.id)}
@@ -452,6 +455,7 @@ function SettingsAboutContent({
 }
 
 function SettingsContent(props: SettingsLayoutProps) {
+  if (props.activeTab === "library") return <LibrarySection />;
   if (props.activeTab === "updates") return <SettingsUpdateContent {...props} />;
   if (props.activeTab === "health") return <SettingsHealthContent {...props} />;
   if (props.activeTab === "about") return <SettingsAboutContent {...props} />;

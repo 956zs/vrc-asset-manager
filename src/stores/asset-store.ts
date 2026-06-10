@@ -1,12 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeTauri } from "@/lib/tauri-runtime";
 import { create, type StateCreator } from "zustand";
 import { toggleId } from "@/lib/id-list";
 import type {
   Asset,
+  AssetCategory,
+  ArchiveStrategy,
   AssetFilters,
   CreateAssetInput,
+  ImportTargetPreview,
+  LibrarySettings,
+  ManagedImportBatchReport,
+  ManagedImportItemInput,
   Model,
   Tag,
+  UpdateLibrarySettingsInput,
+  ZipContentList,
   UpdateAssetInput,
 } from "@/types";
 
@@ -36,6 +44,7 @@ type BackendAsset = {
   id: number;
   name: string;
   displayName: string | null;
+  category: AssetCategory;
   filePath: string;
   boothUrl: string | null;
   thumbnailUrl: string | null;
@@ -80,12 +89,26 @@ export type AssetStore = {
   saving: boolean;
   error: string | null;
   notice: string | null;
+  librarySettings: LibrarySettings | null;
+  importReport: ManagedImportBatchReport | null;
   loadAll: () => Promise<void>;
   loadAssets: () => Promise<void>;
+  loadLibrarySettings: () => Promise<void>;
   getAllAssets: () => Promise<Asset[]>;
   clearError: () => void;
   clearNotice: () => void;
+  clearImportReport: () => void;
+  configureLibraryRoot: (rootPath: string) => Promise<void>;
+  updateLibrarySettings: (input: UpdateLibrarySettingsInput) => Promise<void>;
+  previewManagedImportTarget: (
+    sourcePath: string,
+    category: AssetCategory,
+    archiveStrategy?: ArchiveStrategy | null,
+  ) => Promise<ImportTargetPreview>;
+  listZipContents: (sourcePath: string) => Promise<ZipContentList>;
+  managedImportBatch: (items: ManagedImportItemInput[]) => Promise<ManagedImportBatchReport>;
   setSearchFilter: (search: string) => void;
+  setCategoryFilter: (category: AssetCategory | null) => void;
   setFilters: (filters: AssetFilters) => void;
   toggleModelFilter: (modelId: number) => void;
   toggleTagFilter: (tagId: number) => void;
@@ -94,11 +117,11 @@ export type AssetStore = {
   addAsset: (asset: CreateAssetInput) => Promise<void>;
   updateAsset: (id: number, updates: UpdateAssetInput) => Promise<void>;
   deleteAsset: (id: number) => Promise<void>;
-  addModel: (name: string, displayName?: string) => Promise<void>;
+  addModel: (name: string, displayName?: string) => Promise<Model>;
   updateModel: (id: number, name: string, displayName?: string) => Promise<void>;
   deleteModel: (id: number) => Promise<void>;
   reorderModels: (modelIds: number[]) => Promise<void>;
-  addTag: (name: string, color: string) => Promise<void>;
+  addTag: (name: string, color: string) => Promise<Tag>;
   updateTag: (id: number, name: string, color: string) => Promise<void>;
   deleteTag: (id: number) => Promise<void>;
   reorderTags: (tagIds: number[]) => Promise<void>;
@@ -135,10 +158,13 @@ type AssetStoreStateFields = Pick<
   | "saving"
   | "error"
   | "notice"
+  | "librarySettings"
+  | "importReport"
 >;
 
 const defaultFilters: AssetFilters = {
   search: "",
+  category: null,
   modelIds: [],
   tagIds: [],
 };
@@ -160,6 +186,8 @@ const initialAssetStoreState: AssetStoreStateFields = {
   saving: false,
   error: null,
   notice: null,
+  librarySettings: null,
+  importReport: null,
 };
 
 let assetLoadGeneration = 0;
@@ -202,6 +230,7 @@ const toAsset = (asset: BackendAsset): Asset => ({
   name: asset.name,
   display_name: asset.displayName,
   file_path: asset.filePath,
+  category: asset.category ?? "accessory",
   booth_url: asset.boothUrl,
   thumbnail_url: asset.thumbnailUrl,
   note: asset.note,
@@ -215,12 +244,13 @@ const toAsset = (asset: BackendAsset): Asset => ({
 
 const cleanFilters = (filters: AssetFilters) => ({
   search: filters.search.trim() || undefined,
+  category: filters.category ?? undefined,
   modelIds: filters.modelIds,
   tagIds: filters.tagIds,
 });
 
 const loadBackendAssets = async (filters: AssetFilters) => {
-  const assets = await invoke<BackendAsset[]>("get_assets", {
+  const assets = await invokeTauri<BackendAsset[]>("get_assets", {
     filters: cleanFilters(filters),
   });
   return assets.map(toAsset);
@@ -253,6 +283,7 @@ const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
   displayName:
     updates.display_name !== undefined ? updates.display_name : asset.display_name,
   filePath: updates.file_path ?? asset.file_path,
+  category: updates.category ?? asset.category,
   boothUrl: updates.booth_url !== undefined ? updates.booth_url : asset.booth_url,
   thumbnailUrl:
     updates.thumbnail_url !== undefined ? updates.thumbnail_url : asset.thumbnail_url,
@@ -269,6 +300,7 @@ const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
 
 const toCreateBackendInput = (asset: CreateAssetInput) => ({
   displayName: asset.display_name,
+  category: asset.category,
   filePath: asset.file_path,
   boothUrl: asset.booth_url,
   thumbnailUrl: asset.thumbnail_url,
@@ -286,14 +318,21 @@ const createLoadActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
     const generation = nextAssetLoadGeneration();
     set({ loading: true, error: null });
     try {
-      const [models, tags, assets] = await Promise.all([
-        invoke<BackendModel[]>("get_models"),
-        invoke<BackendTag[]>("get_tags"),
+      const [models, tags, assets, librarySettings] = await Promise.all([
+        invokeTauri<BackendModel[]>("get_models"),
+        invokeTauri<BackendTag[]>("get_tags"),
         loadBackendAssets(get().filters),
+        invokeTauri<LibrarySettings>("get_library_settings"),
       ]);
       if (!isCurrentAssetLoad(generation)) return;
 
-      set({ models: models.map(toModel), tags: tags.map(toTag), assets, loading: false });
+      set({
+        models: models.map(toModel),
+        tags: tags.map(toTag),
+        assets,
+        librarySettings,
+        loading: false,
+      });
     } catch (error) {
       if (isCurrentAssetLoad(generation)) set(errorState(error, { loading: false }));
     }
@@ -309,13 +348,82 @@ const createLoadActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
     }
   },
   getAllAssets: async () => loadBackendAssets(defaultFilters),
+  loadLibrarySettings: async () => {
+    try {
+      const librarySettings = await invokeTauri<LibrarySettings>("get_library_settings");
+      set({ librarySettings });
+    } catch (error) {
+      set(errorState(error));
+    }
+  },
 });
 
 const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
   clearError: () => set({ error: null }),
   clearNotice: () => set({ notice: null }),
+  clearImportReport: () => set({ importReport: null }),
+  configureLibraryRoot: async (rootPath: string) => {
+    set({ saving: true, error: null });
+    try {
+      const librarySettings = await invokeTauri<LibrarySettings>("configure_library_root", {
+        rootPath,
+      });
+      set({ librarySettings, saving: false, notice: "素材庫根目錄已設定" });
+    } catch (error) {
+      set(errorState(error, { saving: false }));
+      throw error;
+    }
+  },
+  updateLibrarySettings: async (input: UpdateLibrarySettingsInput) => {
+    set({ saving: true, error: null });
+    try {
+      const librarySettings = await invokeTauri<LibrarySettings>("update_library_settings", {
+        input,
+      });
+      set({ librarySettings, saving: false, notice: "素材庫設定已更新" });
+    } catch (error) {
+      set(errorState(error, { saving: false }));
+      throw error;
+    }
+  },
+  previewManagedImportTarget: async (
+    sourcePath: string,
+    category: AssetCategory,
+    archiveStrategy: ArchiveStrategy | null = null,
+  ) => {
+    return invokeTauri<ImportTargetPreview>("preview_managed_import_target", {
+      sourcePath,
+      category,
+      archiveStrategy,
+    });
+  },
+  listZipContents: async (sourcePath: string) => {
+    return invokeTauri<ZipContentList>("list_zip_contents", { sourcePath });
+  },
+  managedImportBatch: async (items: ManagedImportItemInput[]) => {
+    set({ saving: true, error: null, notice: null, importReport: null });
+    try {
+      const report = await invokeTauri<ManagedImportBatchReport>("managed_import_batch", {
+        input: { items },
+      });
+      await get().loadAssets();
+      set({
+        saving: false,
+        importReport: report,
+        notice: `導入完成：${report.succeeded} 成功，${report.failed} 失敗`,
+      });
+      return report;
+    } catch (error) {
+      set(errorState(error, { saving: false }));
+      throw error;
+    }
+  },
   setSearchFilter: (search: string) => {
     set((state) => ({ filters: { ...state.filters, search } }));
+    void get().loadAssets();
+  },
+  setCategoryFilter: (category: AssetCategory | null) => {
+    set((state) => ({ filters: { ...state.filters, category } }));
     void get().loadAssets();
   },
   setFilters: (filters: AssetFilters) => {
@@ -346,7 +454,7 @@ const createAddAssetAction = (set: AssetStoreSet, get: AssetStoreGet) => async (
 ) => {
   set({ saving: true, error: null });
   try {
-    const created = await invoke<BackendAsset>("create_asset", {
+    const created = await invokeTauri<BackendAsset>("create_asset", {
       input: toCreateBackendInput(asset),
     });
     await get().loadAssets();
@@ -366,7 +474,7 @@ const createUpdateAssetAction = (set: AssetStoreSet, get: AssetStoreGet) => asyn
 
   set({ saving: true, error: null });
   try {
-    await invoke<BackendAsset>("update_asset", { id, input: toBackendInput(asset, updates) });
+    await invokeTauri<BackendAsset>("update_asset", { id, input: toBackendInput(asset, updates) });
     await get().loadAssets();
     set({ saving: false });
   } catch (error) {
@@ -380,7 +488,7 @@ const createDeleteAssetAction = (set: AssetStoreSet, get: AssetStoreGet) => asyn
 ) => {
   set({ saving: true, error: null });
   try {
-    await invoke("delete_asset", { id });
+    await invokeTauri("delete_asset", { id });
     await get().loadAssets();
     set({ selectedAssetId: null, saving: false });
   } catch (error) {
@@ -407,10 +515,12 @@ const createAddModelAction = (set: AssetStoreSet) => async (
 ) => {
   set({ error: null });
   try {
-    const model = await invoke<BackendModel>("create_model", {
+    const model = await invokeTauri<BackendModel>("create_model", {
       input: { name, displayName: displayName || null },
     });
-    set((state) => ({ models: [...state.models, toModel(model)] }));
+    const created = toModel(model);
+    set((state) => ({ models: [...state.models, created] }));
+    return created;
   } catch (error) {
     set(errorState(error));
     throw error;
@@ -424,7 +534,7 @@ const createUpdateModelAction = (set: AssetStoreSet, get: AssetStoreGet) => asyn
 ) => {
   set({ error: null });
   try {
-    const model = await invoke<BackendModel>("update_model", {
+    const model = await invokeTauri<BackendModel>("update_model", {
       id,
       input: { name, displayName: displayName || null },
     });
@@ -444,7 +554,7 @@ const createDeleteModelAction = (set: AssetStoreSet, get: AssetStoreGet) => asyn
 ) => {
   set({ error: null });
   try {
-    await invoke("delete_model", { id });
+    await invokeTauri("delete_model", { id });
     set((state) => ({
       models: state.models.filter((model) => model.id !== id),
       filters: { ...state.filters, modelIds: state.filters.modelIds.filter((item) => item !== id) },
@@ -465,8 +575,10 @@ const createTagActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
 const createAddTagAction = (set: AssetStoreSet) => async (name: string, color: string) => {
   set({ error: null });
   try {
-    const tag = await invoke<BackendTag>("create_tag", { input: { name, color } });
-    set((state) => ({ tags: [...state.tags, toTag(tag)] }));
+    const tag = await invokeTauri<BackendTag>("create_tag", { input: { name, color } });
+    const created = toTag(tag);
+    set((state) => ({ tags: [...state.tags, created] }));
+    return created;
   } catch (error) {
     set(errorState(error));
     throw error;
@@ -480,7 +592,7 @@ const createUpdateTagAction = (set: AssetStoreSet, get: AssetStoreGet) => async 
 ) => {
   set({ error: null });
   try {
-    const tag = await invoke<BackendTag>("update_tag", { id, input: { name, color } });
+    const tag = await invokeTauri<BackendTag>("update_tag", { id, input: { name, color } });
     set((state) => ({
       tags: state.tags.map((current) => current.id === id ? toTag(tag) : current),
       editingTag: null,
@@ -497,7 +609,7 @@ const createDeleteTagAction = (set: AssetStoreSet, get: AssetStoreGet) => async 
 ) => {
   set({ error: null });
   try {
-    await invoke("delete_tag", { id });
+    await invokeTauri("delete_tag", { id });
     set((state) => ({
       tags: state.tags.filter((tag) => tag.id !== id),
       filters: { ...state.filters, tagIds: state.filters.tagIds.filter((item) => item !== id) },
@@ -530,7 +642,7 @@ const createReorderModelsAction = (set: AssetStoreSet, get: AssetStoreGet) => as
   }));
 
   try {
-    await invoke("reorder_models", { input: { modelIds } });
+    await invokeTauri("reorder_models", { input: { modelIds } });
   } catch (error) {
     set(errorState(error, { models: previousModels, assets: previousAssets }));
     throw error;
@@ -553,7 +665,7 @@ const createReorderTagsAction = (set: AssetStoreSet, get: AssetStoreGet) => asyn
   }));
 
   try {
-    await invoke("reorder_tags", { input: { tagIds } });
+    await invokeTauri("reorder_tags", { input: { tagIds } });
   } catch (error) {
     set(errorState(error, { tags: previousTags, assets: previousAssets }));
     throw error;
@@ -568,7 +680,7 @@ const createSaveActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
 const createExportSaveAction = (set: AssetStoreSet) => async (path: string) => {
   set({ saving: true, error: null, notice: null });
   try {
-    const summary = await invoke<BackendSaveSummary>("export_save", { path });
+    const summary = await invokeTauri<BackendSaveSummary>("export_save", { path });
     const vccBackupText = summary.vccBackupPath
       ? `，VCC 備份 ${summary.vccBackupFiles} 個檔案`
       : "";
@@ -587,7 +699,7 @@ const createImportSaveAction = (set: AssetStoreSet, get: AssetStoreGet) => async
 ) => {
   set({ saving: true, error: null, notice: null });
   try {
-    const summary = await invoke<BackendSaveSummary>("import_save", { path });
+    const summary = await invokeTauri<BackendSaveSummary>("import_save", { path });
     set({ filters: { ...defaultFilters }, selectedAssetId: null });
     await get().loadAll();
     set({

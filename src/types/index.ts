@@ -20,10 +20,84 @@ export interface AssetLink {
   sort_order: number;
 }
 
+export type AssetCategory = "avatar" | "accessory" | "world";
+export type ImportOperation = "move" | "copy";
+export type ArchiveStrategy = "keepArchive" | "extract";
+export type ConflictStrategy = "cancel" | "rename" | "overwrite";
+export type ImportSourceKind = "folder" | "zip" | "unityPackage" | "unsupported";
+
+export interface LibrarySettings {
+  rootPath: string | null;
+  avatarFolder: string;
+  accessoryFolder: string;
+  worldFolder: string;
+  updatedAt: string;
+}
+
+export interface UpdateLibrarySettingsInput {
+  rootPath: string | null;
+  avatarFolder: string;
+  accessoryFolder: string;
+  worldFolder: string;
+}
+
+export interface ImportSourceInfo {
+  sourcePath: string;
+  name: string;
+  kind: ImportSourceKind;
+  supported: boolean;
+  message: string | null;
+}
+
+export interface ImportTargetPreview {
+  sourcePath: string;
+  targetPath: string | null;
+  conflict: boolean;
+  message: string | null;
+}
+
+export interface ZipContentList {
+  sourcePath: string;
+  fileCount: number;
+  paths: string[];
+}
+
+export interface ManagedImportItemInput {
+  sourcePath: string;
+  category: AssetCategory;
+  operation: ImportOperation;
+  archiveStrategy?: ArchiveStrategy | null;
+  conflictStrategy?: ConflictStrategy | null;
+  displayName: string | null;
+  boothUrl: string | null;
+  thumbnailUrl: string | null;
+  note: string | null;
+  modelIds: number[];
+  tagIds: number[];
+  relatedLinks: AssetLinkInput[];
+}
+
+export interface ManagedImportItemResult {
+  sourcePath: string;
+  success: boolean;
+  asset: Asset | null;
+  finalPath: string | null;
+  operation: string;
+  message: string;
+}
+
+export interface ManagedImportBatchReport {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ManagedImportItemResult[];
+}
+
 export interface Asset {
   id: number;
   name: string;
   display_name: string | null;
+  category: AssetCategory;
   file_path: string;
   booth_url: string | null;
   thumbnail_url: string | null;
@@ -58,12 +132,14 @@ export interface AssetHealthSummary {
 
 export interface AssetFilters {
   search: string;
+  category: AssetCategory | null;
   modelIds: number[];
   tagIds: number[];
 }
 
 export interface CreateAssetInput {
   display_name: string | null;
+  category: AssetCategory;
   file_path: string;
   booth_url: string | null;
   thumbnail_url: string | null;
@@ -75,6 +151,7 @@ export interface CreateAssetInput {
 
 export interface UpdateAssetInput {
   display_name?: string | null;
+  category?: AssetCategory;
   file_path?: string;
   booth_url?: string | null;
   thumbnail_url?: string | null;
@@ -87,6 +164,13 @@ export interface UpdateAssetInput {
 export interface AssetLinkInput {
   label: string;
   url: string;
+}
+
+export interface BoothProductInfo {
+  title: string | null;
+  thumbnailUrl: string | null;
+  tags: string[];
+  searchText: string;
 }
 
 interface VccProject {

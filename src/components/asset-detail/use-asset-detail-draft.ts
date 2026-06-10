@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   addEmptyRelatedLink,
   createEmptyRelatedLink,
@@ -11,12 +10,22 @@ import {
   type RelatedLinkDraft,
   updateRelatedLink,
 } from "@/lib/asset-links";
+import {
+  applyBoothProductInfo,
+  fetchBoothProductInfo,
+  mergeIds,
+  type SuggestedBoothModel,
+} from "@/lib/booth-product-info";
 import { sameIds, toggleId } from "@/lib/id-list";
-import type { Asset, UpdateAssetInput } from "@/types";
+import type { Asset, Model, Tag, UpdateAssetInput } from "@/types";
 
 type UseAssetDetailDraftInput = {
+  addModel: (name: string, displayName?: string) => Promise<Model>;
+  addTag: (name: string, color: string) => Promise<Tag>;
   asset: Asset | null;
+  models: Model[];
   saving: boolean;
+  tags: Tag[];
   editingAssetRequestId: number | null;
   updateAsset: (id: number, updates: UpdateAssetInput) => Promise<void>;
   clearAssetEditRequest: () => void;
@@ -112,16 +121,48 @@ type AssetDraftLifecycleOptions = Pick<
 };
 
 type AssetDraftResultOptions = {
+  addSuggestedModel: (model: SuggestedBoothModel) => Promise<void>;
+  addSuggestedTag: (tagName: string) => Promise<void>;
   draft: AssetDetailDraftState;
   derived: AssetDraftDerivedState;
   editingActions: ReturnType<typeof createDraftEditingActions>;
-  fetchThumbnail: () => Promise<void>;
+  fetchProductInfo: () => Promise<void>;
   hasChanges: boolean;
   isEditingAsset: boolean;
-  isFetchingThumbnail: boolean;
+  isFetchingProductInfo: boolean;
   relatedLinkActions: ReturnType<typeof createRelatedLinkActions>;
   saveDraft: () => Promise<void>;
+  suggestedModels: SuggestedBoothModel[];
+  suggestedTags: string[];
 };
+
+type ProductInfoFetcherOptions = {
+  addSuggestedModels: (models: SuggestedBoothModel[]) => void;
+  addSuggestedTags: (tags: string[]) => void;
+  boothUrl: string;
+  currentModels: Model[];
+  currentTags: Tag[];
+  setDisplayName: (name: string) => void;
+  setIsFetchingProductInfo: (fetching: boolean) => void;
+  setModelIds: AssetDetailDraftSetters["setEditedModelIds"];
+  setTagIds: AssetDetailDraftSetters["setEditedTagIds"];
+  setThumbnailUrl: (url: string) => void;
+  shouldFillDisplayName: boolean;
+};
+
+type SuggestedModelActionOptions = {
+  addModel: (name: string, displayName?: string) => Promise<Model>;
+  removeSuggestedModel: (model: SuggestedBoothModel) => void;
+  setModelIds: AssetDetailDraftSetters["setEditedModelIds"];
+};
+
+type SuggestedTagActionOptions = {
+  addTag: (name: string, color: string) => Promise<Tag>;
+  removeSuggestedTag: (tagName: string) => void;
+  setTagIds: AssetDetailDraftSetters["setEditedTagIds"];
+};
+
+const defaultSuggestedTagColor = "#6B7280";
 
 const toRelatedLinkDrafts = (asset: Asset | null): RelatedLinkDraft[] =>
   (asset?.related_links ?? []).map((link) => ({
@@ -401,24 +442,72 @@ function createRelatedLinkActions(
   };
 }
 
-function createThumbnailFetcher(
-  boothUrl: string,
-  setEditedThumbnailUrl: (url: string) => void,
-  setIsFetchingThumbnail: (fetching: boolean) => void,
-) {
+function createProductInfoFetcher({
+  addSuggestedModels,
+  addSuggestedTags,
+  boothUrl,
+  currentModels,
+  currentTags,
+  setDisplayName,
+  setIsFetchingProductInfo,
+  setModelIds,
+  setTagIds,
+  setThumbnailUrl,
+  shouldFillDisplayName,
+}: ProductInfoFetcherOptions) {
   return async () => {
     if (!boothUrl.trim()) {
       return;
     }
-    setIsFetchingThumbnail(true);
+    setIsFetchingProductInfo(true);
     try {
-      const thumbnail = await invoke<string | null>("fetch_booth_thumbnail", {
-        url: boothUrl.trim(),
-      });
-      setEditedThumbnailUrl(thumbnail ?? "");
+      const info = await fetchBoothProductInfo(boothUrl);
+
+      if (!info) {
+        return;
+      }
+
+      if (info.thumbnailUrl) {
+        setThumbnailUrl(info.thumbnailUrl);
+      }
+      if (shouldFillDisplayName && info.title) {
+        setDisplayName(info.title);
+      }
+
+      const applied = applyBoothProductInfo(info, currentModels, currentTags);
+      setModelIds((current) => mergeIds(current, applied.matchedModelIds));
+      setTagIds((current) => mergeIds(current, applied.matchedTagIds));
+      addSuggestedModels(applied.suggestedModels);
+      addSuggestedTags(applied.suggestedTags);
+    } catch (error) {
+      console.warn("Failed to fetch BOOTH product info", error);
     } finally {
-      setIsFetchingThumbnail(false);
+      setIsFetchingProductInfo(false);
     }
+  };
+}
+
+function createSuggestedModelAction({
+  addModel,
+  removeSuggestedModel,
+  setModelIds,
+}: SuggestedModelActionOptions) {
+  return async (model: SuggestedBoothModel) => {
+    const created = await addModel(model.name, model.displayName ?? undefined);
+    setModelIds((current) => mergeIds(current, [created.id]));
+    removeSuggestedModel(model);
+  };
+}
+
+function createSuggestedTagAction({
+  addTag,
+  removeSuggestedTag,
+  setTagIds,
+}: SuggestedTagActionOptions) {
+  return async (tagName: string) => {
+    const created = await addTag(tagName, defaultSuggestedTagColor);
+    setTagIds((current) => mergeIds(current, [created.id]));
+    removeSuggestedTag(tagName);
   };
 }
 
@@ -509,15 +598,19 @@ function useAssetDraftLifecycle({
 }
 
 function createAssetDetailDraftResult({
+  addSuggestedModel,
+  addSuggestedTag,
   draft,
   derived,
   editingActions,
-  fetchThumbnail,
+  fetchProductInfo,
   hasChanges,
   isEditingAsset,
-  isFetchingThumbnail,
+  isFetchingProductInfo,
   relatedLinkActions,
   saveDraft,
+  suggestedModels,
+  suggestedTags,
 }: AssetDraftResultOptions) {
   return {
     isEditingAsset,
@@ -532,7 +625,7 @@ function createAssetDetailDraftResult({
     editedModelIdSet: derived.editedModelIdSet,
     editedTagIdSet: derived.editedTagIdSet,
     hasChanges,
-    isFetchingThumbnail,
+    isFetchingProductInfo,
     setEditedDisplayName: draft.setEditedDisplayName,
     setEditedFilePath: draft.setEditedFilePath,
     setEditedBoothUrl: draft.setEditedBoothUrl,
@@ -541,20 +634,40 @@ function createAssetDetailDraftResult({
     setEditedModelIds: draft.setEditedModelIds,
     setEditedTagIds: draft.setEditedTagIds,
     saveDraft,
-    fetchThumbnail,
+    addSuggestedModel,
+    addSuggestedTag,
+    fetchProductInfo,
+    suggestedModels,
+    suggestedTags,
     ...editingActions,
     ...relatedLinkActions,
   };
 }
 
 export function useAssetDetailDraft({
-  asset, saving, editingAssetRequestId, updateAsset, clearAssetEditRequest,
+  addModel,
+  addTag,
+  asset,
+  models,
+  saving,
+  tags,
+  editingAssetRequestId,
+  updateAsset,
+  clearAssetEditRequest,
 }: UseAssetDetailDraftInput) {
   const [isEditingAsset, setIsEditingAsset] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [isFetchingThumbnail, setIsFetchingThumbnail] = useState(false);
+  const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
+  const [suggestedModels, setSuggestedModels] = useState<SuggestedBoothModel[]>([]);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const draft = useAssetDraftState();
   const derived = useAssetDraftDerivedState(asset, draft);
+
+  useEffect(() => {
+    setSuggestedModels([]);
+    setSuggestedTags([]);
+  }, [asset?.id]);
+
   const { resetDraft, saveDraft } = useAssetDraftLifecycle({
     asset,
     saving,
@@ -577,21 +690,82 @@ export function useAssetDetailDraft({
     setEditedFilePath: draft.setEditedFilePath,
   });
   const relatedLinkActions = createRelatedLinkActions(draft.setEditedRelatedLinks);
-  const fetchThumbnail = createThumbnailFetcher(
-    draft.boothUrl,
-    draft.setEditedThumbnailUrl,
-    setIsFetchingThumbnail,
-  );
+  const addSuggestedModels = (nextModels: SuggestedBoothModel[]) =>
+    setSuggestedModels((current) => {
+      const existing = new Set(
+        current.map((model) => model.name.toLocaleLowerCase()),
+      );
+      const merged = [...current];
+      for (const model of nextModels) {
+        const key = model.name.toLocaleLowerCase();
+        if (!existing.has(key)) {
+          existing.add(key);
+          merged.push(model);
+        }
+      }
+      return merged;
+    });
+  const removeSuggestedModel = (model: SuggestedBoothModel) =>
+    setSuggestedModels((current) =>
+      current.filter(
+        (suggested) =>
+          suggested.name.toLocaleLowerCase() !== model.name.toLocaleLowerCase(),
+      ),
+    );
+  const addSuggestedTags = (nextTags: string[]) =>
+    setSuggestedTags((current) => {
+      const existing = new Set(current.map((tag) => tag.toLocaleLowerCase()));
+      const merged = [...current];
+      for (const tag of nextTags) {
+        const key = tag.toLocaleLowerCase();
+        if (!existing.has(key)) {
+          existing.add(key);
+          merged.push(tag);
+        }
+      }
+      return merged;
+    });
+  const removeSuggestedTag = (tagName: string) =>
+    setSuggestedTags((current) =>
+      current.filter((tag) => tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase()),
+    );
+  const fetchProductInfo = createProductInfoFetcher({
+    addSuggestedModels,
+    addSuggestedTags,
+    boothUrl: draft.boothUrl,
+    currentModels: models,
+    currentTags: tags,
+    setDisplayName: draft.setEditedDisplayName,
+    setIsFetchingProductInfo,
+    setModelIds: draft.setEditedModelIds,
+    setTagIds: draft.setEditedTagIds,
+    setThumbnailUrl: draft.setEditedThumbnailUrl,
+    shouldFillDisplayName: draft.displayName.trim().length === 0,
+  });
+  const addSuggestedModel = createSuggestedModelAction({
+    addModel,
+    removeSuggestedModel,
+    setModelIds: draft.setEditedModelIds,
+  });
+  const addSuggestedTag = createSuggestedTagAction({
+    addTag,
+    removeSuggestedTag,
+    setTagIds: draft.setEditedTagIds,
+  });
 
   return createAssetDetailDraftResult({
+    addSuggestedModel,
+    addSuggestedTag,
     draft,
     derived,
     editingActions,
-    fetchThumbnail,
+    fetchProductInfo,
     hasChanges,
     isEditingAsset,
-    isFetchingThumbnail,
+    isFetchingProductInfo,
     saveDraft,
     relatedLinkActions,
+    suggestedModels,
+    suggestedTags,
   });
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeTauri } from "@/lib/tauri-runtime";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { VccProjectSnapshot, VccRepository } from "@/types";
 import type {
@@ -77,7 +77,7 @@ function useVccLoadActions(state: VccProjectState): VccLoadActions {
     state.setLoading(true);
     state.setError(null);
     try {
-      const nextSnapshots = await invoke<BackendVccProjectSnapshot[]>(
+      const nextSnapshots = await invokeTauri<BackendVccProjectSnapshot[]>(
         "scan_vcc_projects",
       );
       state.setSnapshots(nextSnapshots.map(toSnapshot));
@@ -88,7 +88,7 @@ function useVccLoadActions(state: VccProjectState): VccLoadActions {
     }
   };
   const loadRepositories = async () => {
-    const nextRepositories = await invoke<BackendVccRepository[]>(
+    const nextRepositories = await invokeTauri<BackendVccRepository[]>(
       "get_vcc_repositories",
     );
     state.setRepositories(nextRepositories.map(toRepository));
@@ -110,7 +110,7 @@ function createSyncRepositoriesAction(
     state.setLoading(true);
     state.setError(null);
     try {
-      const repositories = await invoke<BackendVccRepository[]>(
+      const repositories = await invokeTauri<BackendVccRepository[]>(
         "sync_vcc_repositories",
       );
       state.setRepositories(repositories.map(toRepository));
@@ -138,7 +138,7 @@ function createAddProjectAction(
     state.setLoading(true);
     state.setError(null);
     try {
-      await invoke<BackendVccProject>("add_vcc_project", { input: { path: selected } });
+      await invokeTauri<BackendVccProject>("add_vcc_project", { input: { path: selected } });
       await loadProjects();
     } catch (currentError) {
       state.setError(String(currentError));
@@ -153,7 +153,7 @@ function createScanProjectAction(state: VccProjectState) {
     state.setBusyProjectId(projectId);
     state.setError(null);
     try {
-      const snapshot = await invoke<BackendVccProjectSnapshot>("scan_vcc_project", {
+      const snapshot = await invokeTauri<BackendVccProjectSnapshot>("scan_vcc_project", {
         id: projectId,
       });
       state.setSnapshots((current) =>
@@ -177,7 +177,7 @@ function createDeleteProjectAction(state: VccProjectState) {
     state.setBusyProjectId(projectId);
     state.setError(null);
     try {
-      await invoke("delete_vcc_project", { id: projectId });
+      await invokeTauri("delete_vcc_project", { id: projectId });
       state.setSnapshots((current) =>
         current.filter((snapshot) => snapshot.project.id !== projectId),
       );
@@ -197,7 +197,7 @@ function createAddRepositoryAction(state: VccProjectState, loaders: VccLoadActio
     state.setLoading(true);
     state.setError(null);
     try {
-      await invoke<BackendVccRepository>("add_vcc_repository", {
+      await invokeTauri<BackendVccRepository>("add_vcc_repository", {
         input: {
           name: state.repositoryName.trim() || null,
           url: state.repositoryUrl.trim(),
@@ -222,7 +222,7 @@ function createDeleteRepositoryAction(state: VccProjectState, loaders: VccLoadAc
     state.setLoading(true);
     state.setError(null);
     try {
-      await invoke("delete_vcc_repository", { id: state.deleteRepositoryTarget.id });
+      await invokeTauri("delete_vcc_repository", { id: state.deleteRepositoryTarget.id });
       state.setDeleteRepositoryTarget(null);
       await loaders.loadRepositories();
       await loaders.loadProjects();
@@ -237,7 +237,7 @@ function createDeleteRepositoryAction(state: VccProjectState, loaders: VccLoadAc
 function createOpenProjectAction(state: VccProjectState) {
   return async (path: string) => {
     try {
-      await invoke("open_file_location", { path });
+      await invokeTauri("open_file_location", { path });
     } catch (currentError) {
       state.setError(String(currentError));
     }

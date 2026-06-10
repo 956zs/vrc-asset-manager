@@ -17,7 +17,7 @@ function LocationBrowseActions({
   onBrowseFolder,
 }: Pick<AssetDetailLocationSectionProps, "onBrowseFile" | "onBrowseFolder">) {
   return (
-    <div className="mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
+    <div className="asset-detail-action-grid mt-2 grid min-w-0 max-w-full grid-cols-2 gap-2">
       <Button
         type="button"
         variant="outline"

@@ -24,7 +24,7 @@ function EditableTagSelection(props: Omit<AssetDetailTagSectionProps, "assetTags
       actionsLayout="grid"
       actionButtonClassName="h-8 w-full px-2 text-xs"
       labelClassName="text-sm font-medium text-muted-foreground"
-      tagClassName="max-w-full cursor-pointer truncate transition-colors"
+      tagClassName="min-w-0 !max-w-full !shrink cursor-pointer truncate transition-colors"
       onSelectAll={props.onSelectAll}
       onClear={props.onClear}
       onToggle={props.onToggle}
@@ -36,7 +36,7 @@ function ReadonlyTagBadge({ tag }: { tag: Tag }) {
   return (
     <Badge
       variant="outline"
-      className="max-w-full truncate"
+      className="min-w-0 !max-w-full !shrink truncate"
       style={{ borderColor: tag.color, color: tag.color }}
     >
       {tag.name}

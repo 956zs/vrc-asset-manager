@@ -1,6 +1,6 @@
 import type { AssetHealthIssue } from "@/types";
 
-export type SettingsTab = "overview" | "updates" | "health" | "about";
+export type SettingsTab = "overview" | "library" | "updates" | "health" | "about";
 
 export type UpdateStatus =
   | "idle"

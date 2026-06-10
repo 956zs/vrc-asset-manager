@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeTauri } from "@/lib/tauri-runtime";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ClipboardPaste,
@@ -192,7 +192,7 @@ function createFileItems(menu: MenuState): ContextMenuItem[] {
       label: "開啟位置",
       icon: FolderOpen,
       onSelect: async () => {
-        await invoke("open_file_location", { path: menu.filePath });
+        await invokeTauri("open_file_location", { path: menu.filePath });
       },
     },
     {

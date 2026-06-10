@@ -72,7 +72,7 @@ function StackedRelatedLinkRow({
 }: Omit<RelatedLinkRowProps, "layout">) {
   return (
     <div className="min-w-0 space-y-2 rounded-md border border-border p-2">
-      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.25rem] gap-2">
+      <div className="asset-detail-action-grid grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.25rem] gap-2">
         <Input
           value={link.label}
           onChange={(event) => onUpdate(index, "label", event.target.value)}

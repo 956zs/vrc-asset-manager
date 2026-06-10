@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeTauri } from "@/lib/tauri-runtime";
 import { selectSelectedAsset, useAssetStore } from "@/stores/asset-store";
 import type { Asset } from "@/types";
 
@@ -204,7 +204,7 @@ function handleSelectedAssetShortcuts(
   if (context.modifier && context.key === "o") {
     event.preventDefault();
     if (actions.isAssetView && actions.selectedAsset?.file_path.trim()) {
-      void invoke("open_file_location", { path: actions.selectedAsset.file_path });
+      void invokeTauri("open_file_location", { path: actions.selectedAsset.file_path });
     }
     return true;
   }

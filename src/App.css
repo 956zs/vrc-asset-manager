@@ -133,12 +133,15 @@ html,
 body,
 #root {
   margin: 0;
-  min-width: 960px;
   min-height: 640px;
+  max-width: 100%;
+  width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 body {
+  overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
   font-family: Geist, "Geist Fallback", system-ui, sans-serif;
@@ -146,6 +149,54 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell,
+.app-shell > * {
+  min-width: 0;
+}
+
+.app-shell {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.asset-detail-panel,
+.asset-detail-panel * {
+  min-width: 0;
+}
+
+.asset-detail-panel {
+  contain: inline-size;
+  container-type: inline-size;
+  max-width: 25rem;
+  overflow-x: hidden;
+}
+
+.asset-detail-panel [data-slot="badge"],
+.asset-detail-panel [data-slot="button"],
+.asset-detail-panel input,
+.asset-detail-panel textarea {
+  flex-shrink: 1;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.asset-detail-panel [data-slot="button"] > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 22rem) {
+  .asset-detail-action-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .asset-detail-action-grid > [data-slot="button"] {
+    width: 100%;
+  }
 }
 
 button,

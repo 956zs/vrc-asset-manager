@@ -195,6 +195,7 @@ type TagCommandPaletteItemsOptions = {
 
 const emptyFilters: AssetFilters = {
   search: "",
+  category: null,
   modelIds: [],
   tagIds: [],
 };
@@ -296,7 +297,7 @@ function createModelItem({
     keywords: [model.name, model.display_name ?? "", "model", "avatar", "模型", "素體"],
     onSelect: () => {
       showAssets();
-      setFilters({ search: "", modelIds: [model.id], tagIds: [] });
+      setFilters({ search: "", category: null, modelIds: [model.id], tagIds: [] });
     },
   };
 }
@@ -319,7 +320,7 @@ function createTagItem({
     keywords: [tag.name, "tag", "label", "標籤"],
     onSelect: () => {
       showAssets();
-      setFilters({ search: "", modelIds: [], tagIds: [tag.id] });
+      setFilters({ search: "", category: null, modelIds: [], tagIds: [tag.id] });
     },
   };
 }
@@ -564,6 +565,7 @@ function useCommandPaletteAssetCounts(
 function hasCommandPaletteActiveFilters(filters: AssetFilters) {
   return (
     filters.search.trim().length > 0 ||
+    filters.category !== null ||
     filters.modelIds.length > 0 ||
     filters.tagIds.length > 0
   );
@@ -705,7 +707,7 @@ function createSearchActionItem(
     keywords: [cleanedQuery, "search", "find", "搜尋"],
     onSelect: () => {
       showAssets();
-      setFilters({ search: cleanedQuery, modelIds: [], tagIds: [] });
+      setFilters({ search: cleanedQuery, category: null, modelIds: [], tagIds: [] });
     },
   };
 }

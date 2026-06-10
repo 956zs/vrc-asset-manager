@@ -1,4 +1,5 @@
 import {
+  Activity,
   CheckCircle2,
   FolderOpen,
   Loader2,
@@ -38,20 +39,32 @@ function HealthSummaryCard({
   onScan,
 }: Pick<HealthSectionProps, "summary" | "loading" | "onScan">) {
   const issueCount = summary?.issues.length ?? 0;
+  const statusLabel = summary
+    ? issueCount > 0
+      ? `${issueCount} 個問題`
+      : "狀態正常"
+    : "尚未掃描";
 
   return (
     <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            素材健康
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {summary
-              ? `${summary.ok}/${summary.total} 個素材正常，${issueCount} 個需要注意`
-              : "尚未掃描"}
-          </p>
+      <div className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <ShieldCheck className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold text-foreground">素材健康</h3>
+              <Badge variant={issueCount > 0 ? "destructive" : summary ? "secondary" : "outline"}>
+                {statusLabel}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {summary
+                ? `${summary.ok}/${summary.total} 個素材可正常讀取`
+                : "掃描素材路徑、空檔案與無法讀取的項目"}
+            </p>
+          </div>
         </div>
         <Button
           type="button"
@@ -74,11 +87,13 @@ function HealthSummaryCard({
 
 function HealthStatsGrid({ summary }: { summary: AssetHealthSummary }) {
   return (
-    <div className="mt-4 grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4">
+    <div className="mt-4 grid grid-cols-2 items-stretch gap-2 sm:grid-cols-4 lg:grid-cols-6">
       <HealthStat label="總數" value={summary.total} />
       <HealthStat label="正常" value={summary.ok} tone="good" />
       <HealthStat label="缺失" value={summary.missing} tone="warn" />
       <HealthStat label="無法讀取" value={summary.unreadable} tone="warn" />
+      <HealthStat label="空檔案" value={summary.emptyFiles} tone="warn" />
+      <HealthStat label="空資料夾" value={summary.emptyDirectories} tone="warn" />
     </div>
   );
 }
@@ -94,9 +109,18 @@ function HealthErrorMessage({ error }: { error: string }) {
 
 function HealthOkMessage() {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm text-foreground">
-      <CheckCircle2 className="h-4 w-4 text-primary" />
-      目前沒有偵測到素材路徑問題
+    <div className="grid min-h-[260px] place-items-center rounded-lg border border-primary/30 bg-card p-8 text-center text-card-foreground shadow-sm">
+      <div className="max-w-sm space-y-3">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <CheckCircle2 className="h-6 w-6" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-foreground">目前沒有素材路徑問題</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            所有已登錄素材都可以正常讀取。
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -128,27 +152,47 @@ function HealthIssueList({
   );
 }
 
-function HealthPlaceholder({ compact }: { compact?: boolean }) {
+function HealthEmptyState({
+  loading,
+  onScan,
+}: Pick<HealthSectionProps, "loading" | "onScan">) {
   return (
-    <div
-      className={cn(
-        "flex-1 rounded-lg border border-dashed border-border bg-background/50",
-        compact ? "min-h-[160px]" : "min-h-[220px]",
-      )}
-    />
+    <div className="grid min-h-[320px] place-items-center rounded-lg border border-dashed border-border bg-card p-8 text-center text-card-foreground shadow-sm">
+      <div className="max-w-sm space-y-4">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Activity className="h-7 w-7" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-foreground">尚未掃描素材</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            執行一次掃描後，這裡會顯示素材路徑狀態與需要處理的項目。
+          </p>
+        </div>
+        <Button type="button" disabled={loading} onClick={() => void onScan()}>
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          掃描素材
+        </Button>
+      </div>
+    </div>
   );
 }
 
 function HealthDetails({
   summary,
   error,
+  loading,
+  onScan,
   onOpenIssueLocation,
   onEditIssueAsset,
-}: Pick<HealthSectionProps, "summary" | "error"> & HealthIssueActions) {
+}: Pick<HealthSectionProps, "summary" | "error" | "loading" | "onScan"> & HealthIssueActions) {
   const issueCount = summary?.issues.length ?? 0;
 
   if (error) return <HealthErrorMessage error={error} />;
-  if (!summary) return <HealthPlaceholder />;
+  if (!summary) return <HealthEmptyState loading={loading} onScan={onScan} />;
   if (issueCount === 0) return <HealthOkMessage />;
   return (
     <HealthIssueList
@@ -160,12 +204,10 @@ function HealthDetails({
 }
 
 export function HealthSection(props: HealthSectionProps) {
-  const issueCount = props.summary?.issues.length ?? 0;
   return (
     <section className="flex min-h-full flex-col gap-4">
       <HealthSummaryCard {...props} />
       <HealthDetails {...props} />
-      {props.summary && issueCount === 0 && <HealthPlaceholder compact />}
     </section>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { invoke } from "@tauri-apps/api/core";
+import { invokeTauri } from "@/lib/tauri-runtime";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { AssetDetailBoothSection } from "@/components/asset-detail/booth-section";
 import { AssetDetailFooter } from "@/components/asset-detail/footer";
 import { AssetDetailHeader } from "@/components/asset-detail/header";
@@ -12,8 +12,8 @@ import { AssetDetailModelSection } from "@/components/asset-detail/model-section
 import { AssetDetailRelatedLinksSection } from "@/components/asset-detail/related-links-section";
 import { AssetDetailTagSection } from "@/components/asset-detail/tag-section";
 import { AssetDetailThumbnail } from "@/components/asset-detail/thumbnail";
-import { AssetDetailThumbnailUrlSection } from "@/components/asset-detail/thumbnail-url-section";
 import { useAssetDetailDraft } from "@/components/asset-detail/use-asset-detail-draft";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,7 +75,10 @@ type AssetDetailViewState = Pick<
 
 function EmptyAssetDetail() {
   return (
-    <div className="flex w-[25rem] items-center justify-center border-l border-border bg-card">
+    <div
+      className="asset-detail-panel flex h-full min-h-0 shrink-0 items-center justify-center overflow-x-hidden border-l border-border bg-card"
+      style={{ width: "clamp(18rem, 34vw, 25rem)" }}
+    >
       <div className="space-y-2 p-6 text-center">
         <p className="text-muted-foreground">選擇一個素材以查看詳情</p>
       </div>
@@ -165,6 +168,7 @@ function ModelAndTagSections({
         onClear={() => draft.setEditedModelIds([])}
         onToggle={draft.toggleModel}
       />
+      <SuggestedBoothModels draft={draft} />
       <Separator />
       <AssetDetailTagSection
         tags={tags}
@@ -180,23 +184,80 @@ function ModelAndTagSections({
   );
 }
 
+function SuggestedBoothModels({ draft }: { draft: AssetDetailDraft }) {
+  if (!draft.isEditingAsset || draft.suggestedModels.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
+      <p className="text-xs font-medium text-muted-foreground">BOOTH 建議模型</p>
+      <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
+        {draft.suggestedModels.map((model) => (
+          <Button
+            key={model.name}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 min-w-0 !max-w-full !shrink gap-1 px-2 text-xs"
+            onClick={() => void draft.addSuggestedModel(model)}
+          >
+            <Plus className="h-3 w-3 shrink-0" />
+            <span className="min-w-0 truncate">{model.label}</span>
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SuggestedBoothTags({ draft }: { draft: AssetDetailDraft }) {
+  if (!draft.isEditingAsset || draft.suggestedTags.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
+      <p className="text-xs font-medium text-muted-foreground">BOOTH 建議標籤</p>
+      <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
+        {draft.suggestedTags.map((tagName) => (
+          <Button
+            key={tagName}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 min-w-0 !max-w-full !shrink gap-1 px-2 text-xs"
+            onClick={() => void draft.addSuggestedTag(tagName)}
+          >
+            <Plus className="h-3 w-3 shrink-0" />
+            <span className="min-w-0 truncate">{tagName}</span>
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AssetDetailBody(props: AssetDetailBodyProps) {
   const { asset, draft } = props;
 
   return (
-    <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
-      <div className="w-full max-w-full min-w-0 space-y-6 overflow-hidden px-5 py-5">
+    <div className="w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
+      <div className="w-full max-w-full min-w-0 space-y-6 overflow-x-hidden px-5 py-5">
         <AssetDetailThumbnail thumbnailUrl={props.thumbnailUrl} displayName={props.displayName} />
         {!asset.file_exists && <MissingFileNotice editing={draft.isEditingAsset} />}
         <AssetNameField asset={asset} />
         <DisplayNameField asset={asset} draft={draft} />
         <Separator />
         <ModelAndTagSections asset={asset} draft={draft} models={props.models} tags={props.tags} />
+        <SuggestedBoothTags draft={draft} />
         <Separator />
         <AssetDetailBoothSection
           isEditing={draft.isEditingAsset}
           boothUrl={props.boothUrl}
+          fetching={draft.isFetchingProductInfo}
           onBoothUrlChange={draft.setEditedBoothUrl}
+          onFetchProductInfo={() => void draft.fetchProductInfo()}
           onOpenBooth={() => void props.onOpenBooth()}
         />
         <Separator />
@@ -212,7 +273,6 @@ function AssetDetailBody(props: AssetDetailBodyProps) {
         />
         <Separator />
         <NoteSection asset={asset} draft={draft} />
-        {draft.isEditingAsset && <EditableThumbnailUrlSection draft={draft} />}
         <Separator />
         <AssetDetailLocationSection
           isEditing={draft.isEditingAsset}
@@ -223,21 +283,6 @@ function AssetDetailBody(props: AssetDetailBodyProps) {
         />
       </div>
     </div>
-  );
-}
-
-function EditableThumbnailUrlSection({ draft }: { draft: AssetDetailDraft }) {
-  return (
-    <>
-      <Separator />
-      <AssetDetailThumbnailUrlSection
-        thumbnailUrl={draft.editedThumbnailUrl}
-        boothUrl={draft.editedBoothUrl}
-        fetching={draft.isFetchingThumbnail}
-        onThumbnailUrlChange={draft.setEditedThumbnailUrl}
-        onFetchThumbnail={() => void draft.fetchThumbnail()}
-      />
-    </>
   );
 }
 
@@ -268,8 +313,9 @@ function AssetDetailFooterController({
 function AssetDetailLayout(props: AssetDetailLayoutProps) {
   return (
     <div
-      className="flex h-full min-h-0 w-[25rem] shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+      className="asset-detail-panel flex h-full min-h-0 shrink-0 flex-col overflow-x-hidden overflow-y-hidden border-l border-border bg-card"
       data-asset-detail-editing={props.draft.isEditingAsset ? "true" : undefined}
+      style={{ width: "clamp(18rem, 34vw, 25rem)" }}
     >
       <AssetDetailHeader
         isEditing={props.draft.isEditingAsset}
@@ -290,7 +336,7 @@ async function openTrimmedUrl(url: string) {
 
 async function openAssetLocation(filePath: string) {
   if (filePath.trim()) {
-    await invoke("open_file_location", { path: filePath });
+    await invokeTauri("open_file_location", { path: filePath });
   }
 }
 
@@ -313,8 +359,12 @@ function useAssetDetailController(): AssetDetailController {
   const store = useAssetStore();
   const asset = useAssetStore(selectSelectedAsset);
   const draft = useAssetDetailDraft({
+    addModel: store.addModel,
+    addTag: store.addTag,
     asset,
+    models: store.models,
     saving: store.saving,
+    tags: store.tags,
     editingAssetRequestId: store.editingAssetRequestId,
     updateAsset: store.updateAsset,
     clearAssetEditRequest: store.clearAssetEditRequest,

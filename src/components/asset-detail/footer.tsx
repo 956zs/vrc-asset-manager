@@ -34,7 +34,7 @@ function EditActionButtons({
   onSave,
 }: Pick<AssetDetailFooterProps, "saving" | "hasChanges" | "onCancelEditing" | "onSave">) {
   return (
-    <div className="grid min-w-0 grid-cols-2 gap-2">
+    <div className="asset-detail-action-grid grid min-w-0 grid-cols-2 gap-2">
       <Button
         type="button"
         variant="outline"
