@@ -331,7 +331,11 @@ fn default_asset_category() -> String {
 }
 
 fn export_assets(conn: &Connection) -> CommandResult<Vec<SaveAsset>> {
-    match archive_rows(conn, EXPORT_ASSETS_WITH_CATEGORY_SQL, asset_with_category_from_row) {
+    match archive_rows(
+        conn,
+        EXPORT_ASSETS_WITH_CATEGORY_SQL,
+        asset_with_category_from_row,
+    ) {
         Ok(assets) => Ok(assets),
         Err(_) => archive_rows(conn, EXPORT_ASSETS_SQL, asset_from_row),
     }

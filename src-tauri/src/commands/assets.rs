@@ -11,8 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::{
     collections::BTreeMap,
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 use tauri::State;
@@ -884,7 +883,10 @@ fn import_source_info_for(path: &Path) -> ImportSourceInfo {
     }
 }
 
-fn archive_strategy_for(kind: &ImportSourceKind, strategy: Option<ArchiveStrategy>) -> ArchiveStrategy {
+fn archive_strategy_for(
+    kind: &ImportSourceKind,
+    strategy: Option<ArchiveStrategy>,
+) -> ArchiveStrategy {
     if *kind == ImportSourceKind::Zip {
         strategy.unwrap_or(ArchiveStrategy::KeepArchive)
     } else {
@@ -995,7 +997,11 @@ fn remove_source_path(path: &Path) -> CommandResult<()> {
     }
 }
 
-fn move_or_copy_path(source: &Path, destination: &Path, operation: ImportOperation) -> CommandResult<()> {
+fn move_or_copy_path(
+    source: &Path,
+    destination: &Path,
+    operation: ImportOperation,
+) -> CommandResult<()> {
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(db_error)?;
     }
@@ -1025,14 +1031,18 @@ fn move_or_copy_path(source: &Path, destination: &Path, operation: ImportOperati
 
 fn is_ignored_zip_entry(path: &str) -> bool {
     let trimmed = path.trim_end_matches('/');
-    trimmed.ends_with(".DS_Store") || trimmed.ends_with("Thumbs.db") || trimmed.ends_with("__MACOSX")
+    trimmed.ends_with(".DS_Store")
+        || trimmed.ends_with("Thumbs.db")
+        || trimmed.ends_with("__MACOSX")
 }
 
 fn safe_zip_entry_path(enclosed_name: &Path) -> bool {
     !enclosed_name.components().any(|component| {
         matches!(
             component,
-            std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
         )
     })
 }
@@ -1314,25 +1324,31 @@ fn managed_import_item(
     }
     .to_string();
 
-    let run = || -> CommandResult<(Asset, String)> {
+    let run = || -> Result<(Asset, String), (String, Option<String>)> {
         let info = import_source_info_for(&source);
         if !info.supported {
-            return Err(info
-                .message
-                .unwrap_or_else(|| "不支援的導入來源".to_string()));
+            return Err((
+                info.message
+                    .unwrap_or_else(|| "不支援的導入來源".to_string()),
+                None,
+            ));
         }
 
-        let root = require_library_root(settings)?;
-        ensure_category_folders(&root, settings)?;
+        let root = require_library_root(settings).map_err(|message| (message, None))?;
+        ensure_category_folders(&root, settings).map_err(|message| (message, None))?;
         let strategy = archive_strategy_for(&info.kind, item.archive_strategy);
-        let base_target = base_target_path(settings, &source, item.category, strategy)?;
+        let base_target = base_target_path(settings, &source, item.category, strategy)
+            .map_err(|message| (message, None))?;
         let conflict_strategy = item.conflict_strategy.unwrap_or(ConflictStrategy::Cancel);
-        let final_target = prepare_target_path(&base_target, conflict_strategy)?;
+        let final_target = prepare_target_path(&base_target, conflict_strategy)
+            .map_err(|message| (message, None))?;
 
         if info.kind == ImportSourceKind::Zip && strategy == ArchiveStrategy::Extract {
-            import_zip_extract(&source, &final_target, item.operation)?;
+            import_zip_extract(&source, &final_target, item.operation)
+                .map_err(|message| (message, None))?;
         } else {
-            move_or_copy_path(&source, &final_target, item.operation)?;
+            move_or_copy_path(&source, &final_target, item.operation)
+                .map_err(|message| (message, None))?;
         }
 
         let final_path = final_target.to_string_lossy().to_string();
@@ -1349,7 +1365,13 @@ fn managed_import_item(
                 tag_ids: item.tag_ids,
                 related_links: item.related_links,
             },
-        )?;
+        )
+        .map_err(|message| {
+            (
+                format!("檔案已處理，但資料庫記錄建立失敗：{message}"),
+                Some(final_path.clone()),
+            )
+        })?;
         Ok((asset, final_path))
     };
 
@@ -1362,11 +1384,11 @@ fn managed_import_item(
             operation: operation_label,
             message: "導入完成".to_string(),
         },
-        Err(message) => ManagedImportItemResult {
+        Err((message, final_path)) => ManagedImportItemResult {
             source_path,
             success: false,
             asset: None,
-            final_path: None,
+            final_path,
             operation: operation_label,
             message,
         },
