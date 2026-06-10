@@ -1,5 +1,44 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssetCategory {
+    Avatar,
+    #[default]
+    Accessory,
+    World,
+}
+
+impl AssetCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Avatar => "avatar",
+            Self::Accessory => "accessory",
+            Self::World => "world",
+        }
+    }
+}
+
+impl fmt::Display for AssetCategory {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for AssetCategory {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "avatar" => Ok(Self::Avatar),
+            "accessory" => Ok(Self::Accessory),
+            "world" => Ok(Self::World),
+            _ => Err(format!("Unsupported asset category: {value}")),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +74,7 @@ pub struct Asset {
     pub id: i64,
     pub name: String,
     pub display_name: Option<String>,
+    pub category: AssetCategory,
     pub file_path: String,
     pub booth_url: Option<String>,
     pub thumbnail_url: Option<String>,
@@ -53,6 +93,8 @@ pub struct AssetFilters {
     #[serde(default)]
     pub search: Option<String>,
     #[serde(default)]
+    pub category: Option<AssetCategory>,
+    #[serde(default)]
     pub model_ids: Vec<i64>,
     #[serde(default)]
     pub tag_ids: Vec<i64>,
@@ -62,6 +104,8 @@ pub struct AssetFilters {
 #[serde(rename_all = "camelCase")]
 pub struct CreateAssetInput {
     pub display_name: Option<String>,
+    #[serde(default)]
+    pub category: AssetCategory,
     pub file_path: String,
     pub booth_url: Option<String>,
     pub thumbnail_url: Option<String>,
@@ -78,6 +122,8 @@ pub struct CreateAssetInput {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateAssetInput {
     pub display_name: Option<String>,
+    #[serde(default)]
+    pub category: AssetCategory,
     pub file_path: String,
     pub booth_url: Option<String>,
     pub thumbnail_url: Option<String>,

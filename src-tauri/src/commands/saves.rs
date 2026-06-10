@@ -22,6 +22,9 @@ const EXPORT_TAGS_SQL: &str =
 const EXPORT_ASSETS_SQL: &str = "SELECT id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at
              FROM assets
              ORDER BY id";
+const EXPORT_ASSETS_WITH_CATEGORY_SQL: &str = "SELECT id, name, display_name, category, file_path, booth_url, thumbnail_url, note, created_at, updated_at
+             FROM assets
+             ORDER BY id";
 const EXPORT_ASSET_MODELS_SQL: &str =
     "SELECT asset_id, model_id FROM asset_models ORDER BY asset_id, model_id";
 const EXPORT_ASSET_TAGS_SQL: &str =
@@ -63,11 +66,23 @@ struct SaveAsset {
     id: i64,
     name: String,
     display_name: Option<String>,
+    #[serde(default = "default_asset_category")]
+    category: String,
     file_path: String,
     booth_url: Option<String>,
     thumbnail_url: Option<String>,
     note: Option<String>,
     created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SaveLibrarySettings {
+    root_path: Option<String>,
+    avatar_folder: String,
+    accessory_folder: String,
+    world_folder: String,
     updated_at: String,
 }
 
@@ -135,6 +150,8 @@ struct SaveArchive {
     vcc_repositories: Vec<SaveVccRepository>,
     #[serde(default)]
     vcc_project_snapshots: Vec<VccProjectSnapshot>,
+    #[serde(default)]
+    library_settings: Option<SaveLibrarySettings>,
 }
 
 #[derive(Debug, Clone)]
@@ -207,12 +224,38 @@ fn asset_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAsset> {
         id: row.get(0)?,
         name: row.get(1)?,
         display_name: row.get(2)?,
+        category: "accessory".to_string(),
         file_path: row.get(3)?,
         booth_url: row.get(4)?,
         thumbnail_url: row.get(5)?,
         note: row.get(6)?,
         created_at: row.get(7)?,
         updated_at: row.get(8)?,
+    })
+}
+
+fn asset_with_category_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAsset> {
+    Ok(SaveAsset {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        display_name: row.get(2)?,
+        category: row.get(3)?,
+        file_path: row.get(4)?,
+        booth_url: row.get(5)?,
+        thumbnail_url: row.get(6)?,
+        note: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+    })
+}
+
+fn library_settings_from_row(row: &Row<'_>) -> rusqlite::Result<SaveLibrarySettings> {
+    Ok(SaveLibrarySettings {
+        root_path: row.get(0)?,
+        avatar_folder: row.get(1)?,
+        accessory_folder: row.get(2)?,
+        world_folder: row.get(3)?,
+        updated_at: row.get(4)?,
     })
 }
 
@@ -283,6 +326,31 @@ fn export_timestamp(conn: &Connection) -> CommandResult<String> {
         .map_err(db_error)
 }
 
+fn default_asset_category() -> String {
+    "accessory".to_string()
+}
+
+fn export_assets(conn: &Connection) -> CommandResult<Vec<SaveAsset>> {
+    match archive_rows(conn, EXPORT_ASSETS_WITH_CATEGORY_SQL, asset_with_category_from_row) {
+        Ok(assets) => Ok(assets),
+        Err(_) => archive_rows(conn, EXPORT_ASSETS_SQL, asset_from_row),
+    }
+}
+
+fn export_library_settings(conn: &Connection) -> CommandResult<Option<SaveLibrarySettings>> {
+    match conn.query_row(
+        "SELECT root_path, avatar_folder, accessory_folder, world_folder, updated_at
+         FROM library_settings
+         WHERE id = 1",
+        [],
+        library_settings_from_row,
+    ) {
+        Ok(settings) => Ok(Some(settings)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(db_error(error)),
+    }
+}
+
 fn summary(
     path: String,
     archive: &SaveArchive,
@@ -322,13 +390,14 @@ fn build_archive(conn: &Connection) -> CommandResult<SaveArchive> {
         exported_at: export_timestamp(conn)?,
         models: archive_rows(conn, EXPORT_MODELS_SQL, model_from_row)?,
         tags: archive_rows(conn, EXPORT_TAGS_SQL, tag_from_row)?,
-        assets: archive_rows(conn, EXPORT_ASSETS_SQL, asset_from_row)?,
+        assets: export_assets(conn)?,
         asset_models: archive_rows(conn, EXPORT_ASSET_MODELS_SQL, asset_model_from_row)?,
         asset_tags: archive_rows(conn, EXPORT_ASSET_TAGS_SQL, asset_tag_from_row)?,
         asset_links: archive_rows(conn, EXPORT_ASSET_LINKS_SQL, asset_link_from_row)?,
         vcc_projects: archive_rows(conn, EXPORT_VCC_PROJECTS_SQL, vcc_project_from_row)?,
         vcc_repositories: archive_rows(conn, EXPORT_VCC_REPOSITORIES_SQL, vcc_repository_from_row)?,
         vcc_project_snapshots: snapshot_vcc_projects(conn)?,
+        library_settings: export_library_settings(conn)?,
     })
 }
 
@@ -553,16 +622,21 @@ fn insert_assets(tx: &Transaction<'_>, assets: &[SaveAsset]) -> CommandResult<()
     let mut stmt = tx
         .prepare(
             "INSERT INTO assets
-                (id, name, display_name, file_path, booth_url, thumbnail_url, note, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (id, name, display_name, category, file_path, booth_url, thumbnail_url, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .map_err(db_error)?;
 
     for asset in assets {
+        let category = match asset.category.as_str() {
+            "avatar" | "accessory" | "world" => asset.category.as_str(),
+            _ => "accessory",
+        };
         stmt.execute(params![
             asset.id,
             &asset.name,
             asset.display_name.as_deref(),
+            category,
             &asset.file_path,
             asset.booth_url.as_deref(),
             asset.thumbnail_url.as_deref(),

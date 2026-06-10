@@ -159,6 +159,8 @@ pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::e
     conn.pragma_update(None, "foreign_keys", "ON")?;
     conn.execute_batch(include_str!("../migrations/001_initial.sql"))?;
     migrate_sort_order(&conn)?;
+    migrate_asset_category(&conn)?;
+    ensure_library_settings(&conn)?;
     ensure_vcc_repositories(&conn)?;
     if seed_demo {
         seed_demo_data(&conn)?;
@@ -494,6 +496,53 @@ fn migrate_sort_order(conn: &Connection) -> rusqlite::Result<()> {
 
     conn.execute("UPDATE models SET sort_order = id WHERE sort_order = 0", [])?;
     conn.execute("UPDATE tags SET sort_order = id WHERE sort_order = 0", [])?;
+
+    Ok(())
+}
+
+fn migrate_asset_category(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_column(conn, "assets", "category")? {
+        conn.execute(
+            "ALTER TABLE assets ADD COLUMN category TEXT NOT NULL DEFAULT 'accessory'",
+            [],
+        )?;
+    }
+
+    conn.execute(
+        "UPDATE assets
+         SET category = 'accessory'
+         WHERE category NOT IN ('avatar', 'accessory', 'world')
+            OR category IS NULL
+            OR TRIM(category) = ''",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+fn ensure_library_settings(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS library_settings (
+            id               INTEGER PRIMARY KEY CHECK (id = 1),
+            root_path        TEXT,
+            avatar_folder    TEXT NOT NULL DEFAULT '素體',
+            accessory_folder TEXT NOT NULL DEFAULT '素體配件',
+            world_folder     TEXT NOT NULL DEFAULT '世界',
+            updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+        [],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO library_settings
+            (id, root_path, avatar_folder, accessory_folder, world_folder)
+         VALUES
+            (1, NULL, '素體', '素體配件', '世界')",
+        [],
+    )?;
 
     Ok(())
 }

@@ -4,10 +4,12 @@ mod types;
 
 use commands::{
     assets::{
-        create_asset, delete_asset, get_assets, open_file_location, scan_asset_health,
-        update_asset, validate_file_path,
+        configure_library_root, create_asset, delete_asset, get_assets, get_library_settings,
+        inspect_import_sources, list_zip_contents, managed_import_batch, open_file_location,
+        preview_managed_import_target, scan_asset_health, update_asset, update_library_settings,
+        validate_file_path,
     },
-    booth::fetch_booth_thumbnail,
+    booth::{fetch_booth_product_info, fetch_booth_thumbnail},
     models::{create_model, delete_model, get_models, reorder_models, update_model},
     saves::{export_save, import_save},
     tags::{create_tag, delete_tag, get_tags, reorder_tags, update_tag},
@@ -35,6 +37,13 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             get_assets,
+            get_library_settings,
+            configure_library_root,
+            update_library_settings,
+            inspect_import_sources,
+            preview_managed_import_target,
+            list_zip_contents,
+            managed_import_batch,
             create_asset,
             update_asset,
             delete_asset,
@@ -60,6 +69,7 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
             sync_vcc_repositories,
             scan_vcc_project,
             scan_vcc_projects,
+            fetch_booth_product_info,
             fetch_booth_thumbnail,
             validate_file_path,
             open_file_location
@@ -89,8 +99,9 @@ fn demo_seed_enabled() -> bool {
 mod tests {
     use super::*;
     use crate::types::{
-        Asset, AssetFilters, AssetLinkInput, CreateAssetInput, CreateModelInput, CreateTagInput,
-        ReorderModelsInput, ReorderTagsInput, UpdateAssetInput, UpdateModelInput, UpdateTagInput,
+        Asset, AssetCategory, AssetFilters, AssetLinkInput, CreateAssetInput, CreateModelInput,
+        CreateTagInput, ReorderModelsInput, ReorderTagsInput, UpdateAssetInput, UpdateModelInput,
+        UpdateTagInput,
     };
     use std::{
         env, fs,
@@ -171,6 +182,7 @@ mod tests {
         commands::assets::create_asset(
             CreateAssetInput {
                 display_name: Some(display_name.to_string()),
+                category: AssetCategory::Accessory,
                 file_path: file_path.to_string_lossy().to_string(),
                 booth_url: None,
                 thumbnail_url: None,
@@ -323,6 +335,7 @@ mod tests {
         let created_asset = commands::assets::create_asset(
             CreateAssetInput {
                 display_name: Some("Smoke Asset".to_string()),
+                category: AssetCategory::Accessory,
                 file_path: config.asset_path.clone(),
                 booth_url: Some("https://example.com/smoke".to_string()),
                 thumbnail_url: Some("data:image/svg+xml,%3Csvg%3E%3C/svg%3E".to_string()),
@@ -349,6 +362,7 @@ mod tests {
             asset_id,
             UpdateAssetInput {
                 display_name: Some("Smoke Asset Updated".to_string()),
+                category: AssetCategory::Accessory,
                 file_path: config.asset_path.clone(),
                 booth_url: None,
                 thumbnail_url: None,
@@ -377,6 +391,7 @@ mod tests {
         let filtered_assets = commands::assets::get_assets(
             AssetFilters {
                 search: Some("smoke asset updated".to_string()),
+                category: None,
                 model_ids: vec![relations.model_id],
                 tag_ids: vec![relations.tag_id],
             },
@@ -435,6 +450,7 @@ mod tests {
         let after_delete = commands::assets::get_assets(
             AssetFilters {
                 search: Some("smoke asset updated".to_string()),
+                category: None,
                 model_ids: Vec::new(),
                 tag_ids: Vec::new(),
             },
@@ -455,6 +471,7 @@ mod tests {
         let restored = commands::assets::get_assets(
             AssetFilters {
                 search: Some("smoke asset updated".to_string()),
+                category: None,
                 model_ids: Vec::new(),
                 tag_ids: Vec::new(),
             },

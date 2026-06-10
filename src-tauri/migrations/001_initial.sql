@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS assets (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     name          TEXT    NOT NULL,
     display_name  TEXT,
+    category      TEXT    NOT NULL DEFAULT 'accessory',
     file_path     TEXT    NOT NULL,
     booth_url     TEXT,
     thumbnail_url TEXT,
@@ -24,6 +25,20 @@ CREATE TABLE IF NOT EXISTS assets (
     created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS library_settings (
+    id               INTEGER PRIMARY KEY CHECK (id = 1),
+    root_path        TEXT,
+    avatar_folder    TEXT NOT NULL DEFAULT '素體',
+    accessory_folder TEXT NOT NULL DEFAULT '素體配件',
+    world_folder     TEXT NOT NULL DEFAULT '世界',
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT OR IGNORE INTO library_settings
+    (id, root_path, avatar_folder, accessory_folder, world_folder)
+VALUES
+    (1, NULL, '素體', '素體配件', '世界');
 
 CREATE TABLE IF NOT EXISTS asset_models (
     asset_id INTEGER NOT NULL REFERENCES assets(id)  ON DELETE CASCADE,
