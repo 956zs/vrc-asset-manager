@@ -43,6 +43,22 @@ type AppController = {
   setMainView: Dispatch<SetStateAction<MainView>>;
 };
 
+function mergeBatchImportPaths(current: string[], next: string[]) {
+  const seen = new Set(current.map((path) => path.trim().toLocaleLowerCase()));
+  const merged = [...current];
+
+  for (const path of next) {
+    const key = path.trim().toLocaleLowerCase();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(path);
+  }
+
+  return merged;
+}
+
 function useAppController(): AppController {
   const loadAll = useAssetStore((state) => state.loadAll);
   const selectedAssetId = useAssetStore((state) => state.selectedAssetId);
@@ -92,7 +108,10 @@ function useAppController(): AppController {
             return;
           }
 
-          setBatchImportPaths(event.payload.paths);
+          const droppedPaths = event.payload.paths;
+          setBatchImportPaths((current) =>
+            mergeBatchImportPaths(current, droppedPaths),
+          );
           setIsBatchImportOpen(true);
           setMainView("assets");
         }),
@@ -222,6 +241,13 @@ function MainPanel({ controller }: { controller: AppController }) {
 }
 
 function AppDialogs({ controller }: { controller: AppController }) {
+  const setBatchImportOpen = (open: boolean) => {
+    controller.setIsBatchImportOpen(open);
+    if (!open) {
+      controller.setBatchImportPaths([]);
+    }
+  };
+
   return (
     <>
       <AddAssetDialog />
@@ -246,7 +272,7 @@ function AppDialogs({ controller }: { controller: AppController }) {
       <BatchImportDialog
         open={controller.isBatchImportOpen}
         paths={controller.batchImportPaths}
-        onOpenChange={controller.setIsBatchImportOpen}
+        onOpenChange={setBatchImportOpen}
       />
     </>
   );

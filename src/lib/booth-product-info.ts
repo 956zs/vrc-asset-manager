@@ -134,6 +134,56 @@ const compactUnique = (values: string[]) => {
   return compacted;
 };
 
+const boothTagMappings: readonly {
+  localName: string;
+  aliases: readonly string[];
+}[] = [
+  {
+    localName: "服裝",
+    aliases: ["3D Clothing", "Clothing", "Clothes", "Outfit", "衣装", "衣裝"],
+  },
+  {
+    localName: "髮型",
+    aliases: ["Hair", "Hairstyle", "Hair Style", "髪型", "髮型"],
+  },
+  {
+    localName: "配件",
+    aliases: ["Accessory", "Accessories", "アクセサリー", "小物", "道具"],
+  },
+  {
+    localName: "材質",
+    aliases: ["Texture", "Textures", "テクスチャ", "テクスチャー", "Material"],
+  },
+  {
+    localName: "Shader",
+    aliases: ["Shader", "Shaders", "シェーダー", "シェーダ"],
+  },
+  {
+    localName: "世界",
+    aliases: ["World", "ワールド"],
+  },
+  {
+    localName: "素體",
+    aliases: ["Avatar", "アバター", "3D Model", "3Dモデル"],
+  },
+  {
+    localName: "VRChat",
+    aliases: ["VRChat", "VRC"],
+  },
+];
+
+const boothTagMappingByAlias = new Map(
+  boothTagMappings.flatMap((mapping) =>
+    mapping.aliases.map((alias) => [
+      normalizeLookupText(alias),
+      mapping.localName,
+    ]),
+  ),
+);
+
+const localBoothTagName = (tagName: string) =>
+  boothTagMappingByAlias.get(normalizeLookupText(tagName)) ?? tagName.trim();
+
 const splitModelAliasText = (value: string) =>
   value
     .split(modelAliasSplitPattern)
@@ -241,6 +291,7 @@ export const applyBoothProductInfo = (
   const matchedModelIds: number[] = [];
   const matchedTagIds: number[] = [];
   const suggestedTags: string[] = [];
+  const suggestedTagKeys = new Set<string>();
   const existingTagByName = new Map(
     tags.map((tag) => [normalizeLookupText(tag.name), tag]),
   );
@@ -253,15 +304,27 @@ export const applyBoothProductInfo = (
   const suggestedModels = collectSuggestedModels(searchText, models);
 
   for (const tagName of compactUnique(info.tags)) {
-    const existingTag = existingTagByName.get(normalizeLookupText(tagName));
+    const localTagName = localBoothTagName(tagName);
+    const existingTag =
+      existingTagByName.get(normalizeLookupText(localTagName)) ??
+      existingTagByName.get(normalizeLookupText(tagName));
     if (existingTag) {
       matchedTagIds.push(existingTag.id);
-    } else if (suggestedTags.length < suggestedTagLimit) {
-      suggestedTags.push(tagName);
+    } else if (
+      suggestedTags.length < suggestedTagLimit &&
+      !suggestedTagKeys.has(normalizeLookupText(localTagName))
+    ) {
+      suggestedTags.push(localTagName);
+      suggestedTagKeys.add(normalizeLookupText(localTagName));
     }
   }
 
-  return { matchedModelIds, matchedTagIds, suggestedModels, suggestedTags };
+  return {
+    matchedModelIds,
+    matchedTagIds,
+    suggestedModels,
+    suggestedTags,
+  };
 };
 
 export const mergeIds = (currentIds: number[], nextIds: readonly number[]) => {

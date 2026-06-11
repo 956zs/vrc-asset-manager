@@ -197,9 +197,9 @@ const defaultBulkDraft: BulkImportDraft = {
   archiveStrategy: "keepArchive",
 };
 
-function createDrafts(paths: string[]): BatchImportDraft[] {
+function createDrafts(paths: string[], startIndex = 0): BatchImportDraft[] {
   return paths.map((path, index) => ({
-    id: `${index}-${path}`,
+    id: `${startIndex + index}-${path}`,
     sourcePath: path,
     category: "accessory",
     operation: "move",
@@ -264,6 +264,29 @@ function mergeSuggestedTags(current: string[], next: string[]) {
     }
   }
   return merged;
+}
+
+const normalizedLookup = (value: string) => value.trim().toLocaleLowerCase();
+
+function existingModelForSuggestion(
+  models: readonly Model[],
+  suggestion: SuggestedBoothModel,
+) {
+  const keys = [suggestion.name, suggestion.displayName ?? "", suggestion.label]
+    .filter(Boolean)
+    .map(normalizedLookup);
+
+  return models.find((model) =>
+    [model.name, model.display_name ?? ""]
+      .filter(Boolean)
+      .map(normalizedLookup)
+      .some((key) => keys.includes(key)),
+  );
+}
+
+function existingTagForSuggestion(tags: readonly Tag[], tagName: string) {
+  const key = normalizedLookup(tagName);
+  return tags.find((tag) => normalizedLookup(tag.name) === key);
 }
 
 function sourceKindForDraft(draft: BatchImportDraft): ImportSourceKind {
@@ -406,6 +429,17 @@ function conflictSummary(strategy: ConflictStrategy) {
   }
 }
 
+function resultOperationLabel(operation: string) {
+  switch (operation) {
+    case "move":
+      return "移動";
+    case "copy":
+      return "複製";
+    default:
+      return operation || "未記錄";
+  }
+}
+
 function isDirectoryEntry(path: string) {
   return path.endsWith("/") || path.endsWith("\\");
 }
@@ -421,7 +455,10 @@ function formatFileSize(sizeBytes?: number | null) {
   if (sizeBytes === 0) return "0 B";
 
   const units = ["B", "KB", "MB", "GB", "TB"];
-  const unitIndex = Math.min(Math.floor(Math.log(sizeBytes) / Math.log(1024)), units.length - 1);
+  const unitIndex = Math.min(
+    Math.floor(Math.log(sizeBytes) / Math.log(1024)),
+    units.length - 1,
+  );
   const value = sizeBytes / 1024 ** unitIndex;
   const digits = unitIndex === 0 || value >= 10 ? 0 : 1;
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
@@ -603,7 +640,9 @@ function SourceContentsDialog({
       sizeBytes: null,
     })) ??
     [];
-  const hiddenCount = contents ? Math.max(contents.fileCount - entries.length, 0) : 0;
+  const hiddenCount = contents
+    ? Math.max(contents.fileCount - entries.length, 0)
+    : 0;
 
   return (
     <Dialog open={Boolean(draft)} onOpenChange={onOpenChange}>
@@ -633,7 +672,8 @@ function SourceContentsDialog({
               <ScrollArea className="max-h-72">
                 <ul className="divide-y divide-border/60">
                   {entries.map((entry) => {
-                    const directory = entry.isDirectory || isDirectoryEntry(entry.path);
+                    const directory =
+                      entry.isDirectory || isDirectoryEntry(entry.path);
                     const sizeLabel = formatFileSize(entry.sizeBytes);
                     return (
                       <li
@@ -676,7 +716,11 @@ function SourceContentsDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => void invokeTauri("open_file_location", { path: draft.sourcePath })}
+              onClick={() =>
+                void invokeTauri("open_file_location", {
+                  path: draft.sourcePath,
+                })
+              }
             >
               <FolderOpen className="h-4 w-4" />
               在檔案總管中開啟
@@ -705,23 +749,41 @@ function MetadataDetails({
   const summary = metadataSummaryText(draft);
 
   return (
-    <div className="rounded-md border border-border/70 bg-muted/10 px-3 py-2">
+    <div
+      className={[
+        "rounded-md border px-3 py-2 transition-colors",
+        open
+          ? "border-primary/55 bg-primary/8"
+          : "border-primary/35 bg-primary/5 shadow-sm hover:border-primary/55 hover:bg-primary/8",
+      ].join(" ")}
+    >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-xs text-muted-foreground">
-          {summary ? `補充資料：${summary}` : "可選填 BOOTH、模型、標籤與備註"}
-        </p>
-        <Button
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Sparkles className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <p className="text-xs font-medium text-foreground">補充資料</p>
+              <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                可選
+              </span>
+            </div>
+            <p className="mt-1 min-w-0 truncate text-xs text-muted-foreground">
+              {summary || "BOOTH、模型、標籤與備註"}
+            </p>
+          </div>
+        </div>
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-1 text-xs font-medium text-foreground transition-colors hover:text-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           onClick={onToggle}
         >
+          <span>{open ? "收合" : summary ? "編輯" : "展開"}</span>
           <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
+            className={`h-4 w-4 transition-transform ${open ? "" : "-rotate-90"}`}
           />
-          {open ? "隱藏資料" : "補充資料"}
-        </Button>
+        </button>
       </div>
       {open && <div className="mt-3">{children}</div>}
     </div>
@@ -1067,22 +1129,52 @@ function BatchImportReport({
         {report.results.map((result) => (
           <div
             key={result.sourcePath}
-            className="rounded-md border border-border p-3"
+            className={[
+              "rounded-md border p-3",
+              result.success
+                ? "border-emerald-500/35 bg-emerald-500/5"
+                : result.finalPath
+                  ? "border-amber-500/45 bg-amber-500/5"
+                  : "border-destructive/45 bg-destructive/5",
+            ].join(" ")}
           >
-            <div className="flex items-center gap-2">
-              {result.success ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <XCircle className="h-4 w-4 text-destructive" />
-              )}
-              <p className="min-w-0 flex-1 truncate text-sm font-medium">
-                {sourceName(result.sourcePath)}
-              </p>
+            <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {result.success ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-destructive" />
+                  )}
+                  <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {sourceName(result.sourcePath)}
+                  </p>
+                  <Badge variant={result.success ? "outline" : "destructive"}>
+                    {result.success ? "成功" : "失敗"}
+                  </Badge>
+                  <Badge variant="outline">
+                    {resultOperationLabel(result.operation)}
+                  </Badge>
+                </div>
+                <p
+                  className={[
+                    "mt-1 text-xs",
+                    result.success
+                      ? "text-emerald-300"
+                      : result.finalPath
+                        ? "text-amber-300"
+                        : "text-destructive",
+                  ].join(" ")}
+                >
+                  {result.message}
+                </p>
+              </div>
               {result.finalPath && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="justify-self-end"
                   title="開啟目標資料夾"
                   aria-label="開啟目標資料夾"
                   onClick={() =>
@@ -1095,14 +1187,22 @@ function BatchImportReport({
                 </Button>
               )}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {result.message}
-            </p>
-            {result.finalPath && (
-              <p className="mt-1 break-all text-xs text-muted-foreground">
-                {result.finalPath}
-              </p>
-            )}
+            <div className="mt-3 grid gap-2 text-xs">
+              <div>
+                <p className="font-medium text-muted-foreground">來源</p>
+                <p className="mt-0.5 break-all text-foreground/85">
+                  {result.sourcePath}
+                </p>
+              </div>
+              {result.finalPath && (
+                <div>
+                  <p className="font-medium text-muted-foreground">最終路徑</p>
+                  <p className="mt-0.5 break-all text-foreground/85">
+                    {result.finalPath}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -1154,9 +1254,16 @@ export function BatchImportDialog({
     Record<string, SourceContentList>
   >({});
   const [loadingContentId, setLoadingContentId] = useState<string | null>(null);
+  const [confirmAttentionIds, setConfirmAttentionIds] = useState<string[]>([]);
+  const confirmAttentionTimeoutRef = useRef<number | null>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
+      if (confirmAttentionTimeoutRef.current !== null) {
+        window.clearTimeout(confirmAttentionTimeoutRef.current);
+        confirmAttentionTimeoutRef.current = null;
+      }
       setBulkDraft(defaultBulkDraft);
       setBulkOpen(false);
       setDrafts(createDrafts(paths));
@@ -1167,9 +1274,32 @@ export function BatchImportDialog({
       setPreviews({});
       setSourceContents({});
       setLoadingContentId(null);
+      setConfirmAttentionIds([]);
       clearImportReport();
+    } else if (open) {
+      setDrafts((current) => {
+        const existingPaths = new Set(
+          current.map((draft) => draft.sourcePath.toLocaleLowerCase()),
+        );
+        const nextPaths = paths.filter(
+          (path) => !existingPaths.has(path.toLocaleLowerCase()),
+        );
+        if (nextPaths.length === 0) {
+          return current;
+        }
+        return [...current, ...createDrafts(nextPaths, current.length)];
+      });
     }
+    wasOpenRef.current = open;
   }, [open, paths, clearImportReport]);
+
+  useEffect(() => {
+    return () => {
+      if (confirmAttentionTimeoutRef.current !== null) {
+        window.clearTimeout(confirmAttentionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!open || paths.length === 0) return;
@@ -1231,6 +1361,8 @@ export function BatchImportDialog({
     confirmableDrafts.length > 0 &&
     unsupportedCount === 0 &&
     confirmableDrafts.every((draft) => draft.confirmed);
+  const canRequestImport =
+    hasLibraryRoot && drafts.length > 0 && unsupportedCount === 0 && !saving;
   const overwriteDrafts = drafts.filter(
     (draft) =>
       previews[draft.id]?.conflict && draft.conflictStrategy === "overwrite",
@@ -1250,6 +1382,10 @@ export function BatchImportDialog({
       current.map((draft) =>
         draft.id === id ? { ...draft, ...patch } : draft,
       ),
+    );
+  const clearConfirmAttentionFor = (id: string) =>
+    setConfirmAttentionIds((current) =>
+      current.filter((attentionId) => attentionId !== id),
     );
   const updateBulkDraft = (patch: Partial<BulkImportDraft>) =>
     setBulkDraft((current) => ({ ...current, ...patch }));
@@ -1325,13 +1461,20 @@ export function BatchImportDialog({
     draft: BatchImportDraft,
     model: SuggestedBoothModel,
   ) => {
-    const created = await addModel(model.name, model.displayName ?? undefined);
+    const existingModel = existingModelForSuggestion(models, model);
+    const modelId = existingModel?.id;
+    const created = modelId
+      ? null
+      : await addModel(model.name, model.displayName ?? undefined);
+    const selectedModelId = modelId ?? created?.id;
+    if (!selectedModelId) return;
+
     setDrafts((current) =>
       current.map((item) =>
         item.id === draft.id
           ? {
               ...item,
-              modelIds: mergeIds(item.modelIds, [created.id]),
+              modelIds: mergeIds(item.modelIds, [selectedModelId]),
               suggestedModels: item.suggestedModels.filter(
                 (suggested) =>
                   suggested.name.toLocaleLowerCase() !==
@@ -1343,13 +1486,20 @@ export function BatchImportDialog({
     );
   };
   const addSuggestedTag = async (draft: BatchImportDraft, tagName: string) => {
-    const created = await addTag(tagName, defaultSuggestedTagColor);
+    const existingTag = existingTagForSuggestion(tags, tagName);
+    const tagId = existingTag?.id;
+    const created = tagId
+      ? null
+      : await addTag(tagName, defaultSuggestedTagColor);
+    const selectedTagId = tagId ?? created?.id;
+    if (!selectedTagId) return;
+
     setDrafts((current) =>
       current.map((item) =>
         item.id === draft.id
           ? {
               ...item,
-              tagIds: mergeIds(item.tagIds, [created.id]),
+              tagIds: mergeIds(item.tagIds, [selectedTagId]),
               suggestedTags: item.suggestedTags.filter(
                 (tag) =>
                   tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase(),
@@ -1360,13 +1510,34 @@ export function BatchImportDialog({
     );
   };
   const submit = async () => {
+    if (!allConfirmed) {
+      const unconfirmedIds = confirmableDrafts
+        .filter((draft) => !draft.confirmed)
+        .map((draft) => draft.id);
+      setConfirmAttentionIds(unconfirmedIds);
+
+      if (confirmAttentionTimeoutRef.current !== null) {
+        window.clearTimeout(confirmAttentionTimeoutRef.current);
+      }
+      confirmAttentionTimeoutRef.current = window.setTimeout(() => {
+        setConfirmAttentionIds([]);
+        confirmAttentionTimeoutRef.current = null;
+      }, 1800);
+      return;
+    }
+
     if (hasOverwrite) {
       const names = overwriteDrafts
         .slice(0, 5)
-        .map((draft) => `- ${draft.sourceInfo?.name ?? sourceName(draft.sourcePath)}`)
+        .map(
+          (draft) =>
+            `- ${draft.sourceInfo?.name ?? sourceName(draft.sourcePath)}`,
+        )
         .join("\n");
       const extraCount =
-        overwriteDrafts.length > 5 ? `\n...另有 ${overwriteDrafts.length - 5} 筆` : "";
+        overwriteDrafts.length > 5
+          ? `\n...另有 ${overwriteDrafts.length - 5} 筆`
+          : "";
       const confirmed = window.confirm(
         `有 ${overwriteDrafts.length} 筆素材會覆蓋素材庫內同名項目。\n\n${names}${extraCount}\n\n確定要繼續導入嗎？`,
       );
@@ -1423,6 +1594,10 @@ export function BatchImportDialog({
                     const preview = previews[draft.id];
                     const hasConflict = Boolean(preview?.conflict);
                     const metadataSummary = metadataSummaryText(draft);
+                    const needsConfirmationAttention =
+                      confirmAttentionIds.includes(draft.id) &&
+                      sourceSupported &&
+                      !draft.confirmed;
 
                     return (
                       <div
@@ -1490,13 +1665,19 @@ export function BatchImportDialog({
                               type="button"
                               variant={draft.confirmed ? "outline" : "default"}
                               size="sm"
-                              className="min-w-24"
+                              className={[
+                                "min-w-24 transition-shadow",
+                                needsConfirmationAttention
+                                  ? "bg-amber-500/25 text-amber-100 ring-2 ring-amber-300/80 ring-offset-2 ring-offset-background motion-safe:animate-pulse"
+                                  : "",
+                              ].join(" ")}
                               disabled={!sourceSupported}
-                              onClick={() =>
+                              onClick={() => {
+                                clearConfirmAttentionFor(draft.id);
                                 updateDraft(draft.id, {
                                   confirmed: !draft.confirmed,
-                                })
-                              }
+                                });
+                              }}
                               aria-label={`${draft.confirmed ? "取消確認" : "確認"}第 ${index + 1} 項`}
                             >
                               {draft.confirmed && (
@@ -1628,13 +1809,19 @@ export function BatchImportDialog({
                     覆蓋會取代素材庫內同名項目，開始前請再確認。
                   </p>
                 )}
+                {confirmAttentionIds.length > 0 && (
+                  <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-300">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    請先確認高亮的素材。
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   取消
                 </Button>
                 <Button
-                  disabled={!hasLibraryRoot || !allConfirmed || saving}
+                  disabled={!canRequestImport}
                   onClick={() => void submit()}
                 >
                   {saving ? "導入中" : "開始導入"}

@@ -75,7 +75,7 @@
 }
 
 @theme inline {
-  --font-sans: Geist, "Geist Fallback", system-ui, sans-serif;
+  --font-sans: "Microsoft JhengHei", "Noto Sans CJK TC", system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -144,7 +144,7 @@ body {
   overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
-  font-family: Geist, "Geist Fallback", system-ui, sans-serif;
+  font-family: "Microsoft JhengHei", "Noto Sans CJK TC", system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

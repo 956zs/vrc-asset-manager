@@ -1,11 +1,21 @@
 "use client";
 
-import { Archive, FileSearch, FolderSearch, Loader2, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  ChevronDown,
+  FileSearch,
+  FileText,
+  Folder,
+  FolderSearch,
+  Loader2,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { useAddAssetForm } from "@/components/add-asset-dialog/use-add-asset-form";
 import { ModelSelectionField } from "@/components/asset-form/model-selection-field";
 import { RelatedLinksEditor } from "@/components/asset-form/related-links-editor";
 import { TagSelectionField } from "@/components/asset-form/tag-selection-field";
-import { ImportOptionSelect } from "@/components/import-option-select";
 import { LibraryRootActions } from "@/components/library-root-actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,14 +27,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useAssetStore } from "@/stores/asset-store";
-import type { Model, Tag } from "@/types";
+import type {
+  ArchiveStrategy,
+  AssetCategory,
+  ConflictStrategy,
+  ImportOperation,
+  ImportTargetPreview,
+  Model,
+  Tag,
+} from "@/types";
 
 type AddAssetForm = ReturnType<typeof useAddAssetForm>;
 
 type AddAssetDialogController = {
   form: AddAssetForm;
+  libraryRootPath: string | null;
   models: Model[];
   open: boolean;
   saving: boolean;
@@ -34,6 +54,115 @@ type AddAssetDialogController = {
 };
 
 type AddAssetDialogLayoutProps = AddAssetDialogController;
+
+const categoryOptions: { value: AssetCategory; label: string }[] = [
+  { value: "avatar", label: "素體" },
+  { value: "accessory", label: "配件" },
+  { value: "world", label: "世界" },
+];
+const operationOptions: { value: ImportOperation; label: string }[] = [
+  { value: "move", label: "移動" },
+  { value: "copy", label: "複製" },
+];
+const archiveOptions: { value: ArchiveStrategy; label: string }[] = [
+  { value: "keepArchive", label: "保留壓縮檔" },
+  { value: "extract", label: "解壓後管理" },
+];
+const conflictOptions: {
+  value: ConflictStrategy;
+  label: string;
+  tone?: "danger";
+}[] = [
+  { value: "cancel", label: "取消" },
+  { value: "rename", label: "改名" },
+  { value: "overwrite", label: "覆蓋", tone: "danger" },
+];
+
+function optionLabel<TValue extends string>(
+  options: { value: TValue; label: string }[],
+  value: TValue,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function targetSummary(
+  preview: ImportTargetPreview | null,
+  rootPath: string | null,
+) {
+  if (!preview) return "目標：選擇素材後預覽";
+  if (!preview.targetPath)
+    return preview.message ? `目標：${preview.message}` : "目標：無法預覽";
+
+  let targetPath = preview.targetPath;
+  if (rootPath) {
+    const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
+    for (const prefix of [`${normalizedRoot}\\`, `${normalizedRoot}/`]) {
+      if (
+        targetPath.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase())
+      ) {
+        targetPath = targetPath.slice(prefix.length);
+        break;
+      }
+    }
+  }
+
+  return `目標：${targetPath}`;
+}
+
+function formatFileSize(sizeBytes?: number | null) {
+  if (sizeBytes == null) return "";
+  if (sizeBytes === 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const unitIndex = Math.min(
+    Math.floor(Math.log(sizeBytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = sizeBytes / 1024 ** unitIndex;
+  const digits = unitIndex === 0 || value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function SegmentedField<TValue extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: TValue;
+  options: { value: TValue; label: string; tone?: "danger" }[];
+  onChange: (value: TValue) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1 rounded-md border border-border bg-background/45 p-1">
+        {options.map((option) => {
+          const selected = option.value === value;
+          const dangerSelected = selected && option.tone === "danger";
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={[
+                "h-8 min-w-0 rounded-sm px-2 text-xs font-medium transition-colors",
+                selected
+                  ? dangerSelected
+                    ? "bg-amber-500/18 text-amber-200 ring-1 ring-amber-500/55"
+                    : "bg-primary/18 text-foreground ring-1 ring-primary/45"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+              ].join(" ")}
+              onClick={() => onChange(option.value)}
+            >
+              <span className="truncate">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function useAddAssetDialogController(): AddAssetDialogController {
   const {
@@ -47,6 +176,7 @@ function useAddAssetDialogController(): AddAssetDialogController {
     setAddAssetDialogOpen,
     addModel,
     addTag,
+    librarySettings,
   } = useAssetStore();
   const form = useAddAssetForm({
     addModel,
@@ -64,6 +194,7 @@ function useAddAssetDialogController(): AddAssetDialogController {
 
   return {
     form,
+    libraryRootPath: librarySettings?.rootPath ?? null,
     models,
     tags,
     saving,
@@ -144,81 +275,96 @@ function FetchProductInfoButton({ form }: { form: AddAssetForm }) {
 }
 
 function ImportRulesField({ form }: { form: AddAssetForm }) {
+  const hasConflict = Boolean(form.targetPreview?.conflict);
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <ImportOptionSelect
-        label="分類"
-        help="決定素材會放進哪個主要資料夾。這不是標籤，只影響素材庫裡的存放位置。"
-        value={form.category}
-        options={[
-          { value: "avatar", label: "素體" },
-          { value: "accessory", label: "素體配件" },
-          { value: "world", label: "世界" },
-        ]}
-        onChange={form.setCategory}
-      />
-      <ImportOptionSelect
-        label="方式"
-        help="移動會把原檔搬進素材庫；複製會保留原檔，再複製一份到素材庫。"
-        value={form.operation}
-        options={[
-          { value: "move", label: "移動" },
-          { value: "copy", label: "複製" },
-        ]}
-        onChange={form.setOperation}
-      />
-      {form.isZipPath && (
-        <ImportOptionSelect
-          label="Zip"
-          help="保留壓縮檔會直接管理 .zip；解壓後管理會把內容解開成資料夾。"
-          value={form.archiveStrategy}
-          options={[
-            { value: "keepArchive", label: "保留壓縮檔" },
-            { value: "extract", label: "解壓後管理" },
-          ]}
-          onChange={form.setArchiveStrategy}
+    <div className="space-y-3">
+      <div
+        className={`grid gap-3 ${form.isZipPath ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+      >
+        <SegmentedField
+          label="分類"
+          value={form.category}
+          options={categoryOptions}
+          onChange={form.setCategory}
         />
+        <SegmentedField
+          label="方式"
+          value={form.operation}
+          options={operationOptions}
+          onChange={form.setOperation}
+        />
+        {form.isZipPath && (
+          <SegmentedField
+            label="Zip"
+            value={form.archiveStrategy}
+            options={archiveOptions}
+            onChange={form.setArchiveStrategy}
+          />
+        )}
+      </div>
+      {hasConflict && (
+        <div className="rounded-md border border-amber-500/45 bg-amber-500/8 px-3 py-2">
+          <div className="mb-2 flex items-start gap-2 text-xs text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-medium">目標位置已有同名項目</p>
+              <p className="mt-0.5 text-amber-200/80">這筆素材要怎麼處理？</p>
+            </div>
+          </div>
+          <SegmentedField
+            label="處理方式"
+            value={form.conflictStrategy}
+            options={conflictOptions}
+            onChange={form.setConflictStrategy}
+          />
+        </div>
       )}
-      <ImportOptionSelect
-        label="衝突"
-        help="目標位置已經有同名檔案或資料夾時，決定要取消、自動改名，還是覆蓋。"
-        value={form.conflictStrategy}
-        options={[
-          { value: "cancel", label: "取消" },
-          { value: "rename", label: "改名" },
-          { value: "overwrite", label: "覆蓋" },
-        ]}
-        onChange={form.setConflictStrategy}
-      />
     </div>
   );
 }
 
-function TargetPreview({ form }: { form: AddAssetForm }) {
+function TargetPreview({
+  form,
+  libraryRootPath,
+}: {
+  form: AddAssetForm;
+  libraryRootPath: string | null;
+}) {
   const preview = form.targetPreview;
-  if (!preview) return null;
 
   return (
-    <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-xs">
-      <p className="font-medium text-muted-foreground">目標路徑預覽</p>
-      <p className="break-all text-foreground">{preview.targetPath ?? preview.message}</p>
-      {preview.conflict && (
-        <p className="font-medium text-destructive">目標已存在，請確認衝突處理方式。</p>
-      )}
+    <div className="rounded-md border border-border/70 bg-muted/10 px-3 py-2 text-xs">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-muted-foreground">
+          {targetSummary(preview, libraryRootPath)}
+        </p>
+        {preview?.conflict && (
+          <span className="shrink-0 text-amber-300">需要處理同名</span>
+        )}
+      </div>
     </div>
   );
 }
 
 function ZipContentField({ form }: { form: AddAssetForm }) {
   if (!form.isZipPath) return null;
+  const entries =
+    form.zipContents?.entries ??
+    form.zipContents?.paths.map((path) => ({
+      path,
+      isDirectory: path.endsWith("/") || path.endsWith("\\"),
+      sizeBytes: null,
+    })) ??
+    [];
 
   return (
-    <div className="space-y-2 rounded-md border border-border p-3">
+    <div className="space-y-2 rounded-md border border-border/70 bg-muted/10 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">Zip 內容</p>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           disabled={form.isLoadingZipContents}
           onClick={() => void form.loadZipContents()}
@@ -231,14 +377,44 @@ function ZipContentField({ form }: { form: AddAssetForm }) {
           列出內容
         </Button>
       </div>
-      {form.zipContents && (
-        <div className="max-h-36 overflow-auto rounded-md bg-muted/30 p-2 text-xs">
-          <p className="mb-2 text-muted-foreground">{form.zipContents.fileCount} 個檔案</p>
-          {form.zipContents.paths.map((path) => (
-            <p key={path} className="break-all">
-              {path}
-            </p>
-          ))}
+      {form.zipContents && entries.length > 0 && (
+        <div className="overflow-hidden rounded-md border border-border bg-background/35">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+            <span className="text-xs font-medium">壓縮檔內容</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              共 {form.zipContents.fileCount} 個項目
+            </span>
+          </div>
+          <ScrollArea className="max-h-36">
+            <ul className="divide-y divide-border/60">
+              {entries.map((entry) => {
+                const sizeLabel = formatFileSize(entry.sizeBytes);
+                return (
+                  <li
+                    key={entry.path}
+                    className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs"
+                  >
+                    {entry.isDirectory ? (
+                      <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    ) : (
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <span
+                      className="min-w-0 flex-1 truncate font-mono text-foreground/90"
+                      title={entry.path}
+                    >
+                      {entry.path}
+                    </span>
+                    {sizeLabel && (
+                      <span className="shrink-0 pl-2 font-mono text-[11px] text-muted-foreground">
+                        {sizeLabel}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </ScrollArea>
         </div>
       )}
     </div>
@@ -269,7 +445,9 @@ function SuggestedBoothTags({ form }: { form: AddAssetForm }) {
 
   return (
     <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">BOOTH 建議標籤</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        BOOTH 建議標籤
+      </p>
       <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
         {form.suggestedTags.map((tagName) => (
           <Button
@@ -296,7 +474,9 @@ function SuggestedBoothModels({ form }: { form: AddAssetForm }) {
 
   return (
     <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">BOOTH 建議模型</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        BOOTH 建議模型
+      </p>
       <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
         {form.suggestedModels.map((model) => (
           <Button
@@ -329,7 +509,9 @@ function AddAssetModelField({
         models={models}
         selectedModelIds={form.selectedModelIds}
         selectedModelIdSet={form.selectedModelIdSet}
-        onSelectAll={() => form.setSelectedModelIds(models.map((model) => model.id))}
+        onSelectAll={() =>
+          form.setSelectedModelIds(models.map((model) => model.id))
+        }
         onClear={() => form.setSelectedModelIds([])}
         onToggle={form.toggleModel}
       />
@@ -380,27 +562,97 @@ function NoteField({ form }: { form: AddAssetForm }) {
   );
 }
 
+function SourceImportPanel({
+  form,
+  libraryRootPath,
+}: {
+  form: AddAssetForm;
+  libraryRootPath: string | null;
+}) {
+  return (
+    <div className="space-y-4 rounded-md border border-border bg-muted/10 p-4">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">來源與導入</p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {form.filePath.trim()
+              ? `${optionLabel(categoryOptions, form.category)} · ${
+                  form.operation === "move" ? "移動來源" : "複製來源"
+                }${form.isZipPath ? ` · ${optionLabel(archiveOptions, form.archiveStrategy)}` : ""}`
+              : "先選擇檔案或資料夾"}
+          </p>
+        </div>
+        {form.targetPreview?.conflict && (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/55 bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            同名
+          </span>
+        )}
+      </div>
+      <DisplayNameField form={form} />
+      <AssetPathField form={form} />
+      <ImportRulesField form={form} />
+      <TargetPreview form={form} libraryRootPath={libraryRootPath} />
+      <ZipContentField form={form} />
+    </div>
+  );
+}
+
+function SupplementalFields({
+  form,
+  models,
+  tags,
+}: Pick<AddAssetDialogLayoutProps, "form" | "models" | "tags">) {
+  return (
+    <details className="group rounded-md border border-primary/35 bg-primary/5 shadow-sm transition-colors open:border-primary/55 open:bg-primary/8 hover:border-primary/55 hover:bg-primary/8">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <p className="text-sm font-medium">補充資料</p>
+              <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                可選
+              </span>
+            </div>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              BOOTH、相容模型、標籤、連結與備註
+            </p>
+          </div>
+        </div>
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-1 text-xs font-medium text-foreground transition-colors group-hover:text-primary">
+          <span className="group-open:hidden">展開</span>
+          <span className="hidden group-open:inline">收合</span>
+          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+        </span>
+      </summary>
+      <div className="space-y-4 border-t border-border/70 px-4 py-4">
+        <BoothUrlField form={form} />
+        <AddAssetModelField form={form} models={models} />
+        <AddAssetTagField form={form} tags={tags} />
+        <RelatedLinksField form={form} />
+        <NoteField form={form} />
+      </div>
+    </details>
+  );
+}
+
 function AddAssetFormFields({
   form,
+  libraryRootPath,
   models,
   tags,
 }: Pick<
   AddAssetDialogLayoutProps,
-  "form" | "models" | "tags"
+  "form" | "libraryRootPath" | "models" | "tags"
 >) {
   return (
     <div className="space-y-4 py-4">
       <LibraryRootActions compact />
-      <DisplayNameField form={form} />
-      <AssetPathField form={form} />
-      <ImportRulesField form={form} />
-      <TargetPreview form={form} />
-      <ZipContentField form={form} />
-      <BoothUrlField form={form} />
-      <AddAssetModelField form={form} models={models} />
-      <AddAssetTagField form={form} tags={tags} />
-      <RelatedLinksField form={form} />
-      <NoteField form={form} />
+      <SourceImportPanel form={form} libraryRootPath={libraryRootPath} />
+      <SupplementalFields form={form} models={models} tags={tags} />
     </div>
   );
 }
@@ -411,11 +663,14 @@ function AddAssetDialogFooter({
   onClose,
 }: Pick<AddAssetDialogLayoutProps, "form" | "saving" | "onClose">) {
   return (
-    <DialogFooter>
+    <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:items-center">
       <Button variant="outline" onClick={onClose}>
         取消
       </Button>
-      <Button onClick={() => void form.submit()} disabled={!form.canSubmit || saving}>
+      <Button
+        onClick={() => void form.submit()}
+        disabled={!form.canSubmit || saving}
+      >
         {saving ? "新增中" : "新增素材"}
       </Button>
     </DialogFooter>
@@ -425,18 +680,21 @@ function AddAssetDialogFooter({
 function AddAssetDialogLayout(props: AddAssetDialogLayoutProps) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="max-h-[90vh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>新增素材</DialogTitle>
-          <DialogDescription>
-            選擇來源後匯入到 app 管理的素材庫
-          </DialogDescription>
-        </DialogHeader>
-        <AddAssetFormFields
-          form={props.form}
-          models={props.models}
-          tags={props.tags}
-        />
+      <DialogContent className="flex max-h-[90vh] min-w-0 flex-col overflow-hidden p-0 sm:max-w-[640px]">
+        <div className="overflow-y-auto px-6 pt-6">
+          <DialogHeader>
+            <DialogTitle>新增素材</DialogTitle>
+            <DialogDescription>
+              選擇來源後匯入到 app 管理的素材庫
+            </DialogDescription>
+          </DialogHeader>
+          <AddAssetFormFields
+            form={props.form}
+            libraryRootPath={props.libraryRootPath}
+            models={props.models}
+            tags={props.tags}
+          />
+        </div>
         <AddAssetDialogFooter
           form={props.form}
           saving={props.saving}

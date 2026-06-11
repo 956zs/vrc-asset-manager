@@ -412,6 +412,82 @@ mod tests {
         );
     }
 
+    fn set_library_settings(
+        db: &db::DbState,
+        root_path: &Path,
+        avatar_folder: &str,
+        accessory_folder: &str,
+        world_folder: &str,
+    ) {
+        commands::assets::update_library_settings(
+            commands::assets::UpdateLibrarySettingsInput {
+                root_path: Some(root_path.to_string_lossy().to_string()),
+                avatar_folder: avatar_folder.to_string(),
+                accessory_folder: accessory_folder.to_string(),
+                world_folder: world_folder.to_string(),
+            },
+            command_state(db),
+        )
+        .expect("update library settings");
+    }
+
+    fn assert_exported_library_settings(export_path: &Path, expected_root: &Path) {
+        let json = fs::read_to_string(export_path).expect("read exported save");
+        let archive: serde_json::Value = serde_json::from_str(&json).expect("parse exported save");
+        let settings = archive
+            .get("librarySettings")
+            .expect("library settings should be exported as reference");
+
+        assert_eq!(
+            settings.get("rootPath").and_then(|value| value.as_str()),
+            Some(expected_root.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            settings
+                .get("avatarFolder")
+                .and_then(|value| value.as_str()),
+            Some("Exported Avatars")
+        );
+        assert_eq!(
+            settings
+                .get("accessoryFolder")
+                .and_then(|value| value.as_str()),
+            Some("Exported Accessories")
+        );
+        assert_eq!(
+            settings.get("worldFolder").and_then(|value| value.as_str()),
+            Some("Exported Worlds")
+        );
+
+        let exported_assets = archive
+            .get("assets")
+            .and_then(|value| value.as_array())
+            .expect("assets should be exported");
+        let smoke_asset = exported_assets
+            .iter()
+            .find(|asset| {
+                asset.get("displayName").and_then(|value| value.as_str())
+                    == Some("Smoke Asset Updated")
+            })
+            .expect("smoke asset should be exported");
+        assert_eq!(
+            smoke_asset.get("category").and_then(|value| value.as_str()),
+            Some("accessory")
+        );
+    }
+
+    fn assert_current_library_settings(db: &db::DbState, expected_root: &Path) {
+        let settings =
+            commands::assets::get_library_settings(command_state(db)).expect("load settings");
+        assert_eq!(
+            settings.root_path.as_deref(),
+            Some(expected_root.to_string_lossy().as_ref())
+        );
+        assert_eq!(settings.avatar_folder, "Current Avatars");
+        assert_eq!(settings.accessory_folder, "Current Accessories");
+        assert_eq!(settings.world_folder, "Current Worlds");
+    }
+
     fn export_smoke_save(db: &db::DbState, demo_root: &Path) -> PathBuf {
         let export_path = demo_root.join("vrc-asset-manager-save.json");
         let export_summary = commands::saves::export_save(
@@ -442,6 +518,7 @@ mod tests {
             .join("curated-demo.json")
             .is_file());
         assert!(export_path.is_file());
+        assert_exported_library_settings(&export_path, &demo_root.join("exported-library"));
 
         export_path
     }
@@ -480,11 +557,210 @@ mod tests {
         )
         .expect("load restored asset");
         assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].category, AssetCategory::Accessory);
         assert_asset_relations(&restored[0], &[relations.model_id], &[relations.tag_id]);
         assert_asset_links(
             &restored[0],
             &[("https://example.com/forum", "https://example.com/forum")],
         );
+    }
+
+    #[test]
+    fn managed_import_batch_preserves_optional_metadata() {
+        let _env_guard = lock_test_env();
+        let (db, demo_root) = demo_db();
+        let library_root = demo_root.join("managed-library");
+        set_library_settings(&db, &library_root, "Avatars", "Accessories", "Worlds");
+
+        let relations = create_smoke_relations(&db);
+        let source_root = demo_root.join("import-sources");
+        let metadata_source = source_root.join("Metadata_Source");
+        let plain_source = source_root.join("Plain_Source");
+        fs::create_dir_all(&metadata_source).expect("create metadata source");
+        fs::create_dir_all(&plain_source).expect("create plain source");
+        fs::write(metadata_source.join("README.txt"), "metadata import")
+            .expect("write metadata source");
+        fs::write(plain_source.join("README.txt"), "plain import").expect("write plain source");
+
+        let report = commands::assets::managed_import_batch(
+            commands::assets::ManagedImportBatchInput {
+                items: vec![
+                    commands::assets::ManagedImportItemInput {
+                        source_path: metadata_source.to_string_lossy().to_string(),
+                        category: AssetCategory::Accessory,
+                        operation: commands::assets::ImportOperation::Copy,
+                        archive_strategy: None,
+                        conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
+                        display_name: Some("Imported Metadata Asset".to_string()),
+                        booth_url: Some("https://booth.pm/ja/items/12345".to_string()),
+                        thumbnail_url: Some("https://example.com/thumb.png".to_string()),
+                        note: Some("Imported through managed batch".to_string()),
+                        model_ids: vec![relations.model_id],
+                        tag_ids: vec![relations.tag_id],
+                        related_links: Vec::new(),
+                    },
+                    commands::assets::ManagedImportItemInput {
+                        source_path: plain_source.to_string_lossy().to_string(),
+                        category: AssetCategory::World,
+                        operation: commands::assets::ImportOperation::Copy,
+                        archive_strategy: None,
+                        conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
+                        display_name: Some("Imported Without Booth".to_string()),
+                        booth_url: None,
+                        thumbnail_url: None,
+                        note: None,
+                        model_ids: Vec::new(),
+                        tag_ids: Vec::new(),
+                        related_links: Vec::new(),
+                    },
+                ],
+            },
+            command_state(&db),
+        )
+        .expect("managed import batch");
+
+        assert_eq!(report.total, 2);
+        assert_eq!(report.succeeded, 2);
+        assert_eq!(report.failed, 0);
+
+        let imported_assets =
+            commands::assets::get_assets(AssetFilters::default(), command_state(&db))
+                .expect("load imported assets");
+        let metadata_asset = imported_assets
+            .iter()
+            .find(|asset| asset.display_name.as_deref() == Some("Imported Metadata Asset"))
+            .expect("metadata asset should be created");
+        assert_eq!(metadata_asset.category, AssetCategory::Accessory);
+        assert_eq!(
+            metadata_asset.booth_url.as_deref(),
+            Some("https://booth.pm/ja/items/12345")
+        );
+        assert_eq!(
+            metadata_asset.thumbnail_url.as_deref(),
+            Some("https://example.com/thumb.png")
+        );
+        assert_eq!(
+            metadata_asset.note.as_deref(),
+            Some("Imported through managed batch")
+        );
+        assert_asset_relations(metadata_asset, &[relations.model_id], &[relations.tag_id]);
+        assert!(metadata_asset
+            .file_path
+            .starts_with(&library_root.to_string_lossy().to_string()));
+
+        let plain_asset = imported_assets
+            .iter()
+            .find(|asset| asset.display_name.as_deref() == Some("Imported Without Booth"))
+            .expect("plain asset should be created");
+        assert_eq!(plain_asset.category, AssetCategory::World);
+        assert!(plain_asset.booth_url.is_none());
+        assert!(plain_asset.thumbnail_url.is_none());
+        assert!(plain_asset.note.is_none());
+    }
+
+    #[test]
+    fn managed_import_batch_handles_rename_conflict_and_unsupported_sources() {
+        let _env_guard = lock_test_env();
+        let (db, demo_root) = demo_db();
+        let library_root = demo_root.join("managed-library");
+        set_library_settings(&db, &library_root, "Avatars", "Accessories", "Worlds");
+
+        let source_root = demo_root.join("conflict-sources");
+        let first_source = source_root.join("first").join("Same_Name");
+        let second_source = source_root.join("second").join("Same_Name");
+        let unsupported_source = source_root.join("Unsupported.rar");
+        fs::create_dir_all(&first_source).expect("create first source");
+        fs::create_dir_all(&second_source).expect("create second source");
+        fs::write(first_source.join("README.txt"), "first").expect("write first source");
+        fs::write(second_source.join("README.txt"), "second").expect("write second source");
+        fs::write(&unsupported_source, "rar placeholder").expect("write unsupported source");
+
+        let report = commands::assets::managed_import_batch(
+            commands::assets::ManagedImportBatchInput {
+                items: vec![
+                    commands::assets::ManagedImportItemInput {
+                        source_path: first_source.to_string_lossy().to_string(),
+                        category: AssetCategory::Accessory,
+                        operation: commands::assets::ImportOperation::Copy,
+                        archive_strategy: None,
+                        conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
+                        display_name: Some("First Conflict Asset".to_string()),
+                        booth_url: None,
+                        thumbnail_url: None,
+                        note: None,
+                        model_ids: Vec::new(),
+                        tag_ids: Vec::new(),
+                        related_links: Vec::new(),
+                    },
+                    commands::assets::ManagedImportItemInput {
+                        source_path: second_source.to_string_lossy().to_string(),
+                        category: AssetCategory::Accessory,
+                        operation: commands::assets::ImportOperation::Copy,
+                        archive_strategy: None,
+                        conflict_strategy: Some(commands::assets::ConflictStrategy::Rename),
+                        display_name: Some("Renamed Conflict Asset".to_string()),
+                        booth_url: None,
+                        thumbnail_url: None,
+                        note: None,
+                        model_ids: Vec::new(),
+                        tag_ids: Vec::new(),
+                        related_links: Vec::new(),
+                    },
+                    commands::assets::ManagedImportItemInput {
+                        source_path: unsupported_source.to_string_lossy().to_string(),
+                        category: AssetCategory::Accessory,
+                        operation: commands::assets::ImportOperation::Copy,
+                        archive_strategy: None,
+                        conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
+                        display_name: Some("Unsupported Asset".to_string()),
+                        booth_url: None,
+                        thumbnail_url: None,
+                        note: None,
+                        model_ids: Vec::new(),
+                        tag_ids: Vec::new(),
+                        related_links: Vec::new(),
+                    },
+                ],
+            },
+            command_state(&db),
+        )
+        .expect("managed import batch with conflicts");
+
+        assert_eq!(report.total, 3);
+        assert_eq!(report.succeeded, 2);
+        assert_eq!(report.failed, 1);
+        assert!(report.results[0].success);
+        assert!(report.results[1].success);
+        assert!(!report.results[2].success);
+        assert!(report.results[2].final_path.is_none());
+        assert!(report.results[2].message.contains("第一版只支援"));
+
+        let first_path = PathBuf::from(report.results[0].final_path.as_deref().unwrap());
+        let renamed_path = PathBuf::from(report.results[1].final_path.as_deref().unwrap());
+        assert!(first_path.exists());
+        assert!(renamed_path.exists());
+        assert_ne!(first_path, renamed_path);
+        assert_eq!(
+            first_path.file_name().and_then(|name| name.to_str()),
+            Some("Same_Name")
+        );
+        assert_eq!(
+            renamed_path.file_name().and_then(|name| name.to_str()),
+            Some("Same_Name (1)")
+        );
+
+        let imported_assets =
+            commands::assets::get_assets(AssetFilters::default(), command_state(&db))
+                .expect("load imported assets");
+        assert!(imported_assets
+            .iter()
+            .any(|asset| asset.display_name.as_deref() == Some("First Conflict Asset")));
+        assert!(imported_assets
+            .iter()
+            .any(|asset| asset.display_name.as_deref() == Some("Renamed Conflict Asset")));
+        assert!(!imported_assets
+            .iter()
+            .any(|asset| asset.display_name.as_deref() == Some("Unsupported Asset")));
     }
 
     fn assert_vcc_snapshot(db: &db::DbState) {
@@ -570,9 +846,24 @@ mod tests {
         update_smoke_asset(&db, asset_id, &asset_config);
         assert_filtered_smoke_asset(&db, asset_id, relations);
 
+        set_library_settings(
+            &db,
+            &demo_root.join("exported-library"),
+            "Exported Avatars",
+            "Exported Accessories",
+            "Exported Worlds",
+        );
         let export_path = export_smoke_save(&db, &demo_root);
+        set_library_settings(
+            &db,
+            &demo_root.join("current-library"),
+            "Current Avatars",
+            "Current Accessories",
+            "Current Worlds",
+        );
         delete_smoke_asset(&db, asset_id);
         import_smoke_save(&db, &export_path, relations);
+        assert_current_library_settings(&db, &demo_root.join("current-library"));
         assert_vcc_snapshot(&db);
     }
 }
