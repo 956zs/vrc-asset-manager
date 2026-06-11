@@ -29,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { boothTagOriginText } from "@/lib/booth-product-info";
 import { useAssetStore } from "@/stores/asset-store";
 import type {
   ArchiveStrategy,
@@ -462,19 +463,33 @@ function SuggestedBoothTags({ form }: { form: AddAssetForm }) {
         BOOTH 建議標籤
       </p>
       <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
-        {form.suggestedTags.map((tagName) => (
-          <Button
-            key={tagName}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 min-w-0 !max-w-full !shrink gap-1 px-2 text-xs"
-            onClick={() => void form.addSuggestedTag(tagName)}
-          >
-            <Plus className="h-3 w-3 shrink-0" />
-            <span className="min-w-0 truncate">{tagName}</span>
-          </Button>
-        ))}
+        {form.suggestedTags.map((tagName) => {
+          const originText = boothTagOriginText(
+            form.suggestedTagOrigins,
+            tagName,
+          );
+          return (
+            <Button
+              key={tagName}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-auto min-h-7 min-w-0 !max-w-full !shrink gap-1 px-2 py-1 text-left text-xs"
+              onClick={() => void form.addSuggestedTag(tagName)}
+              title={originText ?? undefined}
+            >
+              <Plus className="h-3 w-3 shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate">{tagName}</span>
+                {originText && (
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {originText}
+                  </span>
+                )}
+              </span>
+            </Button>
+          );
+        })}
       </div>
     </div>
   );

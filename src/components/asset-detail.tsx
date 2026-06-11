@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { boothTagOriginText } from "@/lib/booth-product-info";
 import { selectSelectedAsset, useAssetStore } from "@/stores/asset-store";
 import type { Asset, Model, Tag as AssetTag } from "@/types";
 
@@ -220,19 +221,33 @@ function SuggestedBoothTags({ draft }: { draft: AssetDetailDraft }) {
     <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
       <p className="text-xs font-medium text-muted-foreground">BOOTH 建議標籤</p>
       <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
-        {draft.suggestedTags.map((tagName) => (
-          <Button
-            key={tagName}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 min-w-0 !max-w-full !shrink gap-1 px-2 text-xs"
-            onClick={() => void draft.addSuggestedTag(tagName)}
-          >
-            <Plus className="h-3 w-3 shrink-0" />
-            <span className="min-w-0 truncate">{tagName}</span>
-          </Button>
-        ))}
+        {draft.suggestedTags.map((tagName) => {
+          const originText = boothTagOriginText(
+            draft.suggestedTagOrigins,
+            tagName,
+          );
+          return (
+            <Button
+              key={tagName}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-auto min-h-7 min-w-0 !max-w-full !shrink gap-1 px-2 py-1 text-left text-xs"
+              onClick={() => void draft.addSuggestedTag(tagName)}
+              title={originText ?? undefined}
+            >
+              <Plus className="h-3 w-3 shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate">{tagName}</span>
+                {originText && (
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {originText}
+                  </span>
+                )}
+              </span>
+            </Button>
+          );
+        })}
       </div>
     </div>
   );

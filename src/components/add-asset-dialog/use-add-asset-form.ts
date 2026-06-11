@@ -13,7 +13,9 @@ import {
 import {
   applyBoothProductInfo,
   fetchBoothProductInfo,
+  mergeBoothTagOrigins,
   mergeIds,
+  type SuggestedBoothTagOrigins,
   type SuggestedBoothModel,
 } from "@/lib/booth-product-info";
 import { toggleId } from "@/lib/id-list";
@@ -106,6 +108,7 @@ type AddAssetFormResultOptions = {
   selectionActions: ReturnType<typeof createSelectionActions>;
   suggestedModels: SuggestedBoothModel[];
   suggestedTags: string[];
+  suggestedTagOrigins: SuggestedBoothTagOrigins;
   submit: () => Promise<ManagedImportBatchReport | undefined>;
 };
 
@@ -119,6 +122,7 @@ type SubmitActionOptions = {
 type ProductInfoFetcherOptions = {
   addSuggestedModels: (models: SuggestedBoothModel[]) => void;
   addSuggestedTags: (tags: string[]) => void;
+  addSuggestedTagOrigins: (origins: SuggestedBoothTagOrigins) => void;
   boothUrl: string;
   currentTags: Tag[];
   currentModels: Model[];
@@ -284,6 +288,7 @@ async function browseAssetPath(
 function createProductInfoFetcher({
   addSuggestedModels,
   addSuggestedTags,
+  addSuggestedTagOrigins,
   boothUrl,
   currentModels,
   currentTags,
@@ -318,6 +323,7 @@ function createProductInfoFetcher({
       setSelectedTagIds((current) => mergeIds(current, applied.matchedTagIds));
       addSuggestedModels(applied.suggestedModels);
       addSuggestedTags(applied.suggestedTags);
+      addSuggestedTagOrigins(applied.suggestedTagOrigins);
     } catch (error) {
       console.warn("Failed to fetch BOOTH product info", error);
     } finally {
@@ -386,6 +392,7 @@ function createAddAssetFormResult({
   selectionActions,
   suggestedModels,
   suggestedTags,
+  suggestedTagOrigins,
   submit,
 }: AddAssetFormResultOptions) {
   return {
@@ -429,6 +436,7 @@ function createAddAssetFormResult({
     loadZipContents,
     suggestedModels,
     suggestedTags,
+    suggestedTagOrigins,
     submit,
     ...selectionActions,
     ...relatedLinkActions,
@@ -450,12 +458,15 @@ export function useAddAssetForm({
   const [zipContents, setZipContents] = useState<ZipContentList | null>(null);
   const [suggestedModels, setSuggestedModels] = useState<SuggestedBoothModel[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [suggestedTagOrigins, setSuggestedTagOrigins] =
+    useState<SuggestedBoothTagOrigins>({});
   const draft = useAddAssetFormState();
   const derived = useAddAssetDerivedState(draft);
   const reset = () => {
     draft.setDraftValues(emptyAddAssetFormValues);
     setSuggestedModels([]);
     setSuggestedTags([]);
+    setSuggestedTagOrigins({});
     setTargetPreview(null);
     setZipContents(null);
   };
@@ -536,13 +547,27 @@ export function useAddAssetForm({
       }
       return merged;
     });
-  const removeSuggestedTag = (tagName: string) =>
-    setSuggestedTags((current) =>
-      current.filter((tag) => tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase()),
+  const addSuggestedTagOrigins = (nextOrigins: SuggestedBoothTagOrigins) =>
+    setSuggestedTagOrigins((current) =>
+      mergeBoothTagOrigins(current, nextOrigins),
     );
+  const removeSuggestedTag = (tagName: string) =>
+    {
+      setSuggestedTags((current) =>
+        current.filter(
+          (tag) => tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase(),
+        ),
+      );
+      setSuggestedTagOrigins((current) => {
+        const next = { ...current };
+        delete next[tagName];
+        return next;
+      });
+    };
   const fetchProductInfo = createProductInfoFetcher({
     addSuggestedModels,
     addSuggestedTags,
+    addSuggestedTagOrigins,
     boothUrl: draft.boothUrl,
     currentModels: models,
     currentTags: tags,
@@ -590,6 +615,7 @@ export function useAddAssetForm({
     selectionActions,
     suggestedModels,
     suggestedTags,
+    suggestedTagOrigins,
     submit,
   });
 }

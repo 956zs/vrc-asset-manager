@@ -41,8 +41,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyBoothProductInfo,
+  boothTagOriginText,
   fetchBoothProductInfo,
+  mergeBoothTagOrigins,
   mergeIds,
+  type SuggestedBoothTagOrigins,
   type SuggestedBoothModel,
 } from "@/lib/booth-product-info";
 import { toggleId } from "@/lib/id-list";
@@ -79,6 +82,7 @@ type BatchImportDraft = {
   tagIds: number[];
   suggestedModels: SuggestedBoothModel[];
   suggestedTags: string[];
+  suggestedTagOrigins: SuggestedBoothTagOrigins;
   boothFetchStatus: "idle" | "loading" | "success" | "error";
   confirmed: boolean;
 };
@@ -213,6 +217,7 @@ function createDrafts(paths: string[], startIndex = 0): BatchImportDraft[] {
     tagIds: [],
     suggestedModels: [],
     suggestedTags: [],
+    suggestedTagOrigins: {},
     boothFetchStatus: "idle",
     confirmed: false,
   }));
@@ -954,19 +959,33 @@ function SuggestedMetadataActions({
             BOOTH 建議標籤
           </p>
           <div className="flex min-w-0 flex-wrap gap-2">
-            {draft.suggestedTags.map((tagName) => (
-              <Button
-                key={tagName}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 min-w-0 !max-w-full !shrink px-2 text-xs"
-                onClick={() => onAddTag(tagName)}
-              >
-                <Plus className="h-3 w-3 shrink-0" />
-                <span className="min-w-0 truncate">{tagName}</span>
-              </Button>
-            ))}
+            {draft.suggestedTags.map((tagName) => {
+              const originText = boothTagOriginText(
+                draft.suggestedTagOrigins,
+                tagName,
+              );
+              return (
+                <Button
+                  key={tagName}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-auto min-h-7 min-w-0 !max-w-full !shrink px-2 py-1 text-left text-xs"
+                  onClick={() => onAddTag(tagName)}
+                  title={originText ?? undefined}
+                >
+                  <Plus className="h-3 w-3 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block truncate">{tagName}</span>
+                    {originText && (
+                      <span className="block truncate text-[10px] text-muted-foreground">
+                        {originText}
+                      </span>
+                    )}
+                  </span>
+                </Button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1455,6 +1474,10 @@ export function BatchImportDialog({
               item.suggestedTags,
               applied.suggestedTags,
             ),
+            suggestedTagOrigins: mergeBoothTagOrigins(
+              item.suggestedTagOrigins,
+              applied.suggestedTagOrigins,
+            ),
             boothFetchStatus: "success",
           };
         }),
@@ -1509,6 +1532,12 @@ export function BatchImportDialog({
               suggestedTags: item.suggestedTags.filter(
                 (tag) =>
                   tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase(),
+              ),
+              suggestedTagOrigins: Object.fromEntries(
+                Object.entries(item.suggestedTagOrigins).filter(
+                  ([tag]) =>
+                    tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase(),
+                ),
               ),
             }
           : item,

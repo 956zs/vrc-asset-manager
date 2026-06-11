@@ -13,7 +13,9 @@ import {
 import {
   applyBoothProductInfo,
   fetchBoothProductInfo,
+  mergeBoothTagOrigins,
   mergeIds,
+  type SuggestedBoothTagOrigins,
   type SuggestedBoothModel,
 } from "@/lib/booth-product-info";
 import { sameIds, toggleId } from "@/lib/id-list";
@@ -134,11 +136,13 @@ type AssetDraftResultOptions = {
   saveDraft: () => Promise<void>;
   suggestedModels: SuggestedBoothModel[];
   suggestedTags: string[];
+  suggestedTagOrigins: SuggestedBoothTagOrigins;
 };
 
 type ProductInfoFetcherOptions = {
   addSuggestedModels: (models: SuggestedBoothModel[]) => void;
   addSuggestedTags: (tags: string[]) => void;
+  addSuggestedTagOrigins: (origins: SuggestedBoothTagOrigins) => void;
   boothUrl: string;
   currentModels: Model[];
   currentTags: Tag[];
@@ -445,6 +449,7 @@ function createRelatedLinkActions(
 function createProductInfoFetcher({
   addSuggestedModels,
   addSuggestedTags,
+  addSuggestedTagOrigins,
   boothUrl,
   currentModels,
   currentTags,
@@ -479,6 +484,7 @@ function createProductInfoFetcher({
       setTagIds((current) => mergeIds(current, applied.matchedTagIds));
       addSuggestedModels(applied.suggestedModels);
       addSuggestedTags(applied.suggestedTags);
+      addSuggestedTagOrigins(applied.suggestedTagOrigins);
     } catch (error) {
       console.warn("Failed to fetch BOOTH product info", error);
     } finally {
@@ -611,6 +617,7 @@ function createAssetDetailDraftResult({
   saveDraft,
   suggestedModels,
   suggestedTags,
+  suggestedTagOrigins,
 }: AssetDraftResultOptions) {
   return {
     isEditingAsset,
@@ -639,6 +646,7 @@ function createAssetDetailDraftResult({
     fetchProductInfo,
     suggestedModels,
     suggestedTags,
+    suggestedTagOrigins,
     ...editingActions,
     ...relatedLinkActions,
   };
@@ -660,12 +668,15 @@ export function useAssetDetailDraft({
   const [isFetchingProductInfo, setIsFetchingProductInfo] = useState(false);
   const [suggestedModels, setSuggestedModels] = useState<SuggestedBoothModel[]>([]);
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [suggestedTagOrigins, setSuggestedTagOrigins] =
+    useState<SuggestedBoothTagOrigins>({});
   const draft = useAssetDraftState();
   const derived = useAssetDraftDerivedState(asset, draft);
 
   useEffect(() => {
     setSuggestedModels([]);
     setSuggestedTags([]);
+    setSuggestedTagOrigins({});
   }, [asset?.id]);
 
   const { resetDraft, saveDraft } = useAssetDraftLifecycle({
@@ -725,13 +736,27 @@ export function useAssetDetailDraft({
       }
       return merged;
     });
-  const removeSuggestedTag = (tagName: string) =>
-    setSuggestedTags((current) =>
-      current.filter((tag) => tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase()),
+  const addSuggestedTagOrigins = (nextOrigins: SuggestedBoothTagOrigins) =>
+    setSuggestedTagOrigins((current) =>
+      mergeBoothTagOrigins(current, nextOrigins),
     );
+  const removeSuggestedTag = (tagName: string) =>
+    {
+      setSuggestedTags((current) =>
+        current.filter(
+          (tag) => tag.toLocaleLowerCase() !== tagName.toLocaleLowerCase(),
+        ),
+      );
+      setSuggestedTagOrigins((current) => {
+        const next = { ...current };
+        delete next[tagName];
+        return next;
+      });
+    };
   const fetchProductInfo = createProductInfoFetcher({
     addSuggestedModels,
     addSuggestedTags,
+    addSuggestedTagOrigins,
     boothUrl: draft.boothUrl,
     currentModels: models,
     currentTags: tags,
@@ -767,5 +792,6 @@ export function useAssetDetailDraft({
     relatedLinkActions,
     suggestedModels,
     suggestedTags,
+    suggestedTagOrigins,
   });
 }

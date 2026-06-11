@@ -206,7 +206,7 @@ fn product_description(document: &Html, products: &[Value]) -> CommandResult<Opt
 
 fn product_body_description(document: &Html) -> CommandResult<Option<String>> {
     let selector =
-        selector(".js-market-item-detail-description, .main-info-column section.shop__text")?;
+        selector(".js-market-item-detail-description, article section.shop__text")?;
     let chunks = document
         .select(&selector)
         .filter_map(|element| clean_text(&element.text().collect::<Vec<_>>().join(" ")))
@@ -381,7 +381,7 @@ fn parse_product_info(html: &str) -> CommandResult<BoothProductInfo> {
     let base_search_text = product_search_text(
         title.as_deref(),
         description.as_deref(),
-        brand.as_deref(),
+        None,
         &[],
         &variation_names,
     );
@@ -558,5 +558,94 @@ mod tests {
         assert!(info.tags.contains(&"衣装".to_string()));
         assert!(info.search_text.contains("Lasyusha"));
         assert!(info.search_text.contains("しなの - Shinano"));
+    }
+
+    #[test]
+    fn keeps_supported_avatar_names_from_booth_body_and_variations() {
+        let html = r#"
+          <html>
+            <head>
+              <meta property="og:title" content="Midnight Reverie - BOOTH" />
+              <meta property="og:description" content="Midnight Reverie costume for VRChat avatars." />
+            </head>
+            <body>
+              <div class="js-market-item-detail-description description">
+                <p>-</p>
+              </div>
+              <article>
+                <section class="shop__text">
+                  <h2>Supported Avatars (対応アバター)</h2>
+                  <p>
+                    「ミルティナ」 - Milltina
+                    「愛莉」- Airi
+                    「しなの」- Shinano
+                    「マヌカ」- Manuka
+                    「 森羅」 - Shinra
+                    「セレスティア」- Selestia
+                    「海咲」 - Misaki
+                    「萌」- Moe
+                    「ショコラ」 - Chocolat
+                    「シフォン」- Chiffon
+                    「Sio」- しお
+                    「まよ」- Mayo
+                    「イチゴ」- Ichigo
+                    「ルミナ」- LUMINA
+                    「ひきくまりのクマリ」- Kumaly
+                  </p>
+                </section>
+              </article>
+              <div class="variation-name">クマリ - Kumaly</div>
+              <div class="variation-name">イチゴ - Ichigo</div>
+              <div class="variation-name">海咲 - Misaki</div>
+            </body>
+          </html>
+        "#;
+
+        let info = parse_product_info(html).expect("parse product info");
+        let expected_models = [
+            "Milltina", "Airi", "Shinano", "Manuka", "Shinra", "Selestia", "Misaki",
+            "Moe", "Chocolat", "Chiffon", "Sio", "Mayo", "Ichigo", "LUMINA",
+            "Kumaly",
+        ];
+
+        for model in expected_models {
+            assert!(
+                info.search_text.contains(model),
+                "missing supported avatar in search text: {model}"
+            );
+        }
+
+        assert!(info.search_text.contains("クマリ - Kumaly"));
+        assert!(info.search_text.contains("イチゴ - Ichigo"));
+        assert!(info.search_text.contains("海咲 - Misaki"));
+    }
+
+    #[test]
+    fn does_not_infer_tags_from_shop_or_seller_names() {
+        let html = r#"
+          <html>
+            <head>
+              <meta property="og:title" content="Simple Ribbon - BOOTH" />
+              <meta property="og:description" content="A simple decorative item." />
+              <script type="application/ld+json">
+                {
+                  "@context": "https://schema.org",
+                  "@type": "Product",
+                  "name": "Simple Ribbon",
+                  "description": "A simple decorative item.",
+                  "brand": { "@type": "Brand", "name": "Hair Accessory World Shop" }
+                }
+              </script>
+            </head>
+            <body>
+              <div class="shop-name">Hair Accessory World Shop</div>
+            </body>
+          </html>
+        "#;
+
+        let info = parse_product_info(html).expect("parse product info");
+
+        assert!(info.tags.is_empty());
+        assert!(info.search_text.contains("Hair Accessory World Shop"));
     }
 }

@@ -7,11 +7,14 @@ export type SuggestedBoothModel = {
   name: string;
 };
 
+export type SuggestedBoothTagOrigins = Record<string, string[]>;
+
 export type AppliedBoothProductInfo = {
   matchedModelIds: number[];
   matchedTagIds: number[];
   suggestedModels: SuggestedBoothModel[];
   suggestedTags: string[];
+  suggestedTagOrigins: SuggestedBoothTagOrigins;
 };
 
 type ModelAliasGroup = SuggestedBoothModel & {
@@ -21,38 +24,90 @@ type ModelAliasGroup = SuggestedBoothModel & {
 const defaultSuggestedTagLimit = 12;
 const defaultSuggestedModelLimit = 32;
 const modelAliasGroups: readonly ModelAliasGroup[] = [
-  { name: "Kikyo", displayName: "桔梗", label: "桔梗 / Kikyo", aliases: ["桔梗", "Kikyo"] },
+  {
+    name: "Kikyo",
+    displayName: "桔梗",
+    label: "桔梗 / Kikyo",
+    aliases: ["桔梗", "Kikyo"],
+  },
   {
     name: "Shinano",
     displayName: "しなの",
     label: "しなの / Shinano",
     aliases: ["しなの", "信濃", "シナノ", "Shinano"],
   },
-  { name: "Manuka", displayName: "マヌカ", label: "マヌカ / Manuka", aliases: ["マヌカ", "Manuka"] },
-  { name: "Shinra", displayName: "森羅", label: "森羅 / Shinra", aliases: ["森羅", "Shinra"] },
-  { name: "Sio", displayName: "しお", label: "しお / Sio", aliases: ["しお", "Sio"] },
+  {
+    name: "Manuka",
+    displayName: "マヌカ",
+    label: "マヌカ / Manuka",
+    aliases: ["マヌカ", "Manuka"],
+  },
+  {
+    name: "Shinra",
+    displayName: "森羅",
+    label: "森羅 / Shinra",
+    aliases: ["森羅", "Shinra"],
+  },
+  {
+    name: "Sio",
+    displayName: "しお",
+    label: "しお / Sio",
+    aliases: ["しお", "Sio"],
+  },
   { name: "Moe", displayName: "萌", label: "萌 / Moe", aliases: ["萌", "Moe"] },
-  { name: "Airi", displayName: "愛莉", label: "愛莉 / Airi", aliases: ["愛莉", "Airi"] },
+  {
+    name: "Airi",
+    displayName: "愛莉",
+    label: "愛莉 / Airi",
+    aliases: ["愛莉", "Airi"],
+  },
+  {
+    name: "Kumaly",
+    displayName: "クマリ",
+    label: "クマリ / Kumaly",
+    aliases: ["クマリ", "ひきくまりのクマリ", "ひきこまりのクマリ", "Kumaly"],
+  },
   {
     name: "Milltina",
     displayName: "ミルティナ",
     label: "ミルティナ / Milltina",
     aliases: ["ミルティナ", "Milltina"],
   },
-  { name: "Mizuki", displayName: "瑞希", label: "瑞希 / Mizuki", aliases: ["瑞希", "Mizuki"] },
+  {
+    name: "Kipfel",
+    displayName: "キプフェル",
+    label: "キプフェル / Kipfel",
+    aliases: ["キプフェル", "Kipfel"],
+  },
+  {
+    name: "Mizuki",
+    displayName: "瑞希",
+    label: "瑞希 / Mizuki",
+    aliases: ["瑞希", "Mizuki"],
+  },
   {
     name: "Selestia",
     displayName: "セレスティア",
     label: "セレスティア / Selestia",
     aliases: ["セレスティア", "Selestia"],
   },
-  { name: "Lime", displayName: "ライム", label: "ライム / Lime", aliases: ["ライム", "Lime"] },
-  { name: "Plum", displayName: "プラム", label: "プラム / Plum", aliases: ["プラム", "Plum"] },
+  {
+    name: "Lime",
+    displayName: "ライム",
+    label: "ライム / Lime",
+    aliases: ["ライム", "Lime"],
+  },
+  {
+    name: "Plum",
+    displayName: "プラム",
+    label: "プラム / Plum",
+    aliases: ["プラム", "Plum"],
+  },
   {
     name: "Chocolat",
-    displayName: "チョコラ",
-    label: "チョコラ / Chocolat",
-    aliases: ["チョコラ", "Chocolat"],
+    displayName: "ショコラ",
+    label: "ショコラ / Chocolat",
+    aliases: ["ショコラ", "チョコラ", "Chocolat"],
   },
   {
     name: "Chiffon",
@@ -67,33 +122,82 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["ルルネ", "ルルン", "Rurune"],
   },
   {
+    name: "Mamehinata",
+    displayName: "まめひなた",
+    label: "まめひなた / Mamehinata",
+    aliases: ["まめひなた", "Mamehinata"],
+  },
+  {
     name: "Lasyusha",
     displayName: "ラシューシャ",
     label: "ラシューシャ / Lasyusha",
     aliases: ["ラシューシャ", "Lasyusha"],
   },
-  { name: "Maya", displayName: "舞夜", label: "舞夜 / Maya", aliases: ["舞夜", "Maya"] },
-  { name: "Mayo", displayName: "マヨ", label: "マヨ / Mayo", aliases: ["マヨ", "Mayo"] },
+  {
+    name: "Marycia",
+    displayName: "マリシア",
+    label: "マリシア / Marycia",
+    aliases: ["マリシア", "Marycia"],
+  },
+  {
+    name: "Maya",
+    displayName: "舞夜",
+    label: "舞夜 / Maya",
+    aliases: ["舞夜", "Maya"],
+  },
+  {
+    name: "Mayo",
+    displayName: "マヨ",
+    label: "マヨ / Mayo",
+    aliases: ["マヨ", "Mayo"],
+  },
+  {
+    name: "Ichigo",
+    displayName: "イチゴ",
+    label: "イチゴ / Ichigo",
+    aliases: ["イチゴ", "Ichigo"],
+  },
+  {
+    name: "Misaki",
+    displayName: "海咲",
+    label: "海咲 / Misaki",
+    aliases: ["海咲", "Misaki"],
+  },
   {
     name: "Milfy",
     displayName: "ミルフィ",
     label: "ミルフィ / Milfy",
     aliases: ["ミルフィ", "ミルフィー", "Milfy"],
   },
-  { name: "Lumina", displayName: "ルミナ", label: "ルミナ / Lumina", aliases: ["ルミナ", "Lumina"] },
+  {
+    name: "Lumina",
+    displayName: "ルミナ",
+    label: "ルミナ / Lumina",
+    aliases: ["ルミナ", "Lumina"],
+  },
   {
     name: "Lapwing",
     displayName: "ラップウィング",
     label: "ラップウィング / Lapwing",
     aliases: ["ラップウィング", "Lapwing"],
   },
-  { name: "Mao", displayName: "マオ", label: "マオ / Mao", aliases: ["マオ", "Mao"] },
-  { name: "Eku", displayName: "エク", label: "エク / Eku", aliases: ["エク", "Eku"] },
+  {
+    name: "Mao",
+    displayName: "真央",
+    label: "真央 / Mao",
+    aliases: ["真央", "マオ", "Mao"],
+  },
+  {
+    name: "Eku",
+    displayName: "エク",
+    label: "エク / Eku",
+    aliases: ["エク", "Eku"],
+  },
   {
     name: "Shizuku",
     displayName: "しずく",
     label: "しずく / Shizuku",
-    aliases: ["しずく", "シズク", "Shizuku"],
+    aliases: ["しずく", "シズク", "びしょぬれのしずくさん", "Shizuku"],
   },
   {
     name: "Hikarun",
@@ -102,10 +206,13 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["ひかるん", "ヒカルン", "Hikarun"],
   },
 ];
-const modelAliasPairs: readonly [string, string][] = modelAliasGroups.flatMap((group) =>
-  group.aliases.flatMap((left, index) =>
-    group.aliases.slice(index + 1).map((right) => [left, right] as [string, string]),
-  ),
+const modelAliasPairs: readonly [string, string][] = modelAliasGroups.flatMap(
+  (group) =>
+    group.aliases.flatMap((left, index) =>
+      group.aliases
+        .slice(index + 1)
+        .map((right) => [left, right] as [string, string]),
+    ),
 );
 
 const modelAliasBoundary = String.raw`[\s_\-()[\]{}.,，。/\\:;「」『』【】<>《》〈〉"'|・･~〜!！?？+*#＃@＠&＆=＝、◉●○■□◆◇♡❤♥★☆※▸▹▶►•·]`;
@@ -183,6 +290,42 @@ const boothTagMappingByAlias = new Map(
 
 const localBoothTagName = (tagName: string) =>
   boothTagMappingByAlias.get(normalizeLookupText(tagName)) ?? tagName.trim();
+
+export const boothTagOriginText = (
+  origins: SuggestedBoothTagOrigins,
+  tagName: string,
+) => {
+  const values = origins[tagName] ?? [];
+  return values.length > 0 ? `原文：${values.join(" / ")}` : null;
+};
+
+export const mergeBoothTagOrigins = (
+  current: SuggestedBoothTagOrigins,
+  next: SuggestedBoothTagOrigins,
+) => {
+  const merged: SuggestedBoothTagOrigins = { ...current };
+
+  for (const [tagName, originals] of Object.entries(next)) {
+    const existing = new Set(
+      (merged[tagName] ?? []).map((origin) => normalizeLookupText(origin)),
+    );
+    const nextOriginals = [...(merged[tagName] ?? [])];
+
+    for (const original of originals) {
+      const key = normalizeLookupText(original);
+      if (key && !existing.has(key)) {
+        existing.add(key);
+        nextOriginals.push(original);
+      }
+    }
+
+    if (nextOriginals.length > 0) {
+      merged[tagName] = nextOriginals;
+    }
+  }
+
+  return merged;
+};
 
 const splitModelAliasText = (value: string) =>
   value
@@ -291,13 +434,16 @@ export const applyBoothProductInfo = (
   const matchedModelIds: number[] = [];
   const matchedTagIds: number[] = [];
   const suggestedTags: string[] = [];
+  const suggestedTagOrigins: SuggestedBoothTagOrigins = {};
   const suggestedTagKeys = new Set<string>();
   const existingTagByName = new Map(
     tags.map((tag) => [normalizeLookupText(tag.name), tag]),
   );
 
   for (const model of models) {
-    if (modelAliases(model).some((alias) => matchesModelAlias(searchText, alias))) {
+    if (
+      modelAliases(model).some((alias) => matchesModelAlias(searchText, alias))
+    ) {
       matchedModelIds.push(model.id);
     }
   }
@@ -305,17 +451,29 @@ export const applyBoothProductInfo = (
 
   for (const tagName of compactUnique(info.tags)) {
     const localTagName = localBoothTagName(tagName);
+    const localTagKey = normalizeLookupText(localTagName);
+    const originalTagKey = normalizeLookupText(tagName);
     const existingTag =
-      existingTagByName.get(normalizeLookupText(localTagName)) ??
-      existingTagByName.get(normalizeLookupText(tagName));
+      existingTagByName.get(localTagKey) ??
+      existingTagByName.get(originalTagKey);
     if (existingTag) {
       matchedTagIds.push(existingTag.id);
-    } else if (
+      continue;
+    }
+
+    if (
       suggestedTags.length < suggestedTagLimit &&
-      !suggestedTagKeys.has(normalizeLookupText(localTagName))
+      !suggestedTagKeys.has(localTagKey)
     ) {
       suggestedTags.push(localTagName);
-      suggestedTagKeys.add(normalizeLookupText(localTagName));
+      suggestedTagKeys.add(localTagKey);
+    }
+
+    if (suggestedTagKeys.has(localTagKey) && localTagKey !== originalTagKey) {
+      suggestedTagOrigins[localTagName] = [
+        ...(suggestedTagOrigins[localTagName] ?? []),
+        tagName,
+      ];
     }
   }
 
@@ -324,6 +482,7 @@ export const applyBoothProductInfo = (
     matchedTagIds,
     suggestedModels,
     suggestedTags,
+    suggestedTagOrigins,
   };
 };
 
