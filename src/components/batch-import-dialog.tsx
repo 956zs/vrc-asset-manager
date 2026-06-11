@@ -1231,10 +1231,11 @@ export function BatchImportDialog({
     confirmableDrafts.length > 0 &&
     unsupportedCount === 0 &&
     confirmableDrafts.every((draft) => draft.confirmed);
-  const hasOverwrite = drafts.some(
+  const overwriteDrafts = drafts.filter(
     (draft) =>
       previews[draft.id]?.conflict && draft.conflictStrategy === "overwrite",
   );
+  const hasOverwrite = overwriteDrafts.length > 0;
   const footerMessage = !hasLibraryRoot
     ? "請先設定素材庫根目錄"
     : drafts.length === 0
@@ -1359,6 +1360,19 @@ export function BatchImportDialog({
     );
   };
   const submit = async () => {
+    if (hasOverwrite) {
+      const names = overwriteDrafts
+        .slice(0, 5)
+        .map((draft) => `- ${draft.sourceInfo?.name ?? sourceName(draft.sourcePath)}`)
+        .join("\n");
+      const extraCount =
+        overwriteDrafts.length > 5 ? `\n...另有 ${overwriteDrafts.length - 5} 筆` : "";
+      const confirmed = window.confirm(
+        `有 ${overwriteDrafts.length} 筆素材會覆蓋素材庫內同名項目。\n\n${names}${extraCount}\n\n確定要繼續導入嗎？`,
+      );
+      if (!confirmed) return;
+    }
+
     await managedImportBatch(drafts.map(draftToInput));
   };
   const close = () => {
