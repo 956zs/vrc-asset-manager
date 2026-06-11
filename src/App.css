@@ -41,21 +41,21 @@
 
 .dark {
   --background: oklch(0.12 0.015 250);
-  --foreground: oklch(0.95 0.005 240);
+  --foreground: oklch(0.89 0.006 240);
   --card: oklch(0.16 0.015 250);
-  --card-foreground: oklch(0.95 0.005 240);
+  --card-foreground: oklch(0.89 0.006 240);
   --popover: oklch(0.16 0.015 250);
-  --popover-foreground: oklch(0.95 0.005 240);
+  --popover-foreground: oklch(0.89 0.006 240);
   --primary: oklch(0.65 0.2 250);
   --primary-foreground: oklch(0.12 0.015 250);
   --secondary: oklch(0.22 0.015 250);
-  --secondary-foreground: oklch(0.95 0.005 240);
+  --secondary-foreground: oklch(0.86 0.006 240);
   --muted: oklch(0.22 0.015 250);
-  --muted-foreground: oklch(0.65 0.01 240);
+  --muted-foreground: oklch(0.67 0.008 240);
   --accent: oklch(0.25 0.03 250);
-  --accent-foreground: oklch(0.95 0.005 240);
+  --accent-foreground: oklch(0.88 0.006 240);
   --destructive: oklch(0.45 0.2 25);
-  --destructive-foreground: oklch(0.95 0 0);
+  --destructive-foreground: oklch(0.9 0.006 240);
   --border: oklch(0.25 0.015 250);
   --input: oklch(0.25 0.015 250);
   --ring: oklch(0.65 0.2 250);
@@ -65,11 +65,11 @@
   --chart-4: oklch(0.6 0.2 320);
   --chart-5: oklch(0.65 0.18 140);
   --sidebar: oklch(0.14 0.015 250);
-  --sidebar-foreground: oklch(0.95 0.005 240);
+  --sidebar-foreground: oklch(0.89 0.006 240);
   --sidebar-primary: oklch(0.65 0.2 250);
   --sidebar-primary-foreground: oklch(0.12 0.015 250);
   --sidebar-accent: oklch(0.2 0.02 250);
-  --sidebar-accent-foreground: oklch(0.95 0.005 240);
+  --sidebar-accent-foreground: oklch(0.88 0.006 240);
   --sidebar-border: oklch(0.25 0.015 250);
   --sidebar-ring: oklch(0.65 0.2 250);
 }
@@ -258,6 +258,11 @@ button:disabled {
   border-color: var(--border);
   color: var(--foreground);
   outline: none;
+}
+
+[data-slot="badge"] {
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
 }
 
 ::-webkit-scrollbar {

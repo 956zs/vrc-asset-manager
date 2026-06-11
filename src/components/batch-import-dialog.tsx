@@ -341,12 +341,16 @@ function StatusBadge({
   preview?: ImportTargetPreview;
 }) {
   if (draft.sourceInfo && !draft.sourceInfo.supported) {
-    return <Badge variant="destructive">無法導入</Badge>;
+    return (
+      <Badge className="h-5 px-1.5 text-[11px] leading-none" variant="destructive">
+        無法導入
+      </Badge>
+    );
   }
   if (preview?.conflict) {
     return (
       <Badge
-        className="border-amber-500/70 bg-amber-500/10 text-amber-300"
+        className="h-5 border-amber-500/70 bg-amber-500/10 px-1.5 text-[11px] leading-none text-amber-300"
         variant="outline"
       >
         目標衝突
@@ -355,7 +359,7 @@ function StatusBadge({
   }
   return (
     <Badge
-      className="border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+      className="h-5 border-emerald-500/50 bg-emerald-500/10 px-1.5 text-[11px] leading-none text-emerald-300"
       variant="outline"
     >
       可導入
@@ -479,11 +483,11 @@ function SegmentedField<TValue extends string>({
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground/70">
         <span>{label}</span>
         {help && <HelpIcon label={label} help={help} />}
       </div>
-      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1 rounded-md border border-border bg-background/45 p-1">
+      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1 rounded-md border border-border/80 bg-background/35 p-1">
         {options.map((option) => {
           const selected = option.value === value;
           const dangerSelected = selected && option.tone === "danger";
@@ -492,7 +496,7 @@ function SegmentedField<TValue extends string>({
               key={option.value}
               type="button"
               className={[
-                "h-8 min-w-0 rounded-sm px-2 text-xs font-medium transition-colors",
+                "h-8 min-w-0 rounded-sm px-2 text-xs font-semibold leading-none transition-colors",
                 selected
                   ? dangerSelected
                     ? "bg-amber-500/18 text-amber-200 ring-1 ring-amber-500/55"
@@ -550,7 +554,7 @@ function PathDetails({
   return (
     <div className="rounded-md border border-border/70 bg-muted/10 px-3 py-2">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-xs text-muted-foreground">
+        <p className="min-w-0 truncate text-xs text-muted-foreground/90">
           {preview?.conflict
             ? "目標位置已有同名項目"
             : "需要時可檢視來源與導入目標"}
@@ -559,7 +563,7 @@ function PathDetails({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs"
+          className="h-7 px-2 text-xs font-semibold"
           onClick={onToggle}
         >
           <ChevronDown
@@ -571,11 +575,11 @@ function PathDetails({
       {open && (
         <div className="mt-2 space-y-2 border-t border-border/70 pt-2 text-xs">
           <div>
-            <p className="font-medium text-muted-foreground">來源</p>
-            <p className="mt-1 break-all">{draft.sourcePath}</p>
+            <p className="text-[11px] font-semibold text-foreground/55">來源</p>
+            <p className="mt-1 break-all text-foreground/78">{draft.sourcePath}</p>
           </div>
           <div>
-            <p className="font-medium text-muted-foreground">目標</p>
+            <p className="text-[11px] font-semibold text-foreground/55">目標</p>
             <div className="mt-1">
               <TargetPreviewLine preview={preview} />
             </div>
@@ -604,7 +608,7 @@ function SourceContentsButton({
       type="button"
       variant="ghost"
       size="sm"
-      className="shrink-0"
+      className="shrink-0 font-semibold"
       disabled={loading}
       onClick={onOpen}
     >
@@ -662,7 +666,7 @@ function SourceContentsDialog({
           ) : contents && entries.length > 0 ? (
             <div className="overflow-hidden rounded-md border border-border bg-muted/15">
               <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-                <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground">
+                <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-foreground/85">
                   <span className="truncate">{contentTitle(kind)}</span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
@@ -678,7 +682,7 @@ function SourceContentsDialog({
                     return (
                       <li
                         key={entry.path}
-                        className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground"
+                        className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs leading-5 text-muted-foreground"
                       >
                         {directory ? (
                           <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -686,13 +690,13 @@ function SourceContentsDialog({
                           <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
                         <span
-                          className="min-w-0 flex-1 truncate font-mono text-foreground/90"
+                          className="min-w-0 flex-1 truncate font-mono text-foreground/78"
                           title={entry.path}
                         >
                           {entry.path}
                         </span>
                         {sizeLabel && (
-                          <span className="shrink-0 pl-2 font-mono text-[11px] text-muted-foreground">
+                          <span className="shrink-0 pl-2 font-mono text-[11px] leading-none text-muted-foreground">
                             {sizeLabel}
                           </span>
                         )}
@@ -764,8 +768,10 @@ function MetadataDetails({
           </span>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <p className="text-xs font-medium text-foreground">補充資料</p>
-              <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              <p className="text-base font-semibold text-foreground/92">
+                補充資料
+              </p>
+              <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
                 可選
               </span>
             </div>
@@ -776,7 +782,7 @@ function MetadataDetails({
         </div>
         <button
           type="button"
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-1 text-xs font-medium text-foreground transition-colors hover:text-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-1 text-xs font-semibold text-foreground/88 transition-colors hover:text-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           onClick={onToggle}
         >
           <span>{open ? "收合" : summary ? "編輯" : "展開"}</span>
@@ -802,7 +808,7 @@ function ConflictResolution({
       <div className="mb-2 flex items-start gap-2 text-xs text-amber-200">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div className="min-w-0">
-          <p className="font-medium">目標位置已有同名項目</p>
+          <p className="font-semibold">目標位置已有同名項目</p>
           <p className="mt-0.5 text-amber-200/80">這筆素材要怎麼處理？</p>
         </div>
       </div>
@@ -1605,27 +1611,30 @@ export function BatchImportDialog({
                         className={[
                           "space-y-3 rounded-md border p-3 transition-colors",
                           !sourceSupported
-                            ? "border-destructive/60 bg-destructive/5"
+                            ? "border-destructive/50 bg-destructive/5"
                             : hasConflict
-                              ? "border-amber-500/50 bg-amber-500/5"
+                              ? "border-amber-500/45 bg-amber-500/5"
                               : draft.confirmed
-                                ? "border-emerald-500/45 bg-emerald-500/5"
-                                : "border-border bg-background",
+                                ? "border-emerald-500/35 bg-emerald-500/5"
+                                : "border-border/90 bg-background",
                         ].join(" ")}
                       >
                         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                           <div className="min-w-0 space-y-2">
                             <div className="flex min-w-0 items-start gap-2">
-                              <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground">
+                              <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/35 text-muted-foreground">
                                 <SourceKindIcon kind={sourceKind} />
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                  <p className="min-w-0 max-w-full truncate text-sm font-medium">
+                                  <p className="min-w-0 max-w-full truncate text-[15px] font-semibold leading-5 text-foreground/92">
                                     {draft.sourceInfo?.name ??
                                       sourceName(draft.sourcePath)}
                                   </p>
-                                  <Badge variant="outline">
+                                  <Badge
+                                    className="h-5 px-1.5 text-[11px] leading-none text-muted-foreground"
+                                    variant="outline"
+                                  >
                                     {sourceKindLabel(sourceKind)}
                                   </Badge>
                                   <StatusBadge
@@ -1633,18 +1642,24 @@ export function BatchImportDialog({
                                     preview={preview}
                                   />
                                 </div>
-                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                <p className="mt-1 truncate text-xs text-foreground/70">
                                   {sourceSupported
                                     ? draftPlanSummary(draft)
                                     : (draft.sourceInfo?.message ??
                                       "此來源目前無法導入")}
                                 </p>
                                 {sourceSupported && (
-                                  <p className="mt-1 truncate text-xs text-muted-foreground/85">
+                                  <p className="mt-1 truncate text-xs text-muted-foreground/88">
+                                    <span className="font-semibold text-foreground/45">
+                                      目標位置
+                                    </span>
+                                    <span className="mx-1 text-foreground/28">
+                                      /
+                                    </span>
                                     {targetSummary(
                                       preview,
                                       librarySettings?.rootPath,
-                                    )}
+                                    ).replace(/^目標：/, "")}
                                   </p>
                                 )}
                                 {hasConflict && (
@@ -1653,7 +1668,7 @@ export function BatchImportDialog({
                                   </p>
                                 )}
                                 {metadataSummary && (
-                                  <p className="mt-1 truncate text-xs text-muted-foreground/80">
+                                  <p className="mt-1 truncate text-xs text-muted-foreground/72">
                                     {metadataSummary}
                                   </p>
                                 )}
@@ -1666,7 +1681,7 @@ export function BatchImportDialog({
                               variant={draft.confirmed ? "outline" : "default"}
                               size="sm"
                               className={[
-                                "min-w-24 transition-shadow",
+                                "min-w-24 font-semibold transition-shadow",
                                 needsConfirmationAttention
                                   ? "bg-amber-500/25 text-amber-100 ring-2 ring-amber-300/80 ring-offset-2 ring-offset-background motion-safe:animate-pulse"
                                   : "",
@@ -1698,7 +1713,7 @@ export function BatchImportDialog({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="shrink-0"
+                              className="shrink-0 font-semibold"
                               onClick={() =>
                                 setExpandedDraftId(expanded ? null : draft.id)
                               }
