@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type SelectionActionsLayout = "inline" | "grid";
+export type SelectionActionsLayout = "inline" | "grid" | "compact";
 
 type SelectionFieldHeaderProps = {
   actionButtonClassName: string;
@@ -33,7 +33,14 @@ export function SelectionFieldHeader({
         actionsLayout === "grid" ? "flex-col items-start" : "items-center justify-between",
       )}
     >
-      <label className={labelClassName}>{label}</label>
+      <label className={labelClassName}>
+        {label}
+        {actionsLayout === "compact" && (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {selectedCount}/{itemCount}
+          </span>
+        )}
+      </label>
       <div
         className={cn(
           actionsLayout === "grid"

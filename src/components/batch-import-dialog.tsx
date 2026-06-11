@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Archive, CheckCircle2, FolderOpen, Loader2, Plus, Sparkles, XCircle } from "lucide-react";
+import {
+  Archive,
+  CheckCircle2,
+  ChevronDown,
+  FolderOpen,
+  Loader2,
+  Plus,
+  Sparkles,
+  XCircle,
+} from "lucide-react";
 import { ModelSelectionField } from "@/components/asset-form/model-selection-field";
 import { TagSelectionField } from "@/components/asset-form/tag-selection-field";
 import { ImportOptionSelect } from "@/components/import-option-select";
@@ -37,8 +46,8 @@ import type {
   ManagedImportBatchReport,
   ManagedImportItemInput,
   Model,
+  SourceContentList,
   Tag,
-  ZipContentList,
 } from "@/types";
 
 type BatchImportDraft = {
@@ -56,6 +65,7 @@ type BatchImportDraft = {
   tagIds: number[];
   suggestedModels: SuggestedBoothModel[];
   suggestedTags: string[];
+  detailsOpen: boolean;
   confirmed: boolean;
 };
 
@@ -71,6 +81,7 @@ type BatchImportDialogProps = {
 };
 
 const isZipPath = (path: string) => path.toLocaleLowerCase().endsWith(".zip");
+const isUnityPackagePath = (path: string) => path.toLocaleLowerCase().endsWith(".unitypackage");
 const sourceName = (path: string) => path.split(/[\\/]/).pop() || path;
 const defaultSuggestedTagColor = "#6B7280";
 const categoryOptions: { value: AssetCategory; label: string }[] = [
@@ -114,6 +125,7 @@ function createDrafts(paths: string[]): BatchImportDraft[] {
     tagIds: [],
     suggestedModels: [],
     suggestedTags: [],
+    detailsOpen: false,
     confirmed: false,
   }));
 }
@@ -164,6 +176,17 @@ function mergeSuggestedTags(current: string[], next: string[]) {
   return merged;
 }
 
+function metadataSummary(draft: BatchImportDraft) {
+  const values = [];
+  if (draft.displayName.trim()) values.push("名稱");
+  if (draft.boothUrl.trim()) values.push("BOOTH");
+  if (draft.note.trim()) values.push("備註");
+  if (draft.modelIds.length > 0) values.push(`${draft.modelIds.length} 模型`);
+  if (draft.tagIds.length > 0) values.push(`${draft.tagIds.length} 標籤`);
+  if (draft.suggestedModels.length + draft.suggestedTags.length > 0) values.push("有建議");
+  return values.join(" · ");
+}
+
 function TargetPreviewLine({ preview }: { preview?: ImportTargetPreview }) {
   if (!preview) {
     return <p className="text-xs text-muted-foreground">正在產生目標路徑...</p>;
@@ -179,28 +202,37 @@ function TargetPreviewLine({ preview }: { preview?: ImportTargetPreview }) {
   );
 }
 
-function ZipContents({
+function SourceContents({
   draft,
   contents,
   loading,
   onLoad,
 }: {
   draft: BatchImportDraft;
-  contents?: ZipContentList;
+  contents?: SourceContentList;
   loading: boolean;
   onLoad: () => void;
 }) {
-  if (!isZipPath(draft.sourcePath)) return null;
+  if (isUnityPackagePath(draft.sourcePath)) return null;
 
   return (
     <div className="space-y-2 rounded-md bg-muted/25 p-2">
       <Button type="button" variant="outline" size="sm" disabled={loading} onClick={onLoad}>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
-        列出 zip 內容
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : isZipPath(draft.sourcePath) ? (
+          <Archive className="h-4 w-4" />
+        ) : (
+          <FolderOpen className="h-4 w-4" />
+        )}
+        檢視內容
       </Button>
       {contents && (
         <div className="max-h-28 overflow-auto text-xs">
-          <p className="mb-1 text-muted-foreground">{contents.fileCount} 個檔案</p>
+          <p className="mb-1 text-muted-foreground">
+            {contents.fileCount} 個項目
+            {contents.truncated ? `，只顯示前 ${contents.paths.length} 個` : ""}
+          </p>
           {contents.paths.map((path) => (
             <p key={path} className="break-all">
               {path}
@@ -214,54 +246,71 @@ function ZipContents({
 
 function BulkApplyControls({
   draft,
+  open,
   onChange,
   onApply,
+  onOpenChange,
 }: {
   draft: BulkImportDraft;
+  open: boolean;
   onChange: (patch: Partial<BulkImportDraft>) => void;
   onApply: () => void;
+  onOpenChange: (open: boolean) => void;
 }) {
   return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
+    <div className="rounded-md border border-border bg-muted/15">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">批量套用</p>
-          <p className="text-xs text-muted-foreground">把常用導入規則一次套到所有項目。</p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={onApply}>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+          onClick={() => onOpenChange(!open)}
+        >
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">批量套用</span>
+            <p className="truncate text-xs text-muted-foreground">
+              把常用導入規則一次套到所有項目
+            </p>
+          </span>
+        </button>
+        <Button type="button" variant="ghost" size="sm" className="mr-2" onClick={onApply}>
           套用到全部
         </Button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-4">
-        <ImportOptionSelect
-          label="分類"
-          help="決定素材會放進哪個主要資料夾。這不是標籤，只影響素材庫裡的存放位置。"
-          value={draft.category}
-          options={categoryOptions}
-          onChange={(category) => onChange({ category })}
-        />
-        <ImportOptionSelect
-          label="方式"
-          help="移動會把原檔搬進素材庫；複製會保留原檔，再複製一份到素材庫。"
-          value={draft.operation}
-          options={operationOptions}
-          onChange={(operation) => onChange({ operation })}
-        />
-        <ImportOptionSelect
-          label="衝突"
-          help="目標位置已經有同名檔案或資料夾時，決定要取消、自動改名，還是覆蓋。"
-          value={draft.conflictStrategy}
-          options={conflictOptions}
-          onChange={(conflictStrategy) => onChange({ conflictStrategy })}
-        />
-        <ImportOptionSelect
-          label="Zip"
-          help="只會影響 .zip 項目。保留壓縮檔會直接管理 .zip；解壓後管理會把內容解開成資料夾。"
-          value={draft.archiveStrategy}
-          options={archiveOptions}
-          onChange={(archiveStrategy) => onChange({ archiveStrategy })}
-        />
-      </div>
+      {open && (
+        <div className="grid gap-2 border-t border-border px-3 pb-3 pt-2 sm:grid-cols-4">
+          <ImportOptionSelect
+            label="分類"
+            help="決定素材會放進哪個主要資料夾。這不是標籤，只影響素材庫裡的存放位置。"
+            value={draft.category}
+            options={categoryOptions}
+            onChange={(category) => onChange({ category })}
+          />
+          <ImportOptionSelect
+            label="方式"
+            help="移動會把原檔搬進素材庫；複製會保留原檔，再複製一份到素材庫。"
+            value={draft.operation}
+            options={operationOptions}
+            onChange={(operation) => onChange({ operation })}
+          />
+          <ImportOptionSelect
+            label="衝突"
+            help="目標位置已經有同名檔案或資料夾時，決定要取消、自動改名，還是覆蓋。"
+            value={draft.conflictStrategy}
+            options={conflictOptions}
+            onChange={(conflictStrategy) => onChange({ conflictStrategy })}
+          />
+          <ImportOptionSelect
+            label="Zip"
+            help="只會影響 .zip 項目。保留壓縮檔會直接管理 .zip；解壓後管理會把內容解開成資料夾。"
+            value={draft.archiveStrategy}
+            options={archiveOptions}
+            onChange={(archiveStrategy) => onChange({ archiveStrategy })}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -398,10 +447,10 @@ function ItemMetadataFields({
           models={models}
           selectedModelIds={draft.modelIds}
           selectedModelIdSet={selectedModelIdSet}
-          actionsLayout="grid"
-          actionButtonClassName="h-7 px-2 text-xs"
+          actionsLayout="compact"
+          actionButtonClassName="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
           labelClassName="text-xs font-medium text-muted-foreground"
-          listClassName="max-h-28 space-y-2 overflow-y-auto rounded-md border border-border bg-background/60 p-2"
+          listClassName="max-h-28 space-y-1.5 overflow-y-auto rounded-md border border-border/70 bg-background/40 p-2"
           onSelectAll={() => onUpdate({ modelIds: models.map((model) => model.id) })}
           onClear={() => onUpdate({ modelIds: [] })}
           onToggle={(modelId) => onUpdate({ modelIds: toggleId(draft.modelIds, modelId) })}
@@ -410,10 +459,11 @@ function ItemMetadataFields({
           tags={tags}
           selectedTagIds={draft.tagIds}
           selectedTagIdSet={selectedTagIdSet}
-          actionsLayout="grid"
-          actionButtonClassName="h-7 px-2 text-xs"
+          actionsLayout="compact"
+          actionButtonClassName="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
           labelClassName="text-xs font-medium text-muted-foreground"
-          tagClassName="min-w-0 !max-w-full !shrink cursor-pointer truncate transition-colors"
+          listClassName="max-h-28 min-h-10 overflow-y-auto rounded-md border border-border/70 bg-background/40 p-2"
+          tagClassName="min-w-0 !max-w-full !shrink cursor-pointer truncate px-2 py-0 text-[11px] transition-colors"
           onSelectAll={() => onUpdate({ tagIds: tags.map((tag) => tag.id) })}
           onClear={() => onUpdate({ tagIds: [] })}
           onToggle={(tagId) => onUpdate({ tagIds: toggleId(draft.tagIds, tagId) })}
@@ -492,21 +542,24 @@ export function BatchImportDialog({ open, paths, onOpenChange }: BatchImportDial
   const addModel = useAssetStore((state) => state.addModel);
   const addTag = useAssetStore((state) => state.addTag);
   const previewManagedImportTarget = useAssetStore((state) => state.previewManagedImportTarget);
-  const listZipContents = useAssetStore((state) => state.listZipContents);
+  const listImportSourceContents = useAssetStore((state) => state.listImportSourceContents);
   const managedImportBatch = useAssetStore((state) => state.managedImportBatch);
   const [bulkDraft, setBulkDraft] = useState<BulkImportDraft>(defaultBulkDraft);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [drafts, setDrafts] = useState<BatchImportDraft[]>([]);
   const [previews, setPreviews] = useState<Record<string, ImportTargetPreview>>({});
-  const [zipContents, setZipContents] = useState<Record<string, ZipContentList>>({});
-  const [loadingZipId, setLoadingZipId] = useState<string | null>(null);
+  const [sourceContents, setSourceContents] = useState<Record<string, SourceContentList>>({});
+  const [loadingContentId, setLoadingContentId] = useState<string | null>(null);
   const [loadingBoothId, setLoadingBoothId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setBulkDraft(defaultBulkDraft);
+      setBulkOpen(false);
       setDrafts(createDrafts(paths));
       setPreviews({});
-      setZipContents({});
+      setSourceContents({});
+      setLoadingContentId(null);
       setLoadingBoothId(null);
       clearImportReport();
     }
@@ -546,13 +599,13 @@ export function BatchImportDialog({ open, paths, onOpenChange }: BatchImportDial
         archiveStrategy: isZipPath(draft.sourcePath) ? bulkDraft.archiveStrategy : draft.archiveStrategy,
       })),
     );
-  const loadZip = async (draft: BatchImportDraft) => {
-    setLoadingZipId(draft.id);
+  const loadSourceContents = async (draft: BatchImportDraft) => {
+    setLoadingContentId(draft.id);
     try {
-      const contents = await listZipContents(draft.sourcePath);
-      setZipContents((current) => ({ ...current, [draft.id]: contents }));
+      const contents = await listImportSourceContents(draft.sourcePath);
+      setSourceContents((current) => ({ ...current, [draft.id]: contents }));
     } finally {
-      setLoadingZipId(null);
+      setLoadingContentId(null);
     }
   };
   const fetchBoothForDraft = async (draft: BatchImportDraft) => {
@@ -642,8 +695,10 @@ export function BatchImportDialog({ open, paths, onOpenChange }: BatchImportDial
           )}
           <BulkApplyControls
             draft={bulkDraft}
+            open={bulkOpen}
             onApply={applyBulkDraft}
             onChange={updateBulkDraft}
+            onOpenChange={setBulkOpen}
           />
           <div className="space-y-3">
             {drafts.map((draft, index) => (
@@ -660,7 +715,25 @@ export function BatchImportDialog({ open, paths, onOpenChange }: BatchImportDial
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{sourceName(draft.sourcePath)}</p>
                     <p className="break-all text-xs text-muted-foreground">{draft.sourcePath}</p>
+                    <p
+                      className="mt-1 h-4 truncate text-xs text-muted-foreground"
+                      aria-hidden={!metadataSummary(draft)}
+                    >
+                      {metadataSummary(draft)}
+                    </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => updateDraft(draft.id, { detailsOpen: !draft.detailsOpen })}
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${draft.detailsOpen ? "" : "-rotate-90"}`}
+                    />
+                    進階資料
+                  </Button>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-4">
                   <ImportOptionSelect
@@ -694,22 +767,24 @@ export function BatchImportDialog({ open, paths, onOpenChange }: BatchImportDial
                     />
                   )}
                 </div>
-                <ItemMetadataFields
-                  draft={draft}
-                  loadingBooth={loadingBoothId === draft.id}
-                  models={models}
-                  tags={tags}
-                  onAddSuggestedModel={(model) => void addSuggestedModel(draft, model)}
-                  onAddSuggestedTag={(tagName) => void addSuggestedTag(draft, tagName)}
-                  onFetchBooth={() => void fetchBoothForDraft(draft)}
-                  onUpdate={(patch) => updateDraft(draft.id, patch)}
-                />
                 <TargetPreviewLine preview={previews[draft.id]} />
-                <ZipContents
+                {draft.detailsOpen && (
+                  <ItemMetadataFields
+                    draft={draft}
+                    loadingBooth={loadingBoothId === draft.id}
+                    models={models}
+                    tags={tags}
+                    onAddSuggestedModel={(model) => void addSuggestedModel(draft, model)}
+                    onAddSuggestedTag={(tagName) => void addSuggestedTag(draft, tagName)}
+                    onFetchBooth={() => void fetchBoothForDraft(draft)}
+                    onUpdate={(patch) => updateDraft(draft.id, patch)}
+                  />
+                )}
+                <SourceContents
                   draft={draft}
-                  contents={zipContents[draft.id]}
-                  loading={loadingZipId === draft.id}
-                  onLoad={() => void loadZip(draft)}
+                  contents={sourceContents[draft.id]}
+                  loading={loadingContentId === draft.id}
+                  onLoad={() => void loadSourceContents(draft)}
                 />
               </div>
             ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { FolderPlus, FolderSearch } from "lucide-react";
+import { FolderSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/asset-store";
@@ -27,12 +27,8 @@ export function LibraryRootActions({ compact, className }: LibraryRootActionsPro
   const saving = useAssetStore((state) => state.saving);
   const hasRoot = Boolean(librarySettings?.rootPath);
 
-  const selectExistingRoot = async () => {
-    const selected = await pickDirectory("選取素材庫根目錄");
-    if (selected) await configureLibraryRoot(selected);
-  };
-  const createRootFolders = async () => {
-    const selected = await pickDirectory("選擇要建立三個分類資料夾的位置");
+  const selectLibraryRoot = async () => {
+    const selected = await pickDirectory("選擇素材庫根目錄");
     if (selected) await configureLibraryRoot(selected);
   };
 
@@ -49,7 +45,7 @@ export function LibraryRootActions({ compact, className }: LibraryRootActionsPro
         <p className="mt-1 text-xs text-muted-foreground">
           {hasRoot
             ? librarySettings?.rootPath
-            : "選取既有素材庫，或讓 app 在指定位置建立「素體」「素體配件」「世界」三個空資料夾。"}
+            : "選取一個資料夾作為素材庫根目錄；真正導入素材時才會依分類建立需要的資料夾。"}
         </p>
         {!compact && hasRoot && (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -63,20 +59,10 @@ export function LibraryRootActions({ compact, className }: LibraryRootActionsPro
           variant="outline"
           size="sm"
           disabled={saving}
-          onClick={() => void selectExistingRoot()}
+          onClick={() => void selectLibraryRoot()}
         >
           <FolderSearch className="h-4 w-4" />
-          自己選取
-        </Button>
-        <Button
-          type="button"
-          variant={hasRoot ? "outline" : "default"}
-          size="sm"
-          disabled={saving}
-          onClick={() => void createRootFolders()}
-        >
-          <FolderPlus className="h-4 w-4" />
-          幫我建立
+          選擇根目錄
         </Button>
       </div>
     </div>

@@ -12,6 +12,7 @@ import type {
   ManagedImportBatchReport,
   ManagedImportItemInput,
   Model,
+  SourceContentList,
   Tag,
   UpdateLibrarySettingsInput,
   ZipContentList,
@@ -106,6 +107,7 @@ export type AssetStore = {
     archiveStrategy?: ArchiveStrategy | null,
   ) => Promise<ImportTargetPreview>;
   listZipContents: (sourcePath: string) => Promise<ZipContentList>;
+  listImportSourceContents: (sourcePath: string) => Promise<SourceContentList>;
   managedImportBatch: (items: ManagedImportItemInput[]) => Promise<ManagedImportBatchReport>;
   setSearchFilter: (search: string) => void;
   setCategoryFilter: (category: AssetCategory | null) => void;
@@ -399,6 +401,9 @@ const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
   },
   listZipContents: async (sourcePath: string) => {
     return invokeTauri<ZipContentList>("list_zip_contents", { sourcePath });
+  },
+  listImportSourceContents: async (sourcePath: string) => {
+    return invokeTauri<SourceContentList>("list_import_source_contents", { sourcePath });
   },
   managedImportBatch: async (items: ManagedImportItemInput[]) => {
     set({ saving: true, error: null, notice: null, importReport: null });

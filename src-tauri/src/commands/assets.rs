@@ -24,6 +24,7 @@ use super::{
 const SQL_PARAM_BATCH_SIZE: usize = 900;
 const ASSET_SEARCH_PARAM_COUNT: usize = 5;
 const LIBRARY_SETTINGS_ID: i64 = 1;
+const SOURCE_CONTENT_PREVIEW_LIMIT: usize = 200;
 type AssetGroups<T> = BTreeMap<i64, Vec<T>>;
 
 const ASSET_LIST_BASE_SQL: &str = "SELECT a.id, a.name, a.display_name, a.category, a.file_path, a.booth_url, a.thumbnail_url, a.note, a.created_at, a.updated_at
@@ -282,6 +283,16 @@ pub struct ZipContentList {
     pub source_path: String,
     pub file_count: usize,
     pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceContentList {
+    pub source_path: String,
+    pub kind: ImportSourceKind,
+    pub file_count: usize,
+    pub paths: Vec<String>,
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1185,13 +1196,8 @@ pub fn configure_library_root(
     db: State<'_, DbState>,
 ) -> CommandResult<LibrarySettings> {
     let root_path = require_trimmed(&root_path, "素材庫根目錄是必填欄位")?;
-    let root = PathBuf::from(&root_path);
-    fs::create_dir_all(&root).map_err(db_error)?;
 
     let conn = connection(&db)?;
-    let mut settings = get_library_settings_from_conn(&conn).map_err(db_error)?;
-    settings.root_path = Some(root_path.clone());
-    ensure_category_folders(&root, &settings)?;
     conn.execute(
         "UPDATE library_settings
          SET root_path = ?, updated_at = datetime('now')
@@ -1209,23 +1215,7 @@ pub fn update_library_settings(
     db: State<'_, DbState>,
 ) -> CommandResult<LibrarySettings> {
     let input = normalized_library_settings_input(input);
-    let root = input.root_path.as_deref().map(PathBuf::from);
-    if let Some(root) = &root {
-        fs::create_dir_all(root).map_err(db_error)?;
-    }
-
     let conn = connection(&db)?;
-    let settings = LibrarySettings {
-        root_path: input.root_path.clone(),
-        avatar_folder: input.avatar_folder.clone(),
-        accessory_folder: input.accessory_folder.clone(),
-        world_folder: input.world_folder.clone(),
-        updated_at: String::new(),
-    };
-    if let Some(root) = &root {
-        ensure_category_folders(root, &settings)?;
-    }
-
     conn.execute(
         "UPDATE library_settings
          SET root_path = ?, avatar_folder = ?, accessory_folder = ?, world_folder = ?, updated_at = datetime('now')
@@ -1309,6 +1299,76 @@ pub fn list_zip_contents(source_path: String) -> CommandResult<ZipContentList> {
         file_count: paths.len(),
         paths,
     })
+}
+
+fn directory_entry_label(root: &Path, path: &Path, is_dir: bool) -> Option<String> {
+    let relative = path.strip_prefix(root).ok()?;
+    let mut label = relative.to_string_lossy().replace('\\', "/");
+    if is_dir && !label.ends_with('/') {
+        label.push('/');
+    }
+    (!label.is_empty()).then_some(label)
+}
+
+fn collect_directory_contents(
+    root: &Path,
+    current: &Path,
+    paths: &mut Vec<String>,
+) -> io::Result<bool> {
+    let mut entries = fs::read_dir(current)?.collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+
+    for entry in entries {
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if let Some(label) = directory_entry_label(root, &path, file_type.is_dir()) {
+            paths.push(label);
+            if paths.len() >= SOURCE_CONTENT_PREVIEW_LIMIT {
+                return Ok(true);
+            }
+        }
+
+        if file_type.is_dir() && collect_directory_contents(root, &path, paths)? {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+#[tauri::command]
+pub fn list_import_source_contents(source_path: String) -> CommandResult<SourceContentList> {
+    let path = PathBuf::from(&source_path);
+    let kind = source_kind(&path);
+
+    match kind {
+        ImportSourceKind::Folder => {
+            let mut paths = Vec::new();
+            let truncated =
+                collect_directory_contents(&path, &path, &mut paths).map_err(db_error)?;
+            Ok(SourceContentList {
+                source_path,
+                kind,
+                file_count: paths.len(),
+                paths,
+                truncated,
+            })
+        }
+        ImportSourceKind::Zip => {
+            let contents = list_zip_contents(source_path)?;
+            Ok(SourceContentList {
+                source_path: contents.source_path,
+                kind,
+                file_count: contents.file_count,
+                paths: contents.paths,
+                truncated: false,
+            })
+        }
+        ImportSourceKind::UnityPackage => {
+            Err(".unitypackage 會作為受管理檔案，不解析內容".to_string())
+        }
+        ImportSourceKind::Unsupported => Err("第一版只支援檢視資料夾與 .zip 內容".to_string()),
+    }
 }
 
 fn managed_import_item(

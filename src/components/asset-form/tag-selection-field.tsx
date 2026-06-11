@@ -14,6 +14,7 @@ type TagSelectionFieldProps = {
   actionsLayout?: SelectionActionsLayout;
   actionButtonClassName?: string;
   labelClassName?: string;
+  listClassName?: string;
   tagClassName?: string;
   onSelectAll: () => void;
   onClear: () => void;
@@ -30,6 +31,7 @@ type TagBadgeOptionProps = {
 type TagBadgeListProps = {
   tags: Tag[];
   selectedTagIdSet: Set<number>;
+  listClassName?: string;
   tagClassName: string;
   onToggle: (tagId: number) => void;
 };
@@ -70,11 +72,12 @@ function TagBadgeOption({
 function TagBadgeList({
   tags,
   selectedTagIdSet,
+  listClassName,
   tagClassName,
   onToggle,
 }: TagBadgeListProps) {
   return (
-    <div className="flex min-w-0 flex-wrap gap-2">
+    <div className={listClassName ?? "flex min-w-0 flex-wrap gap-2"}>
       {tags.length > 0 ? (
         tags.map((tag) => (
           <TagBadgeOption
@@ -99,6 +102,7 @@ export function TagSelectionField({
   actionsLayout = "inline",
   actionButtonClassName = "h-7 px-2 text-xs",
   labelClassName = "text-sm font-medium",
+  listClassName,
   tagClassName = "min-w-0 !max-w-full !shrink cursor-pointer truncate transition-colors",
   onSelectAll,
   onClear,
@@ -119,6 +123,7 @@ export function TagSelectionField({
       <TagBadgeList
         tags={tags}
         selectedTagIdSet={selectedTagIdSet}
+        listClassName={listClassName}
         tagClassName={tagClassName}
         onToggle={onToggle}
       />

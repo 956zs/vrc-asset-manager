@@ -62,6 +62,14 @@ export interface ZipContentList {
   paths: string[];
 }
 
+export interface SourceContentList {
+  sourcePath: string;
+  kind: ImportSourceKind;
+  fileCount: number;
+  paths: string[];
+  truncated: boolean;
+}
+
 export interface ManagedImportItemInput {
   sourcePath: string;
   category: AssetCategory;

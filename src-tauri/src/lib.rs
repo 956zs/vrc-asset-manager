@@ -5,9 +5,9 @@ mod types;
 use commands::{
     assets::{
         configure_library_root, create_asset, delete_asset, get_assets, get_library_settings,
-        inspect_import_sources, list_zip_contents, managed_import_batch, open_file_location,
-        preview_managed_import_target, scan_asset_health, update_asset, update_library_settings,
-        validate_file_path,
+        inspect_import_sources, list_import_source_contents, list_zip_contents,
+        managed_import_batch, open_file_location, preview_managed_import_target, scan_asset_health,
+        update_asset, update_library_settings, validate_file_path,
     },
     booth::{fetch_booth_product_info, fetch_booth_thumbnail},
     models::{create_model, delete_model, get_models, reorder_models, update_model},
@@ -42,6 +42,7 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
             update_library_settings,
             inspect_import_sources,
             preview_managed_import_target,
+            list_import_source_contents,
             list_zip_contents,
             managed_import_batch,
             create_asset,
