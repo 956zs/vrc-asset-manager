@@ -279,10 +279,19 @@ pub struct ImportTargetPreview {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SourceContentEntry {
+    pub path: String,
+    pub is_directory: bool,
+    pub size_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ZipContentList {
     pub source_path: String,
     pub file_count: usize,
     pub paths: Vec<String>,
+    pub entries: Vec<SourceContentEntry>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -292,6 +301,7 @@ pub struct SourceContentList {
     pub kind: ImportSourceKind,
     pub file_count: usize,
     pub paths: Vec<String>,
+    pub entries: Vec<SourceContentEntry>,
     pub truncated: bool,
 }
 
@@ -1280,7 +1290,7 @@ pub fn list_zip_contents(source_path: String) -> CommandResult<ZipContentList> {
 
     let file = fs::File::open(&path).map_err(db_error)?;
     let mut archive = zip::ZipArchive::new(file).map_err(db_error)?;
-    let mut paths = Vec::new();
+    let mut entries = Vec::new();
     for index in 0..archive.len() {
         let file = archive.by_index(index).map_err(db_error)?;
         if file.is_dir() {
@@ -1290,14 +1300,23 @@ pub fn list_zip_contents(source_path: String) -> CommandResult<ZipContentList> {
         if is_ignored_zip_entry(&name) {
             continue;
         }
-        paths.push(name);
+        entries.push(SourceContentEntry {
+            path: name,
+            is_directory: false,
+            size_bytes: Some(file.size()),
+        });
     }
-    paths.sort();
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
+    let paths = entries
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect::<Vec<_>>();
 
     Ok(ZipContentList {
         source_path,
         file_count: paths.len(),
         paths,
+        entries,
     })
 }
 
@@ -1313,22 +1332,31 @@ fn directory_entry_label(root: &Path, path: &Path, is_dir: bool) -> Option<Strin
 fn collect_directory_contents(
     root: &Path,
     current: &Path,
-    paths: &mut Vec<String>,
+    entries: &mut Vec<SourceContentEntry>,
 ) -> io::Result<bool> {
-    let mut entries = fs::read_dir(current)?.collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by_key(|entry| entry.file_name());
+    let mut directory_entries = fs::read_dir(current)?.collect::<Result<Vec<_>, _>>()?;
+    directory_entries.sort_by_key(|entry| entry.file_name());
 
-    for entry in entries {
+    for entry in directory_entries {
         let path = entry.path();
         let file_type = entry.file_type()?;
         if let Some(label) = directory_entry_label(root, &path, file_type.is_dir()) {
-            paths.push(label);
-            if paths.len() >= SOURCE_CONTENT_PREVIEW_LIMIT {
+            let size_bytes = if file_type.is_dir() {
+                None
+            } else {
+                entry.metadata().ok().map(|metadata| metadata.len())
+            };
+            entries.push(SourceContentEntry {
+                path: label,
+                is_directory: file_type.is_dir(),
+                size_bytes,
+            });
+            if entries.len() >= SOURCE_CONTENT_PREVIEW_LIMIT {
                 return Ok(true);
             }
         }
 
-        if file_type.is_dir() && collect_directory_contents(root, &path, paths)? {
+        if file_type.is_dir() && collect_directory_contents(root, &path, entries)? {
             return Ok(true);
         }
     }
@@ -1343,14 +1371,19 @@ pub fn list_import_source_contents(source_path: String) -> CommandResult<SourceC
 
     match kind {
         ImportSourceKind::Folder => {
-            let mut paths = Vec::new();
+            let mut entries = Vec::new();
             let truncated =
-                collect_directory_contents(&path, &path, &mut paths).map_err(db_error)?;
+                collect_directory_contents(&path, &path, &mut entries).map_err(db_error)?;
+            let paths = entries
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect::<Vec<_>>();
             Ok(SourceContentList {
                 source_path,
                 kind,
                 file_count: paths.len(),
                 paths,
+                entries,
                 truncated,
             })
         }
@@ -1361,6 +1394,7 @@ pub fn list_import_source_contents(source_path: String) -> CommandResult<SourceC
                 kind,
                 file_count: contents.file_count,
                 paths: contents.paths,
+                entries: contents.entries,
                 truncated: false,
             })
         }

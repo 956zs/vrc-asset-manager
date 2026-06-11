@@ -60,6 +60,13 @@ export interface ZipContentList {
   sourcePath: string;
   fileCount: number;
   paths: string[];
+  entries: SourceContentEntry[];
+}
+
+export interface SourceContentEntry {
+  path: string;
+  isDirectory: boolean;
+  sizeBytes: number | null;
 }
 
 export interface SourceContentList {
@@ -67,6 +74,7 @@ export interface SourceContentList {
   kind: ImportSourceKind;
   fileCount: number;
   paths: string[];
+  entries: SourceContentEntry[];
   truncated: boolean;
 }
 
