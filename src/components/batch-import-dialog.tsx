@@ -673,6 +673,14 @@ function SourceContentsDialog({
             </div>
           )}
           <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void invokeTauri("open_file_location", { path: draft.sourcePath })}
+            >
+              <FolderOpen className="h-4 w-4" />
+              在檔案總管中開啟
+            </Button>
             <Button type="button" onClick={() => onOpenChange(false)}>
               關閉
             </Button>
