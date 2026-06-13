@@ -19,6 +19,7 @@ import {
   type SuggestedBoothModel,
 } from "@/lib/booth-product-info";
 import { toggleId } from "@/lib/id-list";
+import { suggestedTagColor } from "@/lib/sensitive-content";
 import type {
   ArchiveStrategy,
   AssetCategory,
@@ -145,8 +146,6 @@ type SuggestedTagActionOptions = {
   removeSuggestedTag: (tagName: string) => void;
   setSelectedTagIds: AddAssetFormSetters["setSelectedTagIds"];
 };
-
-const defaultSuggestedTagColor = "#6B7280";
 
 const emptyAddAssetFormValues: AddAssetFormValues = {
   displayName: "",
@@ -350,7 +349,7 @@ function createSuggestedTagAction({
   setSelectedTagIds,
 }: SuggestedTagActionOptions) {
   return async (tagName: string) => {
-    const created = await addTag(tagName, defaultSuggestedTagColor);
+    const created = await addTag(tagName, suggestedTagColor(tagName));
     setSelectedTagIds((current) => mergeIds(current, [created.id]));
     removeSuggestedTag(tagName);
   };

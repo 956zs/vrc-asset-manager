@@ -24,8 +24,19 @@ import {
   XCircle,
 } from "lucide-react";
 import { ModelSelectionField } from "@/components/asset-form/model-selection-field";
+import { RelatedLinksEditor } from "@/components/asset-form/related-links-editor";
 import { TagSelectionField } from "@/components/asset-form/tag-selection-field";
 import { LibraryRootActions } from "@/components/library-root-actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,6 +51,12 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  addEmptyRelatedLink,
+  normalizeRelatedLinks,
+  removeRelatedLink,
+  updateRelatedLink,
+} from "@/lib/asset-links";
+import {
   applyBoothProductInfo,
   boothTagOriginText,
   fetchBoothProductInfo,
@@ -49,6 +66,7 @@ import {
   type SuggestedBoothModel,
 } from "@/lib/booth-product-info";
 import { toggleId } from "@/lib/id-list";
+import { suggestedTagColor } from "@/lib/sensitive-content";
 import { invokeTauri } from "@/lib/tauri-runtime";
 import { useAssetStore } from "@/stores/asset-store";
 import type {
@@ -62,6 +80,7 @@ import type {
   ManagedImportBatchReport,
   ManagedImportItemInput,
   Model,
+  AssetLinkInput,
   SourceContentList,
   Tag,
 } from "@/types";
@@ -80,6 +99,7 @@ type BatchImportDraft = {
   note: string;
   modelIds: number[];
   tagIds: number[];
+  relatedLinks: AssetLinkInput[];
   suggestedModels: SuggestedBoothModel[];
   suggestedTags: string[];
   suggestedTagOrigins: SuggestedBoothTagOrigins;
@@ -107,7 +127,6 @@ const isZipPath = (path: string) => path.toLocaleLowerCase().endsWith(".zip");
 const isUnityPackagePath = (path: string) =>
   path.toLocaleLowerCase().endsWith(".unitypackage");
 const sourceName = (path: string) => path.split(/[\\/]/).pop() || path;
-const defaultSuggestedTagColor = "#6B7280";
 const categoryOptions: { value: AssetCategory; label: string }[] = [
   { value: "avatar", label: "素體" },
   { value: "accessory", label: "配件" },
@@ -215,6 +234,7 @@ function createDrafts(paths: string[], startIndex = 0): BatchImportDraft[] {
     note: "",
     modelIds: [],
     tagIds: [],
+    relatedLinks: [],
     suggestedModels: [],
     suggestedTags: [],
     suggestedTagOrigins: {},
@@ -236,7 +256,7 @@ function draftToInput(draft: BatchImportDraft): ManagedImportItemInput {
     note: draft.note.trim() || null,
     modelIds: draft.modelIds,
     tagIds: draft.tagIds,
-    relatedLinks: [],
+    relatedLinks: normalizeRelatedLinks(draft.relatedLinks),
   };
 }
 
@@ -389,6 +409,7 @@ function metadataSummaryText(draft: BatchImportDraft) {
     draft.boothUrl.trim() ? "BOOTH" : null,
     draft.modelIds.length > 0 ? `${draft.modelIds.length} 模型` : null,
     draft.tagIds.length > 0 ? `${draft.tagIds.length} 標籤` : null,
+    draft.relatedLinks.length > 0 ? `${draft.relatedLinks.length} 連結` : null,
     draft.note.trim() ? "備註" : null,
     draft.suggestedModels.length + draft.suggestedTags.length > 0
       ? "有建議"
@@ -1013,6 +1034,25 @@ function ItemMetadataFields({
   const selectedModelIdSet = new Set(draft.modelIds);
   const selectedTagIdSet = new Set(draft.tagIds);
   const loadingBooth = draft.boothFetchStatus === "loading";
+  const addRelatedLink = () =>
+    onUpdate({ relatedLinks: addEmptyRelatedLink(draft.relatedLinks) });
+  const updateDraftRelatedLink = (
+    index: number,
+    field: keyof AssetLinkInput,
+    value: string,
+  ) =>
+    onUpdate({
+      relatedLinks: updateRelatedLink({
+        links: draft.relatedLinks,
+        index,
+        field,
+        value,
+      }),
+    });
+  const removeDraftRelatedLink = (index: number) =>
+    onUpdate({
+      relatedLinks: removeRelatedLink(draft.relatedLinks, index),
+    });
   const boothStatusText =
     draft.boothFetchStatus === "loading"
       ? "抓取中"
@@ -1126,6 +1166,17 @@ function ItemMetadataFields({
           }
         />
       </div>
+      <RelatedLinksEditor
+        links={draft.relatedLinks}
+        layout="stacked"
+        actionsLayout="inline"
+        actionButtonClassName="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+        labelClassName="text-xs font-medium text-muted-foreground"
+        onAdd={addRelatedLink}
+        onCreateFirst={addRelatedLink}
+        onUpdate={updateDraftRelatedLink}
+        onRemove={removeDraftRelatedLink}
+      />
       <SuggestedMetadataActions
         draft={draft}
         onAddModel={onAddSuggestedModel}
@@ -1151,85 +1202,109 @@ function BatchImportReport({
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-2">
-        {report.results.map((result) => (
-          <div
-            key={result.sourcePath}
-            className={[
-              "rounded-md border p-3",
-              result.success
-                ? "border-emerald-500/35 bg-emerald-500/5"
-                : result.finalPath
-                  ? "border-amber-500/45 bg-amber-500/5"
-                  : "border-destructive/45 bg-destructive/5",
-            ].join(" ")}
-          >
-            <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  {result.success ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  )}
-                  <p className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {sourceName(result.sourcePath)}
+        {report.results.map((result) => {
+          const partialFailure = !result.success && Boolean(result.finalPath);
+          const StatusIcon = result.success
+            ? CheckCircle2
+            : partialFailure
+              ? AlertTriangle
+              : XCircle;
+
+          return (
+            <div
+              key={result.sourcePath}
+              className={[
+                "rounded-md border p-3",
+                result.success
+                  ? "border-emerald-500/35 bg-emerald-500/5"
+                  : partialFailure
+                    ? "border-amber-500/45 bg-amber-500/5"
+                    : "border-destructive/45 bg-destructive/5",
+              ].join(" ")}
+            >
+              <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <StatusIcon
+                      className={[
+                        "h-4 w-4",
+                        result.success
+                          ? "text-emerald-500"
+                          : partialFailure
+                            ? "text-amber-500"
+                            : "text-destructive",
+                      ].join(" ")}
+                    />
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {sourceName(result.sourcePath)}
+                    </p>
+                    <Badge
+                      variant={
+                        result.success || partialFailure
+                          ? "outline"
+                          : "destructive"
+                      }
+                    >
+                      {result.success
+                        ? "成功"
+                        : partialFailure
+                          ? "檔案已處理"
+                          : "失敗"}
+                    </Badge>
+                    <Badge variant="outline">
+                      {resultOperationLabel(result.operation)}
+                    </Badge>
+                  </div>
+                  <p
+                    className={[
+                      "mt-1 text-xs",
+                      result.success
+                        ? "text-emerald-300"
+                        : partialFailure
+                          ? "text-amber-300"
+                          : "text-destructive",
+                    ].join(" ")}
+                  >
+                    {result.message}
                   </p>
-                  <Badge variant={result.success ? "outline" : "destructive"}>
-                    {result.success ? "成功" : "失敗"}
-                  </Badge>
-                  <Badge variant="outline">
-                    {resultOperationLabel(result.operation)}
-                  </Badge>
                 </div>
-                <p
-                  className={[
-                    "mt-1 text-xs",
-                    result.success
-                      ? "text-emerald-300"
-                      : result.finalPath
-                        ? "text-amber-300"
-                        : "text-destructive",
-                  ].join(" ")}
-                >
-                  {result.message}
-                </p>
+                {result.finalPath && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="justify-self-end"
+                    title="開啟目標資料夾"
+                    aria-label="開啟目標資料夾"
+                    onClick={() =>
+                      void invokeTauri("open_file_location", {
+                        path: result.finalPath,
+                      })
+                    }
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
-              {result.finalPath && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="justify-self-end"
-                  title="開啟目標資料夾"
-                  aria-label="開啟目標資料夾"
-                  onClick={() =>
-                    void invokeTauri("open_file_location", {
-                      path: result.finalPath,
-                    })
-                  }
-                >
-                  <FolderOpen className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            <div className="mt-3 grid gap-2 text-xs">
-              <div>
-                <p className="font-medium text-muted-foreground">來源</p>
-                <p className="mt-0.5 break-all text-foreground/85">
-                  {result.sourcePath}
-                </p>
-              </div>
-              {result.finalPath && (
+              <div className="mt-3 grid gap-2 text-xs">
                 <div>
-                  <p className="font-medium text-muted-foreground">最終路徑</p>
+                  <p className="font-medium text-muted-foreground">來源</p>
                   <p className="mt-0.5 break-all text-foreground/85">
-                    {result.finalPath}
+                    {result.sourcePath}
                   </p>
                 </div>
-              )}
+                {result.finalPath && (
+                  <div>
+                    <p className="font-medium text-muted-foreground">最終路徑</p>
+                    <p className="mt-0.5 break-all text-foreground/85">
+                      {result.finalPath}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <DialogFooter>
         <Button onClick={onClose}>完成</Button>
@@ -1280,6 +1355,7 @@ export function BatchImportDialog({
   >({});
   const [loadingContentId, setLoadingContentId] = useState<string | null>(null);
   const [confirmAttentionIds, setConfirmAttentionIds] = useState<string[]>([]);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const confirmAttentionTimeoutRef = useRef<number | null>(null);
   const wasOpenRef = useRef(false);
 
@@ -1300,6 +1376,7 @@ export function BatchImportDialog({
       setSourceContents({});
       setLoadingContentId(null);
       setConfirmAttentionIds([]);
+      setCloseConfirmOpen(false);
       clearImportReport();
     } else if (open) {
       setDrafts((current) => {
@@ -1336,12 +1413,13 @@ export function BatchImportDialog({
       setDrafts((current) =>
         current.map((draft) => {
           const sourceInfo = infoByPath.get(draft.sourcePath);
-          if (!sourceInfo) return draft;
-          return {
-            ...draft,
-            sourceInfo,
-            confirmed: sourceInfo.supported ? draft.confirmed : false,
-          };
+          return sourceInfo
+            ? {
+                ...draft,
+                sourceInfo,
+                confirmed: sourceInfo.supported ? draft.confirmed : false,
+              }
+            : draft;
         }),
       );
     });
@@ -1519,7 +1597,7 @@ export function BatchImportDialog({
     const tagId = existingTag?.id;
     const created = tagId
       ? null
-      : await addTag(tagName, defaultSuggestedTagColor);
+      : await addTag(tagName, suggestedTagColor(tagName));
     const selectedTagId = tagId ?? created?.id;
     if (!selectedTagId) return;
 
@@ -1584,17 +1662,54 @@ export function BatchImportDialog({
   const close = () => {
     onOpenChange(false);
     clearImportReport();
+    setCloseConfirmOpen(false);
+  };
+  const requestClose = () => {
+    if (report) {
+      close();
+      return;
+    }
+
+    if (drafts.length > 0) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+
+    onOpenChange(false);
+  };
+  const discardAndClose = () => {
+    setCloseConfirmOpen(false);
+    onOpenChange(false);
   };
   const sourceContentsDraft =
     drafts.find((draft) => draft.id === sourceContentsDialogId) ?? null;
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            onOpenChange(true);
+          } else {
+            requestClose();
+          }
+        }}
+      >
         {report ? (
           <BatchImportReport report={report} onClose={close} />
         ) : (
-          <DialogContent className="flex max-h-[88vh] flex-col overflow-hidden p-0 sm:max-w-[900px]">
+          <DialogContent
+            className="flex max-h-[88vh] flex-col overflow-hidden p-0 sm:max-w-[900px]"
+            onEscapeKeyDown={(event) => {
+              event.preventDefault();
+              requestClose();
+            }}
+            onInteractOutside={(event) => {
+              event.preventDefault();
+              requestClose();
+            }}
+          >
             <div className="space-y-4 overflow-y-auto px-6 pb-4 pt-6">
               <DialogHeader>
                 <DialogTitle>批次導入素材</DialogTitle>
@@ -1847,6 +1962,9 @@ export function BatchImportDialog({
             <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:items-center sm:justify-between">
               <div className="min-w-0 text-left">
                 <p className="text-sm text-muted-foreground">{footerMessage}</p>
+                <p className="mt-1 text-xs text-muted-foreground/80">
+                  點擊視窗外或按 Esc 會先確認，避免遺失尚未導入的編輯內容。
+                </p>
                 {hasOverwrite && (
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-300">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -1861,7 +1979,7 @@ export function BatchImportDialog({
                 )}
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                <Button variant="outline" onClick={requestClose}>
                   取消
                 </Button>
                 <Button
@@ -1891,6 +2009,22 @@ export function BatchImportDialog({
           if (!nextOpen) setSourceContentsDialogId(null);
         }}
       />
+      <AlertDialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>批次導入的變更尚未儲存</AlertDialogTitle>
+            <AlertDialogDescription>
+              關閉後目前編輯的素材資料會消失，尚未導入的項目需要重新設定。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>繼續編輯</AlertDialogCancel>
+            <AlertDialogAction onClick={discardAndClose}>
+              放棄並關閉
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

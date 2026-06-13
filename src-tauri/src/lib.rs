@@ -395,6 +395,7 @@ mod tests {
                 category: None,
                 model_ids: vec![relations.model_id],
                 tag_ids: vec![relations.tag_id],
+                ..AssetFilters::default()
             },
             command_state(db),
         )
@@ -531,6 +532,7 @@ mod tests {
                 category: None,
                 model_ids: Vec::new(),
                 tag_ids: Vec::new(),
+                ..AssetFilters::default()
             },
             command_state(db),
         )
@@ -552,6 +554,7 @@ mod tests {
                 category: None,
                 model_ids: Vec::new(),
                 tag_ids: Vec::new(),
+                ..AssetFilters::default()
             },
             command_state(db),
         )
@@ -761,6 +764,66 @@ mod tests {
         assert!(!imported_assets
             .iter()
             .any(|asset| asset.display_name.as_deref() == Some("Unsupported Asset")));
+    }
+
+    #[test]
+    fn managed_import_batch_reports_db_failure_after_file_operation() {
+        let _env_guard = lock_test_env();
+        let (db, demo_root) = demo_db();
+        let library_root = demo_root.join("managed-library");
+        set_library_settings(&db, &library_root, "Avatars", "Accessories", "Worlds");
+
+        let source_root = demo_root.join("db-failure-source");
+        let source = source_root.join("Db_Record_Fails");
+        fs::create_dir_all(&source).expect("create source");
+        fs::write(source.join("README.txt"), "file operation should complete")
+            .expect("write source file");
+
+        let report = commands::assets::managed_import_batch(
+            commands::assets::ManagedImportBatchInput {
+                items: vec![commands::assets::ManagedImportItemInput {
+                    source_path: source.to_string_lossy().to_string(),
+                    category: AssetCategory::Accessory,
+                    operation: commands::assets::ImportOperation::Copy,
+                    archive_strategy: None,
+                    conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
+                    display_name: Some("DB Failure Asset".to_string()),
+                    booth_url: None,
+                    thumbnail_url: None,
+                    note: None,
+                    model_ids: vec![9_999_999],
+                    tag_ids: Vec::new(),
+                    related_links: Vec::new(),
+                }],
+            },
+            command_state(&db),
+        )
+        .expect("managed import batch with DB failure");
+
+        assert_eq!(report.total, 1);
+        assert_eq!(report.succeeded, 0);
+        assert_eq!(report.failed, 1);
+
+        let result = &report.results[0];
+        assert!(!result.success);
+        assert!(
+            result
+                .message
+                .contains("檔案已處理，但資料庫記錄建立失敗"),
+            "unexpected report message: {}",
+            result.message
+        );
+
+        let final_path = PathBuf::from(result.final_path.as_deref().expect("final path"));
+        assert!(final_path.exists());
+        assert!(final_path.join("README.txt").exists());
+
+        let imported_assets =
+            commands::assets::get_assets(AssetFilters::default(), command_state(&db))
+                .expect("load imported assets");
+        assert!(!imported_assets
+            .iter()
+            .any(|asset| asset.display_name.as_deref() == Some("DB Failure Asset")));
     }
 
     fn assert_vcc_snapshot(db: &db::DbState) {

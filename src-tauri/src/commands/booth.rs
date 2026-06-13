@@ -205,8 +205,7 @@ fn product_description(document: &Html, products: &[Value]) -> CommandResult<Opt
 }
 
 fn product_body_description(document: &Html) -> CommandResult<Option<String>> {
-    let selector =
-        selector(".js-market-item-detail-description, article section.shop__text")?;
+    let selector = selector(".js-market-item-detail-description, article section.shop__text")?;
     let chunks = document
         .select(&selector)
         .filter_map(|element| clean_text(&element.text().collect::<Vec<_>>().join(" ")))
@@ -325,6 +324,25 @@ fn inferred_product_tags(search_text: &str) -> Vec<String> {
     }
     if contains_any(&text, &["world", "ワールド"]) {
         tags.insert("ワールド".to_string());
+    }
+    if contains_any(
+        &text,
+        &[
+            "r-18",
+            "r18",
+            "r 18",
+            "18+",
+            "18禁",
+            "adult",
+            "nsfw",
+            "成人向け",
+            "成人向",
+            "成年向け",
+            "成年向",
+            "アダルト",
+        ],
+    ) {
+        tags.insert("R18".to_string());
     }
 
     tags.into_iter().collect()
@@ -514,7 +532,7 @@ mod tests {
           <html>
             <head>
               <meta property="og:title" content="Valentine Lingerie - BOOTH" />
-              <meta property="og:description" content="24-Avatars Costume ▸Milltina ▸Shinano ▸Manuka ▸Sio ▸Kikyo" />
+              <meta property="og:description" content="R-18 24-Avatars Costume ▸Milltina ▸Shinano ▸Manuka ▸Sio ▸Kikyo" />
               <meta property="og:image" content="https://example.com/lingerie.jpg" />
             </head>
             <body><h1>年齢確認</h1></body>
@@ -525,6 +543,7 @@ mod tests {
 
         assert!(info.tags.contains(&"VRChat".to_string()));
         assert!(info.tags.contains(&"衣装".to_string()));
+        assert!(info.tags.contains(&"R18".to_string()));
         assert!(info.search_text.contains("Shinano"));
         assert!(info.search_text.contains("Kikyo"));
     }
@@ -603,9 +622,8 @@ mod tests {
 
         let info = parse_product_info(html).expect("parse product info");
         let expected_models = [
-            "Milltina", "Airi", "Shinano", "Manuka", "Shinra", "Selestia", "Misaki",
-            "Moe", "Chocolat", "Chiffon", "Sio", "Mayo", "Ichigo", "LUMINA",
-            "Kumaly",
+            "Milltina", "Airi", "Shinano", "Manuka", "Shinra", "Selestia", "Misaki", "Moe",
+            "Chocolat", "Chiffon", "Sio", "Mayo", "Ichigo", "LUMINA", "Kumaly",
         ];
 
         for model in expected_models {
@@ -618,6 +636,64 @@ mod tests {
         assert!(info.search_text.contains("クマリ - Kumaly"));
         assert!(info.search_text.contains("イチゴ - Ichigo"));
         assert!(info.search_text.contains("海咲 - Misaki"));
+    }
+
+    #[test]
+    fn keeps_supported_avatar_names_from_json_ld_description() {
+        let html = r#"
+          <html>
+            <head>
+              <meta property="og:title" content="Somiel 21 avatars - BOOTH" />
+              <meta property="og:description" content="Short preview without the avatar list." />
+              <script type="application/ld+json">
+                {
+                  "@context": "https://schema.org",
+                  "@type": "Product",
+                  "name": "Somiel 21 avatars",
+                  "description": "【대응 아바타/対応アバタ】\n*Manuka https://jingo1016.booth.pm/items/5058077\n*Chiffon https://komado.booth.pm/items/5354471\n*Lime https://komado.booth.pm/items/4876459\n*Shinano https://booth.pm/ko/items/6106863\n*Airi https://kyubihome.booth.pm/items/6082686\n*Chocolat https://komado.booth.pm/items/6405390\n*Milltina https://dolosart.booth.pm/items/6538026\n*Mizuki https://paryi.booth.pm/items/5132797\n*Rurune https://paryi.booth.pm/items/5957830\n*Sio https://chocolaterice.booth.pm/items/5650156\n*Milfy https://mk22.booth.pm/items/6571299\n*Ichigo https://hamini.booth.pm/items/7328789\n*Eku https://septem47.booth.pm/items/7328764\n*Mao https://paryi.booth.pm/items/6846646\n*Lasyusha https://keenooshop.booth.pm/items/4825073\n*Lumina https://extension.booth.pm/items/7502898\n*Ririka https://paryi.booth.pm/items/6373683\n*Rinasciita https://rionesta.booth.pm/items/7475899\n*Ramune https://emolab.booth.pm/items/7699667\n*Plum https://komado.booth.pm/items/7770415\n*Mayo https://chocolaterice.booth.pm/items/8122803"
+                }
+              </script>
+            </head>
+            <body>
+              <div class="variation-name">✿Full Package✿ [21 Avatars]</div>
+              <div class="variation-name">✿Milfy,Eku✿</div>
+              <div class="variation-name">✿Mao,Ririka✿</div>
+              <section class="shop__text">UPDATE v1.01</section>
+            </body>
+          </html>
+        "#;
+
+        let info = parse_product_info(html).expect("parse product info");
+        let expected_models = [
+            "Manuka",
+            "Chiffon",
+            "Lime",
+            "Shinano",
+            "Airi",
+            "Chocolat",
+            "Milltina",
+            "Mizuki",
+            "Rurune",
+            "Sio",
+            "Milfy",
+            "Ichigo",
+            "Eku",
+            "Mao",
+            "Lasyusha",
+            "Lumina",
+            "Ririka",
+            "Rinasciita",
+            "Ramune",
+            "Plum",
+            "Mayo",
+        ];
+
+        for model in expected_models {
+            assert!(
+                info.search_text.contains(model),
+                "missing supported avatar in search text: {model}"
+            );
+        }
     }
 
     #[test]

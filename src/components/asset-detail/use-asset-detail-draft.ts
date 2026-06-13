@@ -19,6 +19,7 @@ import {
   type SuggestedBoothModel,
 } from "@/lib/booth-product-info";
 import { sameIds, toggleId } from "@/lib/id-list";
+import { suggestedTagColor } from "@/lib/sensitive-content";
 import type { Asset, Model, Tag, UpdateAssetInput } from "@/types";
 
 type UseAssetDetailDraftInput = {
@@ -165,8 +166,6 @@ type SuggestedTagActionOptions = {
   removeSuggestedTag: (tagName: string) => void;
   setTagIds: AssetDetailDraftSetters["setEditedTagIds"];
 };
-
-const defaultSuggestedTagColor = "#6B7280";
 
 const toRelatedLinkDrafts = (asset: Asset | null): RelatedLinkDraft[] =>
   (asset?.related_links ?? []).map((link) => ({
@@ -511,7 +510,7 @@ function createSuggestedTagAction({
   setTagIds,
 }: SuggestedTagActionOptions) {
   return async (tagName: string) => {
-    const created = await addTag(tagName, defaultSuggestedTagColor);
+    const created = await addTag(tagName, suggestedTagColor(tagName));
     setTagIds((current) => mergeIds(current, [created.id]));
     removeSuggestedTag(tagName);
   };

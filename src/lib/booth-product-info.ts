@@ -1,4 +1,5 @@
 import { invokeTauri } from "@/lib/tauri-runtime";
+import { sensitiveTagName } from "@/lib/sensitive-content";
 import type { BoothProductInfo, Model, Tag } from "@/types";
 
 export type SuggestedBoothModel = {
@@ -40,7 +41,7 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     name: "Manuka",
     displayName: "マヌカ",
     label: "マヌカ / Manuka",
-    aliases: ["マヌカ", "Manuka"],
+    aliases: ["マヌカ", "Manuka", "Manukaマヌカ"],
   },
   {
     name: "Shinra",
@@ -80,10 +81,22 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["キプフェル", "Kipfel"],
   },
   {
+    name: "Rindo",
+    displayName: "竜胆",
+    label: "竜胆 / Rindo",
+    aliases: ["竜胆", "龍胆", "Rindo"],
+  },
+  {
     name: "Mizuki",
     displayName: "瑞希",
     label: "瑞希 / Mizuki",
     aliases: ["瑞希", "Mizuki"],
+  },
+  {
+    name: "Nagi",
+    displayName: "凪",
+    label: "凪 / Nagi",
+    aliases: ["凪", "Nagi"],
   },
   {
     name: "Selestia",
@@ -122,6 +135,24 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["ルルネ", "ルルン", "Rurune"],
   },
   {
+    name: "Nenmir",
+    displayName: "ネミア",
+    label: "ネミア / Nenmir",
+    aliases: ["ネミア", "Nenmir", "Nemir"],
+  },
+  {
+    name: "Zome",
+    displayName: "ゾメ",
+    label: "ゾメ / Zome",
+    aliases: ["ゾメ", "ゾメちゃん", "Zome"],
+  },
+  {
+    name: "Ririka",
+    displayName: "りりか",
+    label: "りりか / Ririka",
+    aliases: ["りりか", "Ririka"],
+  },
+  {
     name: "Mamehinata",
     displayName: "まめひなた",
     label: "まめひなた / Mamehinata",
@@ -134,10 +165,28 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["ラシューシャ", "Lasyusha"],
   },
   {
+    name: "Shiratsume",
+    displayName: "しらつめ",
+    label: "しらつめ / Shiratsume",
+    aliases: ["しらつめ", "Shiratsume", "Shirastume"],
+  },
+  {
     name: "Marycia",
     displayName: "マリシア",
     label: "マリシア / Marycia",
     aliases: ["マリシア", "Marycia"],
+  },
+  {
+    name: "Rusk",
+    displayName: "ラスク",
+    label: "ラスク / Rusk",
+    aliases: ["ラスク", "Rusk"],
+  },
+  {
+    name: "Milk",
+    displayName: "ミルク",
+    label: "ミルク / Milk",
+    aliases: ["ミルク", "Milk"],
   },
   {
     name: "Maya",
@@ -158,6 +207,80 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["イチゴ", "Ichigo"],
   },
   {
+    name: "Karin",
+    displayName: "カリン",
+    label: "カリン / Karin",
+    aliases: ["カリン", "Karin"],
+  },
+  {
+    name: "TubeRose",
+    displayName: null,
+    label: "TubeRose",
+    aliases: ["TubeRose"],
+  },
+  {
+    name: "Velle",
+    displayName: "ヴェール",
+    label: "ヴェール / Velle",
+    aliases: ["ヴェール", "Velle"],
+  },
+  {
+    name: "Rize",
+    displayName: "リゼ",
+    label: "リゼ / Rize",
+    aliases: ["リゼ", "Rize"],
+  },
+  {
+    name: "Bina",
+    displayName: "ビナア",
+    label: "ビナア / Bina",
+    aliases: ["ビナア", "Bina", "Binah"],
+  },
+  {
+    name: "Hakuu",
+    displayName: "薄荷",
+    label: "薄荷 / Hakuu",
+    aliases: ["薄荷", "ハクウ", "Hakuu"],
+  },
+  {
+    name: "MARUBODY",
+    displayName: null,
+    label: "MARUBODY",
+    aliases: ["MARUBODY"],
+  },
+  {
+    name: "Mame Friends",
+    displayName: null,
+    label: "Mame Friends",
+    aliases: ["Mame Friends"],
+  },
+  {
+    name: "YugiMiyo",
+    displayName: "ユギミヨ",
+    label: "ユギミヨ / YugiMiyo",
+    aliases: [
+      "ユギミヨ",
+      "ユギ、ミヨ",
+      "ユギ",
+      "ミヨ",
+      "YugiMiyo",
+      "Yugi",
+      "Miyo",
+    ],
+  },
+  {
+    name: "Meiyun",
+    displayName: "めいゆん",
+    label: "めいゆん / Meiyun",
+    aliases: ["めいゆん", "Meiyun"],
+  },
+  {
+    name: "Sophina",
+    displayName: "ソフィナ",
+    label: "ソフィナ / Sophina",
+    aliases: ["ソフィナ", "Sophina"],
+  },
+  {
     name: "Misaki",
     displayName: "海咲",
     label: "海咲 / Misaki",
@@ -170,16 +293,70 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["ミルフィ", "ミルフィー", "Milfy"],
   },
   {
+    name: "Cian",
+    displayName: "シアン",
+    label: "シアン / Cian",
+    aliases: ["シアン", "Cian"],
+  },
+  {
+    name: "Mafuyu",
+    displayName: "真冬",
+    label: "真冬 / Mafuyu",
+    aliases: ["真冬", "Mafuyu"],
+  },
+  {
     name: "Lumina",
     displayName: "ルミナ",
     label: "ルミナ / Lumina",
     aliases: ["ルミナ", "Lumina"],
   },
   {
+    name: "Rinasciita",
+    displayName: "リナシータ",
+    label: "リナシータ / Rinasciita",
+    aliases: ["リナシータ", "Rinasciita"],
+  },
+  {
+    name: "Ramune",
+    displayName: "ラムネ",
+    label: "ラムネ / Ramune",
+    aliases: ["ラムネ", "Ramune"],
+  },
+  {
+    name: "Leefa",
+    displayName: "リーファ",
+    label: "リーファ / Leefa",
+    aliases: ["リーファ", "Leefa", "Leafa"],
+  },
+  {
+    name: "Watayuki",
+    displayName: "わたゆき",
+    label: "わたゆき / Watayuki",
+    aliases: ["わたゆき", "Watayuki"],
+  },
+  {
+    name: "Hinanatsu",
+    displayName: "ひななつ",
+    label: "ひななつ / Hinanatsu",
+    aliases: ["ひななつ", "Hinanatsu"],
+  },
+  {
+    name: "Mishuru",
+    displayName: "みしゅる",
+    label: "みしゅる / Mishuru",
+    aliases: ["みしゅる", "Mishuru"],
+  },
+  {
     name: "Lapwing",
     displayName: "ラップウィング",
     label: "ラップウィング / Lapwing",
     aliases: ["ラップウィング", "Lapwing"],
+  },
+  {
+    name: "Grus",
+    displayName: null,
+    label: "Grus",
+    aliases: ["Grus"],
   },
   {
     name: "Mao",
@@ -204,6 +381,42 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     displayName: "ひかるん",
     label: "ひかるん / Hikarun",
     aliases: ["ひかるん", "ヒカルン", "Hikarun"],
+  },
+  {
+    name: "Kuuta",
+    displayName: "くうた",
+    label: "くうた / Kuuta",
+    aliases: ["くうた", "Kuuta"],
+  },
+  {
+    name: "Luchika",
+    displayName: "ルチカ",
+    label: "ルチカ / Luchika",
+    aliases: ["ルチカ", "Luchika"],
+  },
+  {
+    name: "Natsume",
+    displayName: "ナツメ",
+    label: "ナツメ / Natsume",
+    aliases: ["ナツメ", "Natsume"],
+  },
+  {
+    name: "Fyuett",
+    displayName: "フィユエ",
+    label: "フィユエ / Fyuett",
+    aliases: ["フィユエ", "Fyuett"],
+  },
+  {
+    name: "Cazalis",
+    displayName: "カザリス",
+    label: "カザリス / Cazalis",
+    aliases: ["カザリス", "Cazalis"],
+  },
+  {
+    name: "Miya",
+    displayName: "ミヤ",
+    label: "ミヤ / Miya",
+    aliases: ["ミヤ", "Miya"],
   },
 ];
 const modelAliasPairs: readonly [string, string][] = modelAliasGroups.flatMap(
@@ -276,6 +489,23 @@ const boothTagMappings: readonly {
   {
     localName: "VRChat",
     aliases: ["VRChat", "VRC"],
+  },
+  {
+    localName: sensitiveTagName,
+    aliases: [
+      "R18",
+      "R-18",
+      "R 18",
+      "18+",
+      "18禁",
+      "Adult",
+      "NSFW",
+      "成人向け",
+      "成人向",
+      "成年向け",
+      "成年向",
+      "アダルト",
+    ],
   },
 ];
 
