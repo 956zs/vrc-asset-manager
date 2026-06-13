@@ -20,11 +20,13 @@ import { AssetGrid } from "@/components/asset-grid";
 import { BatchImportDialog } from "@/components/batch-import-dialog";
 import { CommandPalette } from "@/components/command-palette/command-palette";
 import { AssetRelatedDialog } from "@/components/asset-related-dialog";
+import { ReleaseNotesDialog } from "@/components/release-notes-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { ShortcutHelpDialog } from "@/components/shortcuts/shortcut-help-dialog";
 import { useAppShortcuts } from "@/components/shortcuts/use-app-shortcuts";
 import { Button } from "@/components/ui/button";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
+import { useReleaseNotesController, type ReleaseNotesController } from "@/lib/use-release-notes";
 import { VccProjects } from "@/components/vcc-projects";
 import { useAssetStore } from "@/stores/asset-store";
 import type { AssetSortOrder } from "@/types";
@@ -43,6 +45,7 @@ type AppController = {
   isShortcutHelpOpen: boolean;
   mainView: MainView;
   notice: string | null;
+  releaseNotes: ReleaseNotesController;
   selectedAssetId: number | null;
   setIsCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
   setBatchImportPaths: Dispatch<SetStateAction<string[]>>;
@@ -83,6 +86,7 @@ function useAppController(): AppController {
   const [isBatchImportOpen, setIsBatchImportOpen] = useState(false);
   const [batchImportPaths, setBatchImportPaths] = useState<string[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const releaseNotes = useReleaseNotesController();
 
   useEffect(() => {
     void loadAll();
@@ -141,7 +145,7 @@ function useAppController(): AppController {
   return {
     batchImportPaths, clearError, clearNotice, error, isBatchImportOpen, isDraggingFiles,
     isCommandPaletteOpen, isSettingsOpen,
-    isShortcutHelpOpen, mainView, notice, selectedAssetId,
+    isShortcutHelpOpen, mainView, notice, releaseNotes, selectedAssetId,
     setBatchImportPaths, setIsBatchImportOpen, setIsCommandPaletteOpen, setIsDraggingFiles,
     setIsSettingsOpen, setIsShortcutHelpOpen, setMainView,
   };
@@ -359,12 +363,21 @@ function AppDialogs({ controller }: { controller: AppController }) {
       <AppSettingsDialog
         open={controller.isSettingsOpen}
         onOpenChange={controller.setIsSettingsOpen}
+        onOpenReleaseNotes={controller.releaseNotes.onOpenCurrentReleaseNotes}
         showAssets={() => controller.setMainView("assets")}
       />
       <BatchImportDialog
         open={controller.isBatchImportOpen}
         paths={controller.batchImportPaths}
         onOpenChange={setBatchImportOpen}
+      />
+      <ReleaseNotesDialog
+        currentVersion={controller.releaseNotes.currentVersion}
+        lastSeenVersion={controller.releaseNotes.lastSeenVersion}
+        notes={controller.releaseNotes.notes}
+        open={controller.releaseNotes.open}
+        onOpenChange={controller.releaseNotes.onOpenChange}
+        onAcknowledge={controller.releaseNotes.onAcknowledge}
       />
     </>
   );

@@ -44,6 +44,7 @@ import {
 type AppSettingsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenReleaseNotes: () => void;
   showAssets: () => void;
 };
 
@@ -105,6 +106,7 @@ type SettingsLayoutProps = AppMetadata & {
   stats: SettingsStats;
   update: UpdateController;
   health: HealthController;
+  onOpenReleaseNotes: () => void;
   onOpenTab: (tab: SettingsTab) => void;
 };
 
@@ -409,7 +411,11 @@ function SettingsOverviewContent({
   );
 }
 
-function SettingsUpdateContent({ appVersion, update }: SettingsLayoutProps) {
+function SettingsUpdateContent({
+  appVersion,
+  update,
+  onOpenReleaseNotes,
+}: SettingsLayoutProps) {
   return (
     <UpdateSection
       appVersion={appVersion}
@@ -420,6 +426,7 @@ function SettingsUpdateContent({ appVersion, update }: SettingsLayoutProps) {
       downloadPercent={update.downloadPercent}
       onCheckUpdate={update.onCheckUpdate}
       onInstallUpdate={update.onInstallUpdate}
+      onOpenReleaseNotes={onOpenReleaseNotes}
       onOpenReleases={update.onOpenReleases}
     />
   );

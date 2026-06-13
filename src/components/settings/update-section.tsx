@@ -4,6 +4,7 @@ import {
   Download,
   ExternalLink,
   Info,
+  Newspaper,
   Loader2,
   RefreshCw,
   TriangleAlert,
@@ -21,6 +22,7 @@ type UpdateSectionProps = {
   downloadPercent: number | null;
   onCheckUpdate: () => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
+  onOpenReleaseNotes: () => void | Promise<void>;
   onOpenReleases: () => void | Promise<void>;
 };
 
@@ -200,10 +202,35 @@ function UpdateStatusMessage({
   return null;
 }
 
+function LocalReleaseNotesPanel({
+  onOpenReleaseNotes,
+}: Pick<UpdateSectionProps, "onOpenReleaseNotes">) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Newspaper className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">本版更新內容</h3>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            查看已內建在 app 裡的 first-run release notes。
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => void onOpenReleaseNotes()}>
+          <Newspaper className="h-4 w-4" />
+          查看更新內容
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function UpdateSection(props: UpdateSectionProps) {
   return (
     <section className="flex min-h-full flex-col gap-4">
       <UpdateHeader {...props} />
+      <LocalReleaseNotesPanel onOpenReleaseNotes={props.onOpenReleaseNotes} />
       <UpdateStatusMessage {...props} />
     </section>
   );
