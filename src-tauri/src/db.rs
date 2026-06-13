@@ -160,6 +160,7 @@ pub fn init(db_path: PathBuf, seed_demo: bool) -> Result<DbState, Box<dyn std::e
     conn.execute_batch(include_str!("../migrations/001_initial.sql"))?;
     migrate_sort_order(&conn)?;
     migrate_asset_category(&conn)?;
+    migrate_booth_shop_metadata(&conn)?;
     ensure_library_settings(&conn)?;
     ensure_vcc_repositories(&conn)?;
     if seed_demo {
@@ -518,6 +519,23 @@ fn migrate_asset_category(conn: &Connection) -> rusqlite::Result<()> {
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+fn migrate_booth_shop_metadata(conn: &Connection) -> rusqlite::Result<()> {
+    if !has_column(conn, "assets", "booth_shop_name")? {
+        conn.execute("ALTER TABLE assets ADD COLUMN booth_shop_name TEXT", [])?;
+    }
+
+    if !has_column(conn, "assets", "booth_shop_url")? {
+        conn.execute("ALTER TABLE assets ADD COLUMN booth_shop_url TEXT", [])?;
+    }
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_assets_booth_shop ON assets(booth_shop_name, booth_shop_url)",
         [],
     )?;
 

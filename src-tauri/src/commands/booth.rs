@@ -14,6 +14,8 @@ const BOOTH_ADULT_COOKIE: &str = "adult=t";
 pub struct BoothProductInfo {
     pub title: Option<String>,
     pub thumbnail_url: Option<String>,
+    pub shop_name: Option<String>,
+    pub shop_url: Option<String>,
     pub tags: Vec<String>,
     pub search_text: String,
 }
@@ -163,6 +165,16 @@ fn product_json_brand(products: &[Value]) -> Option<String> {
     })
 }
 
+fn product_json_brand_url(products: &[Value]) -> Option<String> {
+    products.iter().find_map(|product| {
+        product
+            .get("brand")
+            .and_then(|brand| brand.get("url"))
+            .and_then(Value::as_str)
+            .and_then(clean_text)
+    })
+}
+
 fn product_title(document: &Html, products: &[Value]) -> CommandResult<Option<String>> {
     if let Some(title) = product_json_string(products, "name") {
         return Ok(Some(title));
@@ -286,6 +298,75 @@ fn product_variation_names(document: &Html) -> CommandResult<Vec<String>> {
     Ok(names.into_iter().collect())
 }
 
+fn product_shop_name(document: &Html, products: &[Value]) -> CommandResult<Option<String>> {
+    if let Some(brand) = product_json_brand(products) {
+        return Ok(Some(brand));
+    }
+
+    element_text(
+        document,
+        ".shop-name, .shop__name, .market-item-detail-item-shop__name, a[href*='.booth.pm']",
+    )
+}
+
+fn normalize_absolute_url(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed.starts_with("//") {
+        return Some(format!("https:{trimmed}"));
+    }
+
+    reqwest::Url::parse(trimmed)
+        .ok()
+        .map(|url| url.to_string().trim_end_matches('/').to_string())
+}
+
+fn shop_url_from_page_url(page_url: Option<&str>) -> Option<String> {
+    let url = reqwest::Url::parse(page_url?).ok()?;
+    let host = url.host_str()?;
+    if host == "booth.pm" || !host.ends_with(".booth.pm") {
+        return None;
+    }
+
+    Some(format!("{}://{}", url.scheme(), host))
+}
+
+fn product_shop_url(
+    document: &Html,
+    products: &[Value],
+    page_url: Option<&str>,
+) -> CommandResult<Option<String>> {
+    if let Some(url) = product_json_brand_url(products).and_then(|url| normalize_absolute_url(&url))
+    {
+        return Ok(Some(url));
+    }
+
+    let selector = selector("a[href*='.booth.pm']")?;
+    for element in document.select(&selector) {
+        let Some(url) = element
+            .value()
+            .attr("href")
+            .and_then(normalize_absolute_url)
+        else {
+            continue;
+        };
+        let Ok(parsed) = reqwest::Url::parse(&url) else {
+            continue;
+        };
+        let Some(host) = parsed.host_str() else {
+            continue;
+        };
+        if host != "booth.pm" && host.ends_with(".booth.pm") {
+            return Ok(Some(format!("{}://{}", parsed.scheme(), host)));
+        }
+    }
+
+    Ok(shop_url_from_page_url(page_url))
+}
+
 fn inferred_product_tags(search_text: &str) -> Vec<String> {
     let text = search_text.to_lowercase();
     let mut tags = BTreeSet::new();
@@ -369,7 +450,8 @@ fn is_useful_tag(tag: &str) -> bool {
 fn product_search_text(
     title: Option<&str>,
     description: Option<&str>,
-    brand: Option<&str>,
+    shop_name: Option<&str>,
+    shop_url: Option<&str>,
     tags: &[String],
     variation_names: &[String],
 ) -> String {
@@ -380,25 +462,33 @@ fn product_search_text(
     if let Some(description) = description {
         values.push(description);
     }
-    if let Some(brand) = brand {
-        values.push(brand);
+    if let Some(shop_name) = shop_name {
+        values.push(shop_name);
+    }
+    if let Some(shop_url) = shop_url {
+        values.push(shop_url);
     }
     values.extend(tags.iter().map(String::as_str));
     values.extend(variation_names.iter().map(String::as_str));
     values.join(" ")
 }
 
-fn parse_product_info(html: &str) -> CommandResult<BoothProductInfo> {
+fn parse_product_info_with_url(
+    html: &str,
+    page_url: Option<&str>,
+) -> CommandResult<BoothProductInfo> {
     let document = Html::parse_document(html);
     let products = json_ld_products(&document);
     let title = product_title(&document, &products)?;
     let thumbnail_url = product_thumbnail_url(&document, &products)?;
     let description = product_description(&document, &products)?;
-    let brand = product_json_brand(&products);
+    let shop_name = product_shop_name(&document, &products)?;
+    let shop_url = product_shop_url(&document, &products, page_url)?;
     let variation_names = product_variation_names(&document)?;
     let base_search_text = product_search_text(
         title.as_deref(),
         description.as_deref(),
+        None,
         None,
         &[],
         &variation_names,
@@ -407,7 +497,8 @@ fn parse_product_info(html: &str) -> CommandResult<BoothProductInfo> {
     let search_text = product_search_text(
         title.as_deref(),
         description.as_deref(),
-        brand.as_deref(),
+        shop_name.as_deref(),
+        shop_url.as_deref(),
         &tags,
         &variation_names,
     );
@@ -415,9 +506,16 @@ fn parse_product_info(html: &str) -> CommandResult<BoothProductInfo> {
     Ok(BoothProductInfo {
         title,
         thumbnail_url,
+        shop_name,
+        shop_url,
         tags,
         search_text,
     })
+}
+
+#[cfg(test)]
+fn parse_product_info(html: &str) -> CommandResult<BoothProductInfo> {
+    parse_product_info_with_url(html, None)
 }
 
 pub fn fetch_thumbnail_url(url: &str) -> CommandResult<Option<String>> {
@@ -430,6 +528,14 @@ pub fn fetch_thumbnail_url(url: &str) -> CommandResult<Option<String>> {
     product_thumbnail_url(&document, &products)
 }
 
+pub fn fetch_product_info(url: &str) -> CommandResult<Option<BoothProductInfo>> {
+    let Some(html) = fetch_booth_html(url)? else {
+        return Ok(None);
+    };
+
+    parse_product_info_with_url(&html, Some(url)).map(Some)
+}
+
 #[tauri::command]
 pub fn fetch_booth_thumbnail(url: String) -> CommandResult<Option<String>> {
     fetch_thumbnail_url(&url)
@@ -437,11 +543,7 @@ pub fn fetch_booth_thumbnail(url: String) -> CommandResult<Option<String>> {
 
 #[tauri::command]
 pub fn fetch_booth_product_info(url: String) -> CommandResult<Option<BoothProductInfo>> {
-    let Some(html) = fetch_booth_html(&url)? else {
-        return Ok(None);
-    };
-
-    parse_product_info(&html).map(Some)
+    fetch_product_info(&url)
 }
 
 #[cfg(test)]
@@ -499,7 +601,7 @@ mod tests {
                   "name": "Cyberpunk-Body Tex+Material",
                   "description": "Avatar Tex. Sio: https://example.com/sio Manuka: https://example.com/manuka Shinra: https://example.com/shinra",
                   "image": "https://example.com/json.jpg",
-                  "brand": { "@type": "Brand", "name": "No.39" }
+                  "brand": { "@type": "Brand", "name": "No.39", "url": "https://no39.booth.pm" }
                 }
               </script>
             </head>
@@ -522,7 +624,10 @@ mod tests {
         );
         assert!(info.tags.contains(&"VRChat".to_string()));
         assert!(info.tags.contains(&"テクスチャ".to_string()));
+        assert_eq!(info.shop_name.as_deref(), Some("No.39"));
+        assert_eq!(info.shop_url.as_deref(), Some("https://no39.booth.pm"));
         assert!(info.search_text.contains("Sio"));
+        assert!(info.search_text.contains("No.39"));
         assert!(info.search_text.contains("Airi Cyberpunk Body"));
     }
 
@@ -714,7 +819,7 @@ mod tests {
               </script>
             </head>
             <body>
-              <div class="shop-name">Hair Accessory World Shop</div>
+              <a class="shop-name" href="https://hair-accessory-world.booth.pm">Hair Accessory World Shop</a>
             </body>
           </html>
         "#;
@@ -722,6 +827,38 @@ mod tests {
         let info = parse_product_info(html).expect("parse product info");
 
         assert!(info.tags.is_empty());
+        assert_eq!(info.shop_name.as_deref(), Some("Hair Accessory World Shop"));
+        assert_eq!(
+            info.shop_url.as_deref(),
+            Some("https://hair-accessory-world.booth.pm")
+        );
         assert!(info.search_text.contains("Hair Accessory World Shop"));
+    }
+
+    #[test]
+    fn falls_back_to_booth_shop_subdomain_url() {
+        let html = r#"
+          <html>
+            <head>
+              <meta property="og:title" content="Simple Ribbon - BOOTH" />
+              <meta property="og:description" content="A simple decorative item." />
+              <script type="application/ld+json">
+                {
+                  "@context": "https://schema.org",
+                  "@type": "Product",
+                  "name": "Simple Ribbon",
+                  "brand": { "@type": "Brand", "name": "ねこまる商店" }
+                }
+              </script>
+            </head>
+            <body></body>
+          </html>
+        "#;
+
+        let info = parse_product_info_with_url(html, Some("https://nekomaru.booth.pm/items/12345"))
+            .expect("parse product info");
+
+        assert_eq!(info.shop_name.as_deref(), Some("ねこまる商店"));
+        assert_eq!(info.shop_url.as_deref(), Some("https://nekomaru.booth.pm"));
     }
 }

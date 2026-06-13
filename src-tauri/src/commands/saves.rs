@@ -25,6 +25,9 @@ const EXPORT_ASSETS_SQL: &str = "SELECT id, name, display_name, file_path, booth
 const EXPORT_ASSETS_WITH_CATEGORY_SQL: &str = "SELECT id, name, display_name, category, file_path, booth_url, thumbnail_url, note, created_at, updated_at
              FROM assets
              ORDER BY id";
+const EXPORT_ASSETS_WITH_SHOP_SQL: &str = "SELECT id, name, display_name, category, file_path, booth_url, booth_shop_name, booth_shop_url, thumbnail_url, note, created_at, updated_at
+             FROM assets
+             ORDER BY id";
 const EXPORT_ASSET_MODELS_SQL: &str =
     "SELECT asset_id, model_id FROM asset_models ORDER BY asset_id, model_id";
 const EXPORT_ASSET_TAGS_SQL: &str =
@@ -70,6 +73,10 @@ struct SaveAsset {
     category: String,
     file_path: String,
     booth_url: Option<String>,
+    #[serde(default)]
+    booth_shop_name: Option<String>,
+    #[serde(default)]
+    booth_shop_url: Option<String>,
     thumbnail_url: Option<String>,
     note: Option<String>,
     created_at: String,
@@ -227,6 +234,8 @@ fn asset_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAsset> {
         category: "accessory".to_string(),
         file_path: row.get(3)?,
         booth_url: row.get(4)?,
+        booth_shop_name: None,
+        booth_shop_url: None,
         thumbnail_url: row.get(5)?,
         note: row.get(6)?,
         created_at: row.get(7)?,
@@ -242,10 +251,29 @@ fn asset_with_category_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAsset> {
         category: row.get(3)?,
         file_path: row.get(4)?,
         booth_url: row.get(5)?,
+        booth_shop_name: None,
+        booth_shop_url: None,
         thumbnail_url: row.get(6)?,
         note: row.get(7)?,
         created_at: row.get(8)?,
         updated_at: row.get(9)?,
+    })
+}
+
+fn asset_with_shop_from_row(row: &Row<'_>) -> rusqlite::Result<SaveAsset> {
+    Ok(SaveAsset {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        display_name: row.get(2)?,
+        category: row.get(3)?,
+        file_path: row.get(4)?,
+        booth_url: row.get(5)?,
+        booth_shop_name: row.get(6)?,
+        booth_shop_url: row.get(7)?,
+        thumbnail_url: row.get(8)?,
+        note: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
@@ -331,6 +359,10 @@ fn default_asset_category() -> String {
 }
 
 fn export_assets(conn: &Connection) -> CommandResult<Vec<SaveAsset>> {
+    if let Ok(assets) = archive_rows(conn, EXPORT_ASSETS_WITH_SHOP_SQL, asset_with_shop_from_row) {
+        return Ok(assets);
+    }
+
     match archive_rows(
         conn,
         EXPORT_ASSETS_WITH_CATEGORY_SQL,
@@ -626,8 +658,8 @@ fn insert_assets(tx: &Transaction<'_>, assets: &[SaveAsset]) -> CommandResult<()
     let mut stmt = tx
         .prepare(
             "INSERT INTO assets
-                (id, name, display_name, category, file_path, booth_url, thumbnail_url, note, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (id, name, display_name, category, file_path, booth_url, booth_shop_name, booth_shop_url, thumbnail_url, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .map_err(db_error)?;
 
@@ -643,6 +675,8 @@ fn insert_assets(tx: &Transaction<'_>, assets: &[SaveAsset]) -> CommandResult<()
             category,
             &asset.file_path,
             asset.booth_url.as_deref(),
+            asset.booth_shop_name.as_deref(),
+            asset.booth_shop_url.as_deref(),
             asset.thumbnail_url.as_deref(),
             asset.note.as_deref(),
             &asset.created_at,

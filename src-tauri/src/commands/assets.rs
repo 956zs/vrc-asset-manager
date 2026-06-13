@@ -2,7 +2,7 @@ use crate::{
     db::DbState,
     types::{
         Asset, AssetCategory, AssetFilters, AssetLink, AssetLinkInput, AssetSortOrder,
-        AssetStatusFilter, CreateAssetInput, Model, Tag, UpdateAssetInput,
+        AssetStatusFilter, BoothShopFilter, CreateAssetInput, Model, Tag, UpdateAssetInput,
     },
 };
 use rusqlite::{params, params_from_iter, types::Value, Connection, Row, Transaction};
@@ -14,7 +14,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
-use tauri::State;
+use tauri::{Emitter, State};
 
 use super::{
     booth, connection, db_error, ensure_affected, models::list_models_for_asset,
@@ -22,12 +22,13 @@ use super::{
 };
 
 const SQL_PARAM_BATCH_SIZE: usize = 900;
-const ASSET_SEARCH_PARAM_COUNT: usize = 5;
+const ASSET_SEARCH_PARAM_COUNT: usize = 7;
 const LIBRARY_SETTINGS_ID: i64 = 1;
 const SOURCE_CONTENT_PREVIEW_LIMIT: usize = 200;
+const BOOTH_SHOP_BACKFILL_PROGRESS_EVENT: &str = "booth-shop-backfill-progress";
 type AssetGroups<T> = BTreeMap<i64, Vec<T>>;
 
-const ASSET_LIST_BASE_SQL: &str = "SELECT a.id, a.name, a.display_name, a.category, a.file_path, a.booth_url, a.thumbnail_url, a.note, a.created_at, a.updated_at
+const ASSET_LIST_BASE_SQL: &str = "SELECT a.id, a.name, a.display_name, a.category, a.file_path, a.booth_url, a.booth_shop_name, a.booth_shop_url, a.thumbnail_url, a.note, a.created_at, a.updated_at
          FROM assets a
          WHERE 1 = 1";
 
@@ -39,6 +40,8 @@ struct AssetBase {
     category: AssetCategory,
     file_path: String,
     booth_url: Option<String>,
+    booth_shop_name: Option<String>,
+    booth_shop_url: Option<String>,
     thumbnail_url: Option<String>,
     note: Option<String>,
     created_at: String,
@@ -119,6 +122,7 @@ impl AssetListQuery {
             column: "tag_id",
             ids: &filters.tag_ids,
         });
+        query.push_shop_filters(&filters.shop_filters);
         query.push_status_filters(&filters.status_filters);
         query.push_sort_order(filters.sort_order);
         query
@@ -139,6 +143,8 @@ impl AssetListQuery {
                 LOWER(COALESCE(a.display_name, a.name)) LIKE ?
                 OR LOWER(a.file_path) LIKE ?
                 OR LOWER(COALESCE(a.note, '')) LIKE ?
+                OR LOWER(COALESCE(a.booth_shop_name, '')) LIKE ?
+                OR LOWER(COALESCE(a.booth_shop_url, '')) LIKE ?
                 OR a.id IN (
                     SELECT asset_id
                     FROM asset_links
@@ -181,6 +187,45 @@ impl AssetListQuery {
         self.values
             .extend(filter.ids.iter().map(|id| Value::Integer(*id)));
         self.values.push(Value::Integer(filter.ids.len() as i64));
+    }
+
+    fn push_shop_filters(&mut self, filters: &[BoothShopFilter]) {
+        if filters.is_empty() {
+            return;
+        }
+
+        let mut clauses = Vec::new();
+        for filter in filters {
+            let name = filter.name.trim();
+            if name.is_empty() {
+                continue;
+            }
+
+            match filter
+                .url
+                .as_deref()
+                .map(str::trim)
+                .filter(|url| !url.is_empty())
+            {
+                Some(url) => {
+                    clauses.push(
+                        "(a.booth_shop_name = ? AND COALESCE(a.booth_shop_url, '') = ?)"
+                            .to_string(),
+                    );
+                    self.values.push(Value::Text(name.to_string()));
+                    self.values.push(Value::Text(url.to_string()));
+                }
+                None => {
+                    clauses.push("(a.booth_shop_name = ? AND (a.booth_shop_url IS NULL OR TRIM(a.booth_shop_url) = ''))".to_string());
+                    self.values.push(Value::Text(name.to_string()));
+                }
+            }
+        }
+
+        if !clauses.is_empty() {
+            self.sql
+                .push_str(&format!(" AND ({})", clauses.join(" OR ")));
+        }
     }
 
     fn push_status_filters(&mut self, filters: &[AssetStatusFilter]) {
@@ -249,10 +294,12 @@ fn asset_base_from_row(row: &Row<'_>) -> rusqlite::Result<AssetBase> {
         category: category_text.parse().unwrap_or_default(),
         file_path: row.get(4)?,
         booth_url: row.get(5)?,
-        thumbnail_url: row.get(6)?,
-        note: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        booth_shop_name: row.get(6)?,
+        booth_shop_url: row.get(7)?,
+        thumbnail_url: row.get(8)?,
+        note: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
@@ -365,6 +412,8 @@ pub struct ManagedImportItemInput {
     pub conflict_strategy: Option<ConflictStrategy>,
     pub display_name: Option<String>,
     pub booth_url: Option<String>,
+    pub booth_shop_name: Option<String>,
+    pub booth_shop_url: Option<String>,
     pub thumbnail_url: Option<String>,
     pub note: Option<String>,
     #[serde(default)]
@@ -400,6 +449,42 @@ pub struct ManagedImportBatchReport {
     pub succeeded: usize,
     pub failed: usize,
     pub results: Vec<ManagedImportItemResult>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoothShopOption {
+    pub key: String,
+    pub name: String,
+    pub url: Option<String>,
+    pub asset_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoothShopBackfillReport {
+    pub total_candidates: usize,
+    pub updated: usize,
+    pub skipped: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoothShopBackfillProgress {
+    pub total: usize,
+    pub current: usize,
+    pub updated: usize,
+    pub skipped: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug)]
+struct BoothShopBackfillCandidate {
+    id: i64,
+    booth_url: String,
+    booth_shop_name: Option<String>,
+    booth_shop_url: Option<String>,
 }
 
 fn normalize_asset_links(links: &[AssetLinkInput]) -> Vec<AssetLinkInput> {
@@ -509,6 +594,34 @@ fn link_for_asset_from_row(row: &Row<'_>) -> rusqlite::Result<(i64, AssetLink)> 
     ))
 }
 
+fn booth_shop_option_from_row(row: &Row<'_>) -> rusqlite::Result<BoothShopOption> {
+    let name: String = row.get(0)?;
+    let url: Option<String> = row.get(1)?;
+    let key = booth_shop_key(&name, url.as_deref());
+
+    Ok(BoothShopOption {
+        key,
+        name,
+        url,
+        asset_count: row.get(2)?,
+    })
+}
+
+fn booth_shop_key(name: &str, url: Option<&str>) -> String {
+    format!("{}|{}", name.trim(), url.unwrap_or("").trim())
+}
+
+fn booth_shop_backfill_candidate_from_row(
+    row: &Row<'_>,
+) -> rusqlite::Result<BoothShopBackfillCandidate> {
+    Ok(BoothShopBackfillCandidate {
+        id: row.get(0)?,
+        booth_url: row.get(1)?,
+        booth_shop_name: row.get(2)?,
+        booth_shop_url: row.get(3)?,
+    })
+}
+
 fn list_models_for_assets(
     conn: &Connection,
     asset_ids: &[i64],
@@ -581,6 +694,8 @@ fn hydrate_asset(conn: &Connection, base: AssetBase) -> rusqlite::Result<Asset> 
         category: base.category,
         file_path: base.file_path,
         booth_url: base.booth_url,
+        booth_shop_name: base.booth_shop_name,
+        booth_shop_url: base.booth_shop_url,
         thumbnail_url: base.thumbnail_url,
         note: base.note,
         created_at: base.created_at,
@@ -608,6 +723,8 @@ fn hydrate_assets(conn: &Connection, bases: Vec<AssetBase>) -> rusqlite::Result<
             category: base.category,
             file_path: base.file_path,
             booth_url: base.booth_url,
+            booth_shop_name: base.booth_shop_name,
+            booth_shop_url: base.booth_shop_url,
             thumbnail_url: base.thumbnail_url,
             note: base.note,
             created_at: base.created_at,
@@ -730,7 +847,7 @@ fn scan_asset_path(summary: &mut AssetHealthSummary, base: &AssetBase) {
 
 fn get_asset_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Asset> {
     let base = conn.query_row(
-        "SELECT id, name, display_name, category, file_path, booth_url, thumbnail_url, note, created_at, updated_at
+        "SELECT id, name, display_name, category, file_path, booth_url, booth_shop_name, booth_shop_url, thumbnail_url, note, created_at, updated_at
          FROM assets
          WHERE id = ?",
         params![id],
@@ -1206,19 +1323,23 @@ fn insert_asset_record(conn: &mut Connection, input: CreateAssetInput) -> Comman
     let name = asset_name_from_path(&file_path);
     let display_name = normalize_optional(input.display_name);
     let booth_url = normalize_optional(input.booth_url);
+    let booth_shop_name = normalize_optional(input.booth_shop_name);
+    let booth_shop_url = normalize_optional(input.booth_shop_url);
     let thumbnail_url = resolve_thumbnail(&booth_url, normalize_optional(input.thumbnail_url));
     let note = normalize_optional(input.note);
 
     let tx = conn.transaction().map_err(db_error)?;
     tx.execute(
-        "INSERT INTO assets (name, display_name, category, file_path, booth_url, thumbnail_url, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO assets (name, display_name, category, file_path, booth_url, booth_shop_name, booth_shop_url, thumbnail_url, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             name,
             display_name,
             input.category.as_str(),
             file_path,
             booth_url,
+            booth_shop_name,
+            booth_shop_url,
             thumbnail_url,
             note
         ],
@@ -1247,6 +1368,136 @@ pub fn get_assets(filters: AssetFilters, db: State<'_, DbState>) -> CommandResul
         assets.retain(|asset| !asset.file_exists);
     }
     Ok(assets)
+}
+
+#[tauri::command]
+pub fn get_booth_shop_options(db: State<'_, DbState>) -> CommandResult<Vec<BoothShopOption>> {
+    let conn = connection(&db)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT booth_shop_name, booth_shop_url, COUNT(*) AS asset_count
+             FROM assets
+             WHERE booth_shop_name IS NOT NULL
+               AND TRIM(booth_shop_name) != ''
+             GROUP BY booth_shop_name, COALESCE(booth_shop_url, '')
+             ORDER BY LOWER(booth_shop_name) COLLATE NOCASE ASC, LOWER(COALESCE(booth_shop_url, '')) COLLATE NOCASE ASC",
+        )
+        .map_err(db_error)?;
+    let rows = stmt
+        .query_map([], booth_shop_option_from_row)
+        .map_err(db_error)?;
+
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)
+}
+
+fn booth_shop_backfill_candidates(
+    conn: &Connection,
+) -> CommandResult<Vec<BoothShopBackfillCandidate>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, booth_url, booth_shop_name, booth_shop_url
+             FROM assets
+             WHERE booth_url IS NOT NULL
+               AND TRIM(booth_url) != ''
+               AND (
+                    booth_shop_name IS NULL
+                    OR TRIM(booth_shop_name) = ''
+                    OR booth_shop_url IS NULL
+                    OR TRIM(booth_shop_url) = ''
+               )
+             ORDER BY id",
+        )
+        .map_err(db_error)?;
+    let rows = stmt
+        .query_map([], booth_shop_backfill_candidate_from_row)
+        .map_err(db_error)?;
+
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(db_error)
+}
+
+fn update_booth_shop_metadata(
+    conn: &Connection,
+    candidate: &BoothShopBackfillCandidate,
+    shop_name: Option<String>,
+    shop_url: Option<String>,
+) -> CommandResult<bool> {
+    let next_shop_name = merge_booth_shop_field(candidate.booth_shop_name.clone(), shop_name);
+    let next_shop_url = merge_booth_shop_field(candidate.booth_shop_url.clone(), shop_url);
+    let changed =
+        next_shop_name != candidate.booth_shop_name || next_shop_url != candidate.booth_shop_url;
+
+    if !changed {
+        return Ok(false);
+    }
+
+    conn.execute(
+        "UPDATE assets
+         SET booth_shop_name = ?, booth_shop_url = ?, updated_at = datetime('now')
+         WHERE id = ?",
+        params![next_shop_name, next_shop_url, candidate.id],
+    )
+    .map_err(db_error)?;
+
+    Ok(true)
+}
+
+fn merge_booth_shop_field(existing: Option<String>, fetched: Option<String>) -> Option<String> {
+    normalize_optional(existing).or_else(|| normalize_optional(fetched))
+}
+
+#[tauri::command]
+pub async fn backfill_booth_shop_metadata(
+    app: tauri::AppHandle,
+    db: State<'_, DbState>,
+) -> CommandResult<BoothShopBackfillReport> {
+    let candidates = {
+        let conn = connection(&db)?;
+        booth_shop_backfill_candidates(&conn)?
+    };
+    let mut report = BoothShopBackfillReport {
+        total_candidates: candidates.len(),
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+    };
+    let emit_progress = |report: &BoothShopBackfillReport, current: usize| {
+        let _ = app.emit(
+            BOOTH_SHOP_BACKFILL_PROGRESS_EVENT,
+            BoothShopBackfillProgress {
+                total: report.total_candidates,
+                current,
+                updated: report.updated,
+                skipped: report.skipped,
+                failed: report.failed,
+            },
+        );
+    };
+
+    emit_progress(&report, 0);
+
+    for (index, candidate) in candidates.into_iter().enumerate() {
+        match booth::fetch_product_info(&candidate.booth_url) {
+            Ok(Some(info)) => {
+                let shop_name = normalize_optional(info.shop_name);
+                let shop_url = normalize_optional(info.shop_url);
+                let conn = connection(&db)?;
+                if update_booth_shop_metadata(&conn, &candidate, shop_name, shop_url)? {
+                    report.updated += 1;
+                } else {
+                    report.skipped += 1;
+                }
+            }
+            Ok(None) => {
+                report.skipped += 1;
+            }
+            Err(_) => {
+                report.failed += 1;
+            }
+        }
+        emit_progress(&report, index + 1);
+    }
+
+    Ok(report)
 }
 
 #[tauri::command]
@@ -1508,6 +1759,8 @@ fn managed_import_item(
                 category: item.category,
                 file_path: final_path.clone(),
                 booth_url: item.booth_url,
+                booth_shop_name: item.booth_shop_name,
+                booth_shop_url: item.booth_shop_url,
                 thumbnail_url: item.thumbnail_url,
                 note: item.note,
                 model_ids: item.model_ids,
@@ -1573,7 +1826,7 @@ pub fn scan_asset_health(db: State<'_, DbState>) -> CommandResult<AssetHealthSum
     let bases = {
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, display_name, category, file_path, booth_url, thumbnail_url, note, created_at, updated_at
+                "SELECT id, name, display_name, category, file_path, booth_url, booth_shop_name, booth_shop_url, thumbnail_url, note, created_at, updated_at
                  FROM assets
                  ORDER BY id",
             )
@@ -1617,6 +1870,8 @@ pub fn update_asset(
     let name = asset_name_from_path(&file_path);
     let display_name = normalize_optional(input.display_name);
     let booth_url = normalize_optional(input.booth_url);
+    let booth_shop_name = normalize_optional(input.booth_shop_name);
+    let booth_shop_url = normalize_optional(input.booth_shop_url);
     let thumbnail_url = resolve_thumbnail(&booth_url, normalize_optional(input.thumbnail_url));
     let note = normalize_optional(input.note);
 
@@ -1625,7 +1880,7 @@ pub fn update_asset(
     let affected = tx
         .execute(
             "UPDATE assets
-             SET name = ?, display_name = ?, category = ?, file_path = ?, booth_url = ?, thumbnail_url = ?, note = ?, updated_at = datetime('now')
+             SET name = ?, display_name = ?, category = ?, file_path = ?, booth_url = ?, booth_shop_name = ?, booth_shop_url = ?, thumbnail_url = ?, note = ?, updated_at = datetime('now')
              WHERE id = ?",
             params![
                 name,
@@ -1633,6 +1888,8 @@ pub fn update_asset(
                 input.category.as_str(),
                 file_path,
                 booth_url,
+                booth_shop_name,
+                booth_shop_url,
                 thumbnail_url,
                 note,
                 id
@@ -1712,4 +1969,35 @@ pub fn open_file_location(path: String) -> CommandResult<()> {
     };
 
     open_folder(&open_target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_booth_shop_field;
+
+    #[test]
+    fn booth_shop_backfill_treats_blank_existing_fields_as_missing() {
+        assert_eq!(
+            merge_booth_shop_field(Some(String::new()), Some("ねこまる商店".to_string())),
+            Some("ねこまる商店".to_string()),
+        );
+        assert_eq!(
+            merge_booth_shop_field(
+                Some("   ".to_string()),
+                Some("https://nekomaru.booth.pm".to_string())
+            ),
+            Some("https://nekomaru.booth.pm".to_string()),
+        );
+    }
+
+    #[test]
+    fn booth_shop_backfill_keeps_existing_non_blank_fields() {
+        assert_eq!(
+            merge_booth_shop_field(
+                Some("Existing Shop".to_string()),
+                Some("Fetched Shop".to_string())
+            ),
+            Some("Existing Shop".to_string()),
+        );
+    }
 }

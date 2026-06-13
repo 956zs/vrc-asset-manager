@@ -4,10 +4,11 @@ mod types;
 
 use commands::{
     assets::{
-        configure_library_root, create_asset, delete_asset, get_assets, get_library_settings,
-        inspect_import_sources, list_import_source_contents, list_zip_contents,
-        managed_import_batch, open_file_location, preview_managed_import_target, scan_asset_health,
-        update_asset, update_library_settings, validate_file_path,
+        backfill_booth_shop_metadata, configure_library_root, create_asset, delete_asset,
+        get_assets, get_booth_shop_options, get_library_settings, inspect_import_sources,
+        list_import_source_contents, list_zip_contents, managed_import_batch, open_file_location,
+        preview_managed_import_target, scan_asset_health, update_asset, update_library_settings,
+        validate_file_path,
     },
     booth::{fetch_booth_product_info, fetch_booth_thumbnail},
     models::{create_model, delete_model, get_models, reorder_models, update_model},
@@ -37,6 +38,8 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             get_assets,
+            get_booth_shop_options,
+            backfill_booth_shop_metadata,
             get_library_settings,
             configure_library_root,
             update_library_settings,
@@ -186,6 +189,8 @@ mod tests {
                 category: AssetCategory::Accessory,
                 file_path: file_path.to_string_lossy().to_string(),
                 booth_url: None,
+                booth_shop_name: None,
+                booth_shop_url: None,
                 thumbnail_url: None,
                 note: None,
                 model_ids: Vec::new(),
@@ -339,6 +344,8 @@ mod tests {
                 category: AssetCategory::Accessory,
                 file_path: config.asset_path.clone(),
                 booth_url: Some("https://example.com/smoke".to_string()),
+                booth_shop_name: Some("Smoke Shop".to_string()),
+                booth_shop_url: Some("https://smoke.booth.pm".to_string()),
                 thumbnail_url: Some("data:image/svg+xml,%3Csvg%3E%3C/svg%3E".to_string()),
                 note: Some("Created by smoke test".to_string()),
                 model_ids: vec![config.relations.model_id],
@@ -352,6 +359,11 @@ mod tests {
         )
         .expect("create asset");
         assert_eq!(created_asset.display_name.as_deref(), Some("Smoke Asset"));
+        assert_eq!(created_asset.booth_shop_name.as_deref(), Some("Smoke Shop"));
+        assert_eq!(
+            created_asset.booth_shop_url.as_deref(),
+            Some("https://smoke.booth.pm")
+        );
         assert_eq!(created_asset.models.len(), 1);
         assert_eq!(created_asset.tags.len(), 1);
         assert_eq!(created_asset.related_links.len(), 1);
@@ -366,6 +378,8 @@ mod tests {
                 category: AssetCategory::Accessory,
                 file_path: config.asset_path.clone(),
                 booth_url: None,
+                booth_shop_name: Some("Updated Smoke Shop".to_string()),
+                booth_shop_url: Some("https://updated-smoke.booth.pm".to_string()),
                 thumbnail_url: None,
                 note: Some("Updated by smoke test".to_string()),
                 model_ids: vec![config.relations.model_id],
@@ -385,6 +399,10 @@ mod tests {
         assert_eq!(
             updated_asset.related_links[0].label,
             "https://example.com/forum"
+        );
+        assert_eq!(
+            updated_asset.booth_shop_name.as_deref(),
+            Some("Updated Smoke Shop")
         );
     }
 
@@ -411,6 +429,20 @@ mod tests {
             &filtered_assets[0],
             &[("https://example.com/forum", "https://example.com/forum")],
         );
+
+        let shop_filtered_assets = commands::assets::get_assets(
+            AssetFilters {
+                shop_filters: vec![crate::types::BoothShopFilter {
+                    name: "Updated Smoke Shop".to_string(),
+                    url: Some("https://updated-smoke.booth.pm".to_string()),
+                }],
+                ..AssetFilters::default()
+            },
+            command_state(db),
+        )
+        .expect("filter asset by shop");
+        assert_eq!(shop_filtered_assets.len(), 1);
+        assert_eq!(shop_filtered_assets[0].id, asset_id);
     }
 
     fn set_library_settings(
@@ -474,6 +506,18 @@ mod tests {
         assert_eq!(
             smoke_asset.get("category").and_then(|value| value.as_str()),
             Some("accessory")
+        );
+        assert_eq!(
+            smoke_asset
+                .get("boothShopName")
+                .and_then(|value| value.as_str()),
+            Some("Updated Smoke Shop")
+        );
+        assert_eq!(
+            smoke_asset
+                .get("boothShopUrl")
+                .and_then(|value| value.as_str()),
+            Some("https://updated-smoke.booth.pm")
         );
     }
 
@@ -596,6 +640,8 @@ mod tests {
                         conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
                         display_name: Some("Imported Metadata Asset".to_string()),
                         booth_url: Some("https://booth.pm/ja/items/12345".to_string()),
+                        booth_shop_name: Some("ねこまる商店".to_string()),
+                        booth_shop_url: Some("https://nekomaru.booth.pm".to_string()),
                         thumbnail_url: Some("https://example.com/thumb.png".to_string()),
                         note: Some("Imported through managed batch".to_string()),
                         model_ids: vec![relations.model_id],
@@ -610,6 +656,8 @@ mod tests {
                         conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
                         display_name: Some("Imported Without Booth".to_string()),
                         booth_url: None,
+                        booth_shop_name: None,
+                        booth_shop_url: None,
                         thumbnail_url: None,
                         note: None,
                         model_ids: Vec::new(),
@@ -639,6 +687,14 @@ mod tests {
             Some("https://booth.pm/ja/items/12345")
         );
         assert_eq!(
+            metadata_asset.booth_shop_name.as_deref(),
+            Some("ねこまる商店")
+        );
+        assert_eq!(
+            metadata_asset.booth_shop_url.as_deref(),
+            Some("https://nekomaru.booth.pm")
+        );
+        assert_eq!(
             metadata_asset.thumbnail_url.as_deref(),
             Some("https://example.com/thumb.png")
         );
@@ -657,6 +713,8 @@ mod tests {
             .expect("plain asset should be created");
         assert_eq!(plain_asset.category, AssetCategory::World);
         assert!(plain_asset.booth_url.is_none());
+        assert!(plain_asset.booth_shop_name.is_none());
+        assert!(plain_asset.booth_shop_url.is_none());
         assert!(plain_asset.thumbnail_url.is_none());
         assert!(plain_asset.note.is_none());
     }
@@ -689,6 +747,8 @@ mod tests {
                         conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
                         display_name: Some("First Conflict Asset".to_string()),
                         booth_url: None,
+                        booth_shop_name: None,
+                        booth_shop_url: None,
                         thumbnail_url: None,
                         note: None,
                         model_ids: Vec::new(),
@@ -703,6 +763,8 @@ mod tests {
                         conflict_strategy: Some(commands::assets::ConflictStrategy::Rename),
                         display_name: Some("Renamed Conflict Asset".to_string()),
                         booth_url: None,
+                        booth_shop_name: None,
+                        booth_shop_url: None,
                         thumbnail_url: None,
                         note: None,
                         model_ids: Vec::new(),
@@ -717,6 +779,8 @@ mod tests {
                         conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
                         display_name: Some("Unsupported Asset".to_string()),
                         booth_url: None,
+                        booth_shop_name: None,
+                        booth_shop_url: None,
                         thumbnail_url: None,
                         note: None,
                         model_ids: Vec::new(),
@@ -789,6 +853,8 @@ mod tests {
                     conflict_strategy: Some(commands::assets::ConflictStrategy::Cancel),
                     display_name: Some("DB Failure Asset".to_string()),
                     booth_url: None,
+                    booth_shop_name: None,
+                    booth_shop_url: None,
                     thumbnail_url: None,
                     note: None,
                     model_ids: vec![9_999_999],
@@ -807,9 +873,7 @@ mod tests {
         let result = &report.results[0];
         assert!(!result.success);
         assert!(
-            result
-                .message
-                .contains("檔案已處理，但資料庫記錄建立失敗"),
+            result.message.contains("檔案已處理，但資料庫記錄建立失敗"),
             "unexpected report message: {}",
             result.message
         );

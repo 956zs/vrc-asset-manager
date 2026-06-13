@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS assets (
     category      TEXT    NOT NULL DEFAULT 'accessory',
     file_path     TEXT    NOT NULL,
     booth_url     TEXT,
+    booth_shop_name TEXT,
+    booth_shop_url  TEXT,
     thumbnail_url TEXT,
     note          TEXT,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now')),

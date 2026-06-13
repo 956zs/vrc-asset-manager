@@ -77,6 +77,8 @@ pub struct Asset {
     pub category: AssetCategory,
     pub file_path: String,
     pub booth_url: Option<String>,
+    pub booth_shop_name: Option<String>,
+    pub booth_shop_url: Option<String>,
     pub thumbnail_url: Option<String>,
     pub note: Option<String>,
     pub created_at: String,
@@ -98,6 +100,8 @@ pub struct AssetFilters {
     pub model_ids: Vec<i64>,
     #[serde(default)]
     pub tag_ids: Vec<i64>,
+    #[serde(default)]
+    pub shop_filters: Vec<BoothShopFilter>,
     #[serde(default)]
     pub status_filters: Vec<AssetStatusFilter>,
     #[serde(default)]
@@ -126,6 +130,13 @@ pub enum AssetStatusFilter {
     MissingNote,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BoothShopFilter {
+    pub name: String,
+    pub url: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAssetInput {
@@ -134,6 +145,8 @@ pub struct CreateAssetInput {
     pub category: AssetCategory,
     pub file_path: String,
     pub booth_url: Option<String>,
+    pub booth_shop_name: Option<String>,
+    pub booth_shop_url: Option<String>,
     pub thumbnail_url: Option<String>,
     pub note: Option<String>,
     #[serde(default)]
@@ -152,6 +165,8 @@ pub struct UpdateAssetInput {
     pub category: AssetCategory,
     pub file_path: String,
     pub booth_url: Option<String>,
+    pub booth_shop_name: Option<String>,
+    pub booth_shop_url: Option<String>,
     pub thumbnail_url: Option<String>,
     pub note: Option<String>,
     #[serde(default)]
