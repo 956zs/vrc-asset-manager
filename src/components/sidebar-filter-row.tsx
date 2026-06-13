@@ -5,8 +5,8 @@ import {
   type ReactNode,
 } from "react";
 import { GripVertical, Pencil, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 
 type SidebarDropPlacement = "before" | "after";
@@ -126,20 +126,16 @@ function RowActionButton({
   onClick: () => void;
 }) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
+    <IconButton
+      label={label}
       size="icon-sm"
       className="!size-7"
-      title={label}
-      aria-label={label}
+      icon={<span className={destructive ? "text-destructive" : undefined}>{children}</span>}
       onClick={(event) => {
         event.stopPropagation();
         onClick();
       }}
-    >
-      <span className={destructive ? "text-destructive" : undefined}>{children}</span>
-    </Button>
+    />
   );
 }
 

@@ -13,7 +13,6 @@ import {
   Eraser,
   Image as ImageIcon,
   Images,
-  Loader2,
   Package,
   PackagePlus,
   Pencil,
@@ -27,7 +26,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { IconTile } from "@/components/ui/icon-tile";
+import { KeyHint } from "@/components/ui/key-hint";
+import { MetaBadge } from "@/components/ui/meta-badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Spinner } from "@/components/ui/spinner";
 import { hasSensitiveAssetTags } from "@/lib/sensitive-content";
 import { cn } from "@/lib/utils";
 import { type AssetStore, useAssetStore } from "@/stores/asset-store";
@@ -199,6 +202,7 @@ const emptyFilters: AssetFilters = {
   category: null,
   modelIds: [],
   tagIds: [],
+  shopFilters: [],
   statusFilters: [],
   sortOrder: "updatedDesc",
 };
@@ -223,6 +227,8 @@ function createAssetItemMetadata(asset: Asset): AssetItemMetadata {
     asset.display_name ?? "",
     asset.file_path,
     asset.booth_url ?? "",
+    asset.booth_shop_name ?? "",
+    asset.booth_shop_url ?? "",
     asset.note ?? "",
   ];
   let subtitle = "";
@@ -306,6 +312,7 @@ function createModelItem({
         category: null,
         modelIds: [model.id],
         tagIds: [],
+        shopFilters: [],
         statusFilters: [],
         sortOrder: "updatedDesc",
       });
@@ -336,6 +343,7 @@ function createTagItem({
         category: null,
         modelIds: [],
         tagIds: [tag.id],
+        shopFilters: [],
         statusFilters: [],
         sortOrder: "updatedDesc",
       });
@@ -586,6 +594,7 @@ function hasCommandPaletteActiveFilters(filters: AssetFilters) {
     filters.category !== null ||
     filters.modelIds.length > 0 ||
     filters.tagIds.length > 0 ||
+    filters.shopFilters.length > 0 ||
     filters.statusFilters.length > 0
   );
 }
@@ -731,6 +740,7 @@ function createSearchActionItem(
         category: null,
         modelIds: [],
         tagIds: [],
+        shopFilters: [],
         statusFilters: [],
         sortOrder: "updatedDesc",
       });
@@ -912,15 +922,11 @@ function CommandPaletteSearchBar({
         onChange={(event) => onQueryChange(event.target.value)}
       />
       {loading ? (
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+        <Spinner className="shrink-0 text-muted-foreground" />
       ) : (
         <div className="hidden shrink-0 items-center gap-1 sm:flex">
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-            Ctrl
-          </kbd>
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-            K
-          </kbd>
+          <KeyHint>Ctrl</KeyHint>
+          <KeyHint>K</KeyHint>
         </div>
       )}
     </div>
@@ -931,14 +937,14 @@ function CommandPaletteItemIcon({ item }: CommandPaletteItemIconProps) {
   const Icon = item.icon;
 
   return (
-    <span
+    <IconTile
       data-sensitive-preview={
         item.kind === "asset" && item.sensitive && item.thumbnailUrl
           ? ""
           : undefined
       }
       className={cn(
-        "flex size-10 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-muted-foreground",
+        "overflow-hidden border border-border",
         item.kind === "tag" && "border-transparent bg-transparent",
       )}
     >
@@ -961,7 +967,7 @@ function CommandPaletteItemIcon({ item }: CommandPaletteItemIconProps) {
       ) : (
         <Icon className="h-5 w-5" />
       )}
-    </span>
+    </IconTile>
   );
 }
 
@@ -994,14 +1000,9 @@ function CommandPaletteRow({
         )}
       </span>
       {item.badge && (
-        <span
-          className={cn(
-            "rounded border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground",
-            active && "bg-background/70",
-          )}
-        >
+        <MetaBadge className={cn("text-xs", active && "bg-background/70")}>
           {item.badge}
-        </span>
+        </MetaBadge>
       )}
     </button>
   );

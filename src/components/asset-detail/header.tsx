@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 
 type AssetDetailHeaderProps = {
   isEditing: boolean;
@@ -24,27 +24,17 @@ export function AssetDetailHeader({
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {!isEditing && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="編輯素材"
-            aria-label="編輯素材"
+          <IconButton
+            label="編輯素材"
+            icon={<Pencil className="h-4 w-4" />}
             onClick={onStartEditing}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
+          />
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          title="關閉詳情"
-          aria-label="關閉詳情"
+        <IconButton
+          label="關閉詳情"
+          icon={<X className="h-4 w-4" />}
           onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        />
       </div>
     </div>
   );

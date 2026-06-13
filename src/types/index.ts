@@ -99,6 +99,8 @@ export interface ManagedImportItemInput {
   conflictStrategy?: ConflictStrategy | null;
   displayName: string | null;
   boothUrl: string | null;
+  boothShopName: string | null;
+  boothShopUrl: string | null;
   thumbnailUrl: string | null;
   note: string | null;
   modelIds: number[];
@@ -129,6 +131,8 @@ export interface Asset {
   category: AssetCategory;
   file_path: string;
   booth_url: string | null;
+  booth_shop_name: string | null;
+  booth_shop_url: string | null;
   thumbnail_url: string | null;
   note: string | null;
   created_at: string;
@@ -164,8 +168,34 @@ export interface AssetFilters {
   category: AssetCategory | null;
   modelIds: number[];
   tagIds: number[];
+  shopFilters: BoothShopFilter[];
   statusFilters: AssetStatusFilter[];
   sortOrder: AssetSortOrder;
+}
+
+export interface BoothShopFilter {
+  name: string;
+  url: string | null;
+}
+
+export interface BoothShopOption extends BoothShopFilter {
+  key: string;
+  assetCount: number;
+}
+
+export interface BoothShopBackfillReport {
+  totalCandidates: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface BoothShopBackfillProgress {
+  total: number;
+  current: number;
+  updated: number;
+  skipped: number;
+  failed: number;
 }
 
 export interface CreateAssetInput {
@@ -173,6 +203,8 @@ export interface CreateAssetInput {
   category: AssetCategory;
   file_path: string;
   booth_url: string | null;
+  booth_shop_name: string | null;
+  booth_shop_url: string | null;
   thumbnail_url: string | null;
   note: string | null;
   model_ids: number[];
@@ -185,6 +217,8 @@ export interface UpdateAssetInput {
   category?: AssetCategory;
   file_path?: string;
   booth_url?: string | null;
+  booth_shop_name?: string | null;
+  booth_shop_url?: string | null;
   thumbnail_url?: string | null;
   note?: string | null;
   model_ids?: number[];
@@ -200,6 +234,8 @@ export interface AssetLinkInput {
 export interface BoothProductInfo {
   title: string | null;
   thumbnailUrl: string | null;
+  shopName: string | null;
+  shopUrl: string | null;
   tags: string[];
   searchText: string;
 }

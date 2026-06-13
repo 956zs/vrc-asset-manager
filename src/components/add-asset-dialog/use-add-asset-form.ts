@@ -55,6 +55,8 @@ type AddAssetFormValues = {
   conflictStrategy: ConflictStrategy;
   filePath: string;
   boothUrl: string;
+  boothShopName: string;
+  boothShopUrl: string;
   thumbnailUrl: string;
   note: string;
   selectedModelIds: number[];
@@ -76,6 +78,8 @@ type AddAssetFormSetters = {
   setConflictStrategy: (value: ConflictStrategy) => void;
   setFilePath: (value: string) => void;
   setBoothUrl: (value: string) => void;
+  setBoothShopName: (value: string) => void;
+  setBoothShopUrl: (value: string) => void;
   setThumbnailUrl: (value: string) => void;
   setNote: (value: string) => void;
   setSelectedModelIds: IdSetter;
@@ -128,6 +132,8 @@ type ProductInfoFetcherOptions = {
   currentTags: Tag[];
   currentModels: Model[];
   setDisplayName: (name: string) => void;
+  setBoothShopName: (name: string) => void;
+  setBoothShopUrl: (url: string) => void;
   setIsFetchingProductInfo: (fetching: boolean) => void;
   setSelectedModelIds: AddAssetFormSetters["setSelectedModelIds"];
   setSelectedTagIds: AddAssetFormSetters["setSelectedTagIds"];
@@ -155,6 +161,8 @@ const emptyAddAssetFormValues: AddAssetFormValues = {
   conflictStrategy: "cancel",
   filePath: "",
   boothUrl: "",
+  boothShopName: "",
+  boothShopUrl: "",
   thumbnailUrl: "",
   note: "",
   selectedModelIds: [],
@@ -171,6 +179,8 @@ function toManagedImportInput(draft: AddAssetFormValues): ManagedImportItemInput
     conflictStrategy: draft.conflictStrategy,
     displayName: draft.displayName.trim() || null,
     boothUrl: draft.boothUrl.trim() || null,
+    boothShopName: draft.boothShopName.trim() || null,
+    boothShopUrl: draft.boothShopUrl.trim() || null,
     thumbnailUrl: draft.thumbnailUrl.trim() || null,
     note: draft.note.trim() || null,
     modelIds: draft.selectedModelIds,
@@ -214,6 +224,8 @@ function useAddAssetFormState(): AddAssetFormState {
     setConflictStrategy: (value) => setField("conflictStrategy", value),
     setFilePath: (value) => setField("filePath", value),
     setBoothUrl: (value) => setField("boothUrl", value),
+    setBoothShopName: (value) => setField("boothShopName", value),
+    setBoothShopUrl: (value) => setField("boothShopUrl", value),
     setThumbnailUrl: (value) => setField("thumbnailUrl", value),
     setNote: (value) => setField("note", value),
     setSelectedModelIds: (value) => setIds("selectedModelIds", value),
@@ -292,6 +304,8 @@ function createProductInfoFetcher({
   currentModels,
   currentTags,
   setDisplayName,
+  setBoothShopName,
+  setBoothShopUrl,
   setIsFetchingProductInfo,
   setSelectedModelIds,
   setSelectedTagIds,
@@ -312,6 +326,12 @@ function createProductInfoFetcher({
 
       if (info.thumbnailUrl) {
         setThumbnailUrl(info.thumbnailUrl);
+      }
+      if (info.shopName) {
+        setBoothShopName(info.shopName);
+      }
+      if (info.shopUrl) {
+        setBoothShopUrl(info.shopUrl);
       }
       if (shouldFillDisplayName && info.title) {
         setDisplayName(info.title);
@@ -402,6 +422,8 @@ function createAddAssetFormResult({
     conflictStrategy: draft.conflictStrategy,
     filePath: draft.filePath,
     boothUrl: draft.boothUrl,
+    boothShopName: draft.boothShopName,
+    boothShopUrl: draft.boothShopUrl,
     thumbnailUrl: draft.thumbnailUrl,
     note: draft.note,
     selectedModelIds: draft.selectedModelIds,
@@ -421,6 +443,8 @@ function createAddAssetFormResult({
     setConflictStrategy: draft.setConflictStrategy,
     setFilePath: draft.setFilePath,
     setBoothUrl: draft.setBoothUrl,
+    setBoothShopName: draft.setBoothShopName,
+    setBoothShopUrl: draft.setBoothShopUrl,
     setThumbnailUrl: draft.setThumbnailUrl,
     setNote: draft.setNote,
     setSelectedModelIds: draft.setSelectedModelIds,
@@ -571,6 +595,8 @@ export function useAddAssetForm({
     currentModels: models,
     currentTags: tags,
     setDisplayName: draft.setDisplayName,
+    setBoothShopName: draft.setBoothShopName,
+    setBoothShopUrl: draft.setBoothShopUrl,
     setIsFetchingProductInfo,
     setSelectedModelIds: draft.setSelectedModelIds,
     setSelectedTagIds: draft.setSelectedTagIds,

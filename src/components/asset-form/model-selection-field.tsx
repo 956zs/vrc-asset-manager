@@ -1,8 +1,11 @@
 "use client";
 
 import {
-  SelectionFieldHeader,
+  SelectionFieldEmpty,
+  SelectionFieldFrame,
+  SelectionFieldList,
   type SelectionActionsLayout,
+  type SelectionFieldListSurface,
 } from "@/components/asset-form/selection-field-header";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Model } from "@/types";
@@ -15,6 +18,7 @@ type ModelSelectionFieldProps = {
   actionButtonClassName?: string;
   labelClassName?: string;
   listClassName?: string;
+  listSurface?: SelectionFieldListSurface;
   onSelectAll: () => void;
   onClear: () => void;
   onToggle: (modelId: number) => void;
@@ -45,13 +49,19 @@ function ModelOptionList({
   models,
   selectedModelIdSet,
   listClassName,
+  listSurface,
   onToggle,
 }: Pick<
   ModelSelectionFieldProps,
   "models" | "selectedModelIdSet" | "listClassName" | "onToggle"
->) {
+> & {
+  listSurface: SelectionFieldListSurface;
+}) {
   return (
-    <div className={listClassName}>
+    <SelectionFieldList
+      className={listClassName ?? "max-h-32 p-3"}
+      surface={listSurface}
+    >
       {models.length > 0 ? (
         models.map((model) => (
           <ModelOptionRow
@@ -62,9 +72,9 @@ function ModelOptionList({
           />
         ))
       ) : (
-        <p className="text-sm text-muted-foreground">尚無模型</p>
+        <SelectionFieldEmpty>尚無模型</SelectionFieldEmpty>
       )}
-    </div>
+    </SelectionFieldList>
   );
 }
 
@@ -75,29 +85,30 @@ export function ModelSelectionField({
   actionsLayout = "inline",
   actionButtonClassName = "h-7 px-2 text-xs",
   labelClassName = "text-sm font-medium",
-  listClassName = "max-h-32 space-y-2 overflow-y-auto rounded-md border p-3",
+  listClassName,
+  listSurface = "panel",
   onSelectAll,
   onClear,
   onToggle,
 }: ModelSelectionFieldProps) {
   return (
-    <div className="space-y-2">
-      <SelectionFieldHeader
-        actionButtonClassName={actionButtonClassName}
-        actionsLayout={actionsLayout}
-        itemCount={models.length}
-        label="相容模型"
-        labelClassName={labelClassName}
-        selectedCount={selectedModelIds.length}
-        onClear={onClear}
-        onSelectAll={onSelectAll}
-      />
+    <SelectionFieldFrame
+      actionButtonClassName={actionButtonClassName}
+      actionsLayout={actionsLayout}
+      itemCount={models.length}
+      label="相容模型"
+      labelClassName={labelClassName}
+      selectedCount={selectedModelIds.length}
+      onClear={onClear}
+      onSelectAll={onSelectAll}
+    >
       <ModelOptionList
         models={models}
         selectedModelIdSet={selectedModelIdSet}
         listClassName={listClassName}
+        listSurface={listSurface}
         onToggle={onToggle}
       />
-    </div>
+    </SelectionFieldFrame>
   );
 }

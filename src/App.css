@@ -292,6 +292,20 @@ button:disabled {
   line-height: 1.15;
 }
 
+.progress-indeterminate {
+  animation: progress-indeterminate 1.05s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

@@ -3,33 +3,38 @@
 import {
   AlertTriangle,
   Archive,
-  ChevronDown,
   FileSearch,
-  FileText,
-  Folder,
   FolderSearch,
-  Loader2,
-  Plus,
   Sparkles,
 } from "lucide-react";
+import { FileContentList } from "@/components/ui/file-content-list";
 import { useAddAssetForm } from "@/components/add-asset-dialog/use-add-asset-form";
 import { ModelSelectionField } from "@/components/asset-form/model-selection-field";
 import { RelatedLinksEditor } from "@/components/asset-form/related-links-editor";
 import { TagSelectionField } from "@/components/asset-form/tag-selection-field";
+import { BoothModelSuggestionPanel, BoothTagSuggestionPanel } from "@/components/booth-suggestion-panel";
+import { BoothShopFields } from "@/components/booth-shop-fields";
 import { LibraryRootActions } from "@/components/library-root-actions";
 import { Button } from "@/components/ui/button";
+import { DisclosurePanel } from "@/components/ui/disclosure-panel";
+import { FormField } from "@/components/ui/form-field";
+import { IconButton } from "@/components/ui/icon-button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActionBar } from "@/components/ui/dialog-action-bar";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { MetaLabel } from "@/components/ui/meta-label";
+import { SegmentedField } from "@/components/ui/segmented-field";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusMessage } from "@/components/ui/status-message";
+import { SurfaceBox } from "@/components/ui/surface-box";
 import { Textarea } from "@/components/ui/textarea";
-import { boothTagOriginText } from "@/lib/booth-product-info";
+import { ToneBadge } from "@/components/ui/tone-badge";
 import { useAssetStore } from "@/stores/asset-store";
 import type {
   ArchiveStrategy,
@@ -110,61 +115,6 @@ function targetSummary(
   return `目標：${targetPath}`;
 }
 
-function formatFileSize(sizeBytes?: number | null) {
-  if (sizeBytes == null) return "";
-  if (sizeBytes === 0) return "0 B";
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const unitIndex = Math.min(
-    Math.floor(Math.log(sizeBytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = sizeBytes / 1024 ** unitIndex;
-  const digits = unitIndex === 0 || value >= 10 ? 0 : 1;
-  return `${value.toFixed(digits)} ${units[unitIndex]}`;
-}
-
-function SegmentedField<TValue extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: TValue;
-  options: { value: TValue; label: string; tone?: "danger" }[];
-  onChange: (value: TValue) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[11px] font-semibold text-foreground/70">{label}</p>
-      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1 rounded-md border border-border/80 bg-background/35 p-1">
-        {options.map((option) => {
-          const selected = option.value === value;
-          const dangerSelected = selected && option.tone === "danger";
-          return (
-            <button
-              key={option.value}
-              type="button"
-              className={[
-                "h-8 min-w-0 rounded-sm px-2 text-xs font-semibold leading-none transition-colors",
-                selected
-                  ? dangerSelected
-                    ? "bg-amber-500/18 text-amber-200 ring-1 ring-amber-500/55"
-                    : "bg-primary/18 text-foreground ring-1 ring-primary/45"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-              ].join(" ")}
-              onClick={() => onChange(option.value)}
-            >
-              <span className="truncate">{option.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function useAddAssetDialogController(): AddAssetDialogController {
   const {
     listZipContents,
@@ -233,26 +183,18 @@ function AssetPathField({ form }: { form: AddAssetForm }) {
           placeholder="D:/VRChat/Assets/..."
           className="flex-1"
         />
-        <Button
-          type="button"
+        <IconButton
+          label="選擇素材檔案"
           variant="outline"
-          size="icon"
-          title="選擇素材檔案"
-          aria-label="選擇素材檔案"
+          icon={<FileSearch className="h-4 w-4" />}
           onClick={() => void form.browseFile()}
-        >
-          <FileSearch className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
+        />
+        <IconButton
+          label="選擇素材資料夾"
           variant="outline"
-          size="icon"
-          title="選擇素材資料夾"
-          aria-label="選擇素材資料夾"
+          icon={<FolderSearch className="h-4 w-4" />}
           onClick={() => void form.browseFolder()}
-        >
-          <FolderSearch className="h-4 w-4" />
-        </Button>
+        />
       </div>
     </div>
   );
@@ -269,7 +211,7 @@ function FetchProductInfoButton({ form }: { form: AddAssetForm }) {
       onClick={() => void form.fetchProductInfo()}
     >
       {form.isFetchingProductInfo ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Spinner />
       ) : (
         "抓取資訊"
       )}
@@ -307,21 +249,22 @@ function ImportRulesField({ form }: { form: AddAssetForm }) {
         )}
       </div>
       {hasConflict && (
-        <div className="rounded-md border border-amber-500/45 bg-amber-500/8 px-3 py-2">
-          <div className="mb-2 flex items-start gap-2 text-xs text-amber-200">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div className="min-w-0">
-              <p className="font-medium">目標位置已有同名項目</p>
-              <p className="mt-0.5 text-amber-200/80">這筆素材要怎麼處理？</p>
-            </div>
-          </div>
-          <SegmentedField
-            label="處理方式"
-            value={form.conflictStrategy}
-            options={conflictOptions}
-            onChange={form.setConflictStrategy}
-          />
-        </div>
+        <StatusMessage
+          tone="warning"
+          className="rounded-md px-3 py-2 text-xs"
+          icon={<AlertTriangle className="h-4 w-4" />}
+          title="目標位置已有同名項目"
+          action={
+            <SegmentedField
+              label="處理方式"
+              value={form.conflictStrategy}
+              options={conflictOptions}
+              onChange={form.setConflictStrategy}
+            />
+          }
+        >
+          這筆素材要怎麼處理？
+        </StatusMessage>
       )}
     </div>
   );
@@ -337,23 +280,21 @@ function TargetPreview({
   const preview = form.targetPreview;
 
   return (
-    <div className="rounded-md border border-border/70 bg-background/35 px-3 py-2 text-xs">
+    <SurfaceBox className="border-border/70 bg-background/35 px-3 py-2 text-xs">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-foreground/55">
-            目標位置
-          </p>
+          <MetaLabel>目標位置</MetaLabel>
           <p className="mt-0.5 min-w-0 truncate text-foreground/72">
             {targetSummary(preview, libraryRootPath).replace(/^目標：/, "")}
           </p>
         </div>
         {preview?.conflict && (
-          <span className="shrink-0 rounded-md border border-amber-500/45 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold leading-none text-amber-300">
+          <ToneBadge tone="warning" className="shrink-0">
             需要處理同名
-          </span>
+          </ToneBadge>
         )}
       </div>
-    </div>
+    </SurfaceBox>
   );
 }
 
@@ -369,7 +310,7 @@ function ZipContentField({ form }: { form: AddAssetForm }) {
     [];
 
   return (
-    <div className="space-y-2 rounded-md border border-border/70 bg-muted/10 p-3">
+    <SurfaceBox className="space-y-2 border-border/70 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">Zip 內容</p>
         <Button
@@ -380,7 +321,7 @@ function ZipContentField({ form }: { form: AddAssetForm }) {
           onClick={() => void form.loadZipContents()}
         >
           {form.isLoadingZipContents ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner />
           ) : (
             <Archive className="h-4 w-4" />
           )}
@@ -388,138 +329,38 @@ function ZipContentField({ form }: { form: AddAssetForm }) {
         </Button>
       </div>
       {form.zipContents && entries.length > 0 && (
-        <div className="overflow-hidden rounded-md border border-border bg-background/35">
-          <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-            <span className="text-xs font-semibold text-foreground/85">
-              壓縮檔內容
-            </span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              共 {form.zipContents.fileCount} 個項目
-            </span>
-          </div>
-          <ScrollArea className="max-h-36">
-            <ul className="divide-y divide-border/60">
-              {entries.map((entry) => {
-                const sizeLabel = formatFileSize(entry.sizeBytes);
-                return (
-                  <li
-                    key={entry.path}
-                    className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs leading-5"
-                  >
-                    {entry.isDirectory ? (
-                      <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    ) : (
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    )}
-                    <span
-                      className="min-w-0 flex-1 truncate font-mono text-foreground/78"
-                      title={entry.path}
-                    >
-                      {entry.path}
-                    </span>
-                    {sizeLabel && (
-                      <span className="shrink-0 pl-2 font-mono text-[11px] leading-none text-muted-foreground">
-                        {sizeLabel}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </ScrollArea>
-        </div>
+        <FileContentList
+          title="壓縮檔內容"
+          totalCount={form.zipContents.fileCount}
+          entries={entries}
+          className="bg-background/35"
+          scrollClassName="max-h-36"
+        />
       )}
-    </div>
+    </SurfaceBox>
   );
 }
 
 function BoothUrlField({ form }: { form: AddAssetForm }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-semibold text-foreground/90">
-        Booth 連結
-      </label>
-      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] gap-2">
-        <Input
-          value={form.boothUrl}
-          onChange={(event) => form.setBoothUrl(event.target.value)}
-          placeholder="https://booth.pm/ja/items/..."
-          className="min-w-0 flex-1"
-        />
-        <FetchProductInfoButton form={form} />
-      </div>
-    </div>
-  );
-}
-
-function SuggestedBoothTags({ form }: { form: AddAssetForm }) {
-  if (form.suggestedTags.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">
-        BOOTH 建議標籤
-      </p>
-      <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
-        {form.suggestedTags.map((tagName) => {
-          const originText = boothTagOriginText(
-            form.suggestedTagOrigins,
-            tagName,
-          );
-          return (
-            <Button
-              key={tagName}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-auto min-h-7 min-w-0 !max-w-full !shrink gap-1 px-2 py-1 text-left text-xs"
-              onClick={() => void form.addSuggestedTag(tagName)}
-              title={originText ?? undefined}
-            >
-              <Plus className="h-3 w-3 shrink-0" />
-              <span className="min-w-0">
-                <span className="block truncate">{tagName}</span>
-                {originText && (
-                  <span className="block truncate text-[10px] text-muted-foreground">
-                    {originText}
-                  </span>
-                )}
-              </span>
-            </Button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function SuggestedBoothModels({ form }: { form: AddAssetForm }) {
-  if (form.suggestedModels.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">
-        BOOTH 建議模型
-      </p>
-      <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
-        {form.suggestedModels.map((model) => (
-          <Button
-            key={model.name}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 min-w-0 !max-w-full !shrink gap-1 px-2 text-xs"
-            onClick={() => void form.addSuggestedModel(model)}
-          >
-            <Plus className="h-3 w-3 shrink-0" />
-            <span className="min-w-0 truncate">{model.label}</span>
-          </Button>
-        ))}
-      </div>
+    <div className="space-y-3">
+      <FormField label="Booth 連結">
+        <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <Input
+            value={form.boothUrl}
+            onChange={(event) => form.setBoothUrl(event.target.value)}
+            placeholder="https://booth.pm/ja/items/..."
+            className="min-w-0 flex-1"
+          />
+          <FetchProductInfoButton form={form} />
+        </div>
+      </FormField>
+      <BoothShopFields
+        shopName={form.boothShopName}
+        shopUrl={form.boothShopUrl}
+        onShopNameChange={form.setBoothShopName}
+        onShopUrlChange={form.setBoothShopUrl}
+      />
     </div>
   );
 }
@@ -543,7 +384,10 @@ function AddAssetModelField({
         onClear={() => form.setSelectedModelIds([])}
         onToggle={form.toggleModel}
       />
-      <SuggestedBoothModels form={form} />
+      <BoothModelSuggestionPanel
+        models={form.suggestedModels}
+        onAdd={(model) => void form.addSuggestedModel(model)}
+      />
     </div>
   );
 }
@@ -559,7 +403,11 @@ function AddAssetTagField({ form, tags }: { form: AddAssetForm; tags: Tag[] }) {
         onClear={() => form.setSelectedTagIds([])}
         onToggle={form.toggleTag}
       />
-      <SuggestedBoothTags form={form} />
+      <BoothTagSuggestionPanel
+        origins={form.suggestedTagOrigins}
+        tags={form.suggestedTags}
+        onAdd={(tagName) => void form.addSuggestedTag(tagName)}
+      />
     </div>
   );
 }
@@ -578,15 +426,14 @@ function RelatedLinksField({ form }: { form: AddAssetForm }) {
 
 function NoteField({ form }: { form: AddAssetForm }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-semibold text-foreground/90">備註</label>
+    <FormField label="備註">
       <Textarea
         value={form.note}
         onChange={(event) => form.setNote(event.target.value)}
         placeholder="添加備註..."
         rows={3}
       />
-    </div>
+    </FormField>
   );
 }
 
@@ -598,7 +445,7 @@ function SourceImportPanel({
   libraryRootPath: string | null;
 }) {
   return (
-    <div className="space-y-4 rounded-md border border-border bg-muted/8 p-4">
+    <SurfaceBox className="space-y-4 bg-muted/8 p-4">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground/92">
@@ -613,10 +460,10 @@ function SourceImportPanel({
           </p>
         </div>
         {form.targetPreview?.conflict && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/55 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold leading-none text-amber-200">
+          <ToneBadge tone="warning" className="shrink-0 gap-1">
             <AlertTriangle className="h-3.5 w-3.5" />
             同名
-          </span>
+          </ToneBadge>
         )}
       </div>
       <DisplayNameField form={form} />
@@ -624,7 +471,7 @@ function SourceImportPanel({
       <ImportRulesField form={form} />
       <TargetPreview form={form} libraryRootPath={libraryRootPath} />
       <ZipContentField form={form} />
-    </div>
+    </SurfaceBox>
   );
 }
 
@@ -634,40 +481,17 @@ function SupplementalFields({
   tags,
 }: Pick<AddAssetDialogLayoutProps, "form" | "models" | "tags">) {
   return (
-    <details className="group rounded-md border border-primary/35 bg-primary/5 shadow-sm transition-colors open:border-primary/55 open:bg-primary/8 hover:border-primary/55 hover:bg-primary/8">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <Sparkles className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <p className="text-lg font-semibold text-foreground/92">
-                補充資料
-              </p>
-              <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-                可選
-              </span>
-            </div>
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              BOOTH、相容模型、標籤、連結與備註
-            </p>
-          </div>
-        </div>
-        <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-1 text-xs font-medium text-foreground transition-colors group-hover:text-primary">
-          <span className="group-open:hidden">展開</span>
-          <span className="hidden group-open:inline">收合</span>
-          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-        </span>
-      </summary>
-      <div className="space-y-4 border-t border-border/70 px-4 py-4">
-        <BoothUrlField form={form} />
-        <AddAssetModelField form={form} models={models} />
-        <AddAssetTagField form={form} tags={tags} />
-        <RelatedLinksField form={form} />
-        <NoteField form={form} />
-      </div>
-    </details>
+    <DisclosurePanel
+      title="補充資料"
+      description="BOOTH、相容模型、標籤、連結與備註"
+      icon={<Sparkles className="h-4 w-4" />}
+    >
+      <BoothUrlField form={form} />
+      <AddAssetModelField form={form} models={models} />
+      <AddAssetTagField form={form} tags={tags} />
+      <RelatedLinksField form={form} />
+      <NoteField form={form} />
+    </DisclosurePanel>
   );
 }
 
@@ -695,7 +519,7 @@ function AddAssetDialogFooter({
   onClose,
 }: Pick<AddAssetDialogLayoutProps, "form" | "saving" | "onClose">) {
   return (
-    <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:items-center">
+    <DialogActionBar>
       <Button variant="outline" onClick={onClose}>
         取消
       </Button>
@@ -705,7 +529,7 @@ function AddAssetDialogFooter({
       >
         {saving ? "新增中" : "新增素材"}
       </Button>
-    </DialogFooter>
+    </DialogActionBar>
   );
 }
 

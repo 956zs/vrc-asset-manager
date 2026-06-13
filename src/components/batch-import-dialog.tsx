@@ -1,31 +1,34 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   Archive,
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
-  CircleHelp,
-  FileText,
-  Folder,
   FolderOpen,
-  Loader2,
   Package,
-  Plus,
   Sparkles,
   XCircle,
 } from "lucide-react";
+import { FileContentList } from "@/components/ui/file-content-list";
+import {
+  compactModelSelectionPreset,
+  compactRelatedLinksPreset,
+  compactTagSelectionPreset,
+} from "@/components/asset-form/field-presets";
 import { ModelSelectionField } from "@/components/asset-form/model-selection-field";
 import { RelatedLinksEditor } from "@/components/asset-form/related-links-editor";
 import { TagSelectionField } from "@/components/asset-form/tag-selection-field";
+import {
+  BoothModelSuggestionPanel,
+  BoothTagSuggestionPanel,
+} from "@/components/booth-suggestion-panel";
+import { BoothShopFields } from "@/components/booth-shop-fields";
 import { LibraryRootActions } from "@/components/library-root-actions";
 import {
   AlertDialog,
@@ -39,17 +42,30 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
+  DisclosureButton,
+  DisclosureChevron,
+} from "@/components/ui/disclosure";
+import { DisclosurePanel } from "@/components/ui/disclosure-panel";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { DialogActionBar } from "@/components/ui/dialog-action-bar";
+import { FormField } from "@/components/ui/form-field";
+import { IconButton } from "@/components/ui/icon-button";
+import { IconTile } from "@/components/ui/icon-tile";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { MetaLabel } from "@/components/ui/meta-label";
+import { SegmentedField } from "@/components/ui/segmented-field";
+import { Spinner } from "@/components/ui/spinner";
+import { StateSurface, type StateSurfaceTone } from "@/components/ui/state-surface";
+import { StatusMessage } from "@/components/ui/status-message";
+import { SurfaceBox } from "@/components/ui/surface-box";
 import { Textarea } from "@/components/ui/textarea";
+import { ToneBadge } from "@/components/ui/tone-badge";
 import {
   addEmptyRelatedLink,
   normalizeRelatedLinks,
@@ -58,7 +74,6 @@ import {
 } from "@/lib/asset-links";
 import {
   applyBoothProductInfo,
-  boothTagOriginText,
   fetchBoothProductInfo,
   mergeBoothTagOrigins,
   mergeIds,
@@ -68,6 +83,7 @@ import {
 import { toggleId } from "@/lib/id-list";
 import { suggestedTagColor } from "@/lib/sensitive-content";
 import { invokeTauri } from "@/lib/tauri-runtime";
+import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/asset-store";
 import type {
   ArchiveStrategy,
@@ -95,6 +111,8 @@ type BatchImportDraft = {
   conflictStrategy: ConflictStrategy;
   displayName: string;
   boothUrl: string;
+  boothShopName: string;
+  boothShopUrl: string;
   thumbnailUrl: string;
   note: string;
   modelIds: number[];
@@ -105,11 +123,6 @@ type BatchImportDraft = {
   suggestedTagOrigins: SuggestedBoothTagOrigins;
   boothFetchStatus: "idle" | "loading" | "success" | "error";
   confirmed: boolean;
-};
-
-type TooltipPosition = {
-  left: number;
-  top: number;
 };
 
 type BulkImportDraft = Pick<
@@ -150,70 +163,6 @@ const archiveOptions: { value: ArchiveStrategy; label: string }[] = [
   { value: "extract", label: "解壓後管理" },
 ];
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function HelpTooltip({
-  children,
-  position,
-}: {
-  children: string;
-  position: TooltipPosition | null;
-}) {
-  if (!position || typeof document === "undefined") return null;
-
-  return createPortal(
-    <span
-      className="pointer-events-none fixed z-[1000] w-64 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs font-normal leading-relaxed text-popover-foreground shadow-xl"
-      style={{ left: position.left, top: position.top }}
-    >
-      {children}
-    </span>,
-    document.body,
-  );
-}
-
-function HelpIcon({ label, help }: { label: string; help: string }) {
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const [tooltipPosition, setTooltipPosition] =
-    useState<TooltipPosition | null>(null);
-
-  const showTooltip = useCallback(() => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const tooltipWidth = 256;
-    const edgePadding = 12;
-    const center = rect.left + rect.width / 2;
-    setTooltipPosition({
-      left: clamp(
-        center,
-        edgePadding + tooltipWidth / 2,
-        window.innerWidth - edgePadding - tooltipWidth / 2,
-      ),
-      top: rect.bottom + 8,
-    });
-  }, []);
-
-  return (
-    <span className="relative inline-flex">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={`${label}說明`}
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-        onBlur={() => setTooltipPosition(null)}
-        onFocus={showTooltip}
-        onMouseEnter={showTooltip}
-        onMouseLeave={() => setTooltipPosition(null)}
-      >
-        <CircleHelp className="h-3.5 w-3.5" />
-      </button>
-      <HelpTooltip position={tooltipPosition}>{help}</HelpTooltip>
-    </span>
-  );
-}
 const defaultBulkDraft: BulkImportDraft = {
   category: "accessory",
   operation: "move",
@@ -230,6 +179,8 @@ function createDrafts(paths: string[], startIndex = 0): BatchImportDraft[] {
     conflictStrategy: "cancel",
     displayName: "",
     boothUrl: "",
+    boothShopName: "",
+    boothShopUrl: "",
     thumbnailUrl: "",
     note: "",
     modelIds: [],
@@ -252,6 +203,8 @@ function draftToInput(draft: BatchImportDraft): ManagedImportItemInput {
     conflictStrategy: draft.conflictStrategy,
     displayName: draft.displayName.trim() || null,
     boothUrl: draft.boothUrl.trim() || null,
+    boothShopName: draft.boothShopName.trim() || null,
+    boothShopUrl: draft.boothShopUrl.trim() || null,
     thumbnailUrl: draft.thumbnailUrl.trim() || null,
     note: draft.note.trim() || null,
     modelIds: draft.modelIds,
@@ -366,30 +319,12 @@ function StatusBadge({
   preview?: ImportTargetPreview;
 }) {
   if (draft.sourceInfo && !draft.sourceInfo.supported) {
-    return (
-      <Badge className="h-5 px-1.5 text-[11px] leading-none" variant="destructive">
-        無法導入
-      </Badge>
-    );
+    return <ToneBadge tone="danger">無法導入</ToneBadge>;
   }
   if (preview?.conflict) {
-    return (
-      <Badge
-        className="h-5 border-amber-500/70 bg-amber-500/10 px-1.5 text-[11px] leading-none text-amber-300"
-        variant="outline"
-      >
-        目標衝突
-      </Badge>
-    );
+    return <ToneBadge tone="warning">目標衝突</ToneBadge>;
   }
-  return (
-    <Badge
-      className="h-5 border-emerald-500/50 bg-emerald-500/10 px-1.5 text-[11px] leading-none text-emerald-300"
-      variant="outline"
-    >
-      可導入
-    </Badge>
-  );
+  return <ToneBadge tone="success">可導入</ToneBadge>;
 }
 
 function draftPlanSummary(draft: BatchImportDraft) {
@@ -407,6 +342,7 @@ function draftPlanSummary(draft: BatchImportDraft) {
 function metadataSummaryText(draft: BatchImportDraft) {
   const values = [
     draft.boothUrl.trim() ? "BOOTH" : null,
+    draft.boothShopName.trim() ? "Shop" : null,
     draft.modelIds.length > 0 ? `${draft.modelIds.length} 模型` : null,
     draft.tagIds.length > 0 ? `${draft.tagIds.length} 標籤` : null,
     draft.relatedLinks.length > 0 ? `${draft.relatedLinks.length} 連結` : null,
@@ -470,74 +406,34 @@ function resultOperationLabel(operation: string) {
   }
 }
 
-function isDirectoryEntry(path: string) {
-  return path.endsWith("/") || path.endsWith("\\");
-}
-
 function contentTitle(kind: ImportSourceKind) {
   if (kind === "zip") return "壓縮檔內容";
   if (kind === "folder") return "資料夾內容";
   return "內容";
 }
 
-function formatFileSize(sizeBytes?: number | null) {
-  if (sizeBytes == null) return "";
-  if (sizeBytes === 0) return "0 B";
-
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const unitIndex = Math.min(
-    Math.floor(Math.log(sizeBytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = sizeBytes / 1024 ** unitIndex;
-  const digits = unitIndex === 0 || value >= 10 ? 0 : 1;
-  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+function draftSurfaceTone({
+  confirmed,
+  hasConflict,
+  sourceSupported,
+}: {
+  confirmed: boolean;
+  hasConflict: boolean;
+  sourceSupported: boolean;
+}): StateSurfaceTone {
+  if (!sourceSupported) return "danger";
+  if (hasConflict) return "warning";
+  if (confirmed) return "success";
+  return "default";
 }
 
-function SegmentedField<TValue extends string>({
-  label,
-  help,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  help?: string;
-  value: TValue;
-  options: { value: TValue; label: string; tone?: "danger" }[];
-  onChange: (value: TValue) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground/70">
-        <span>{label}</span>
-        {help && <HelpIcon label={label} help={help} />}
-      </div>
-      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-1 rounded-md border border-border/80 bg-background/35 p-1">
-        {options.map((option) => {
-          const selected = option.value === value;
-          const dangerSelected = selected && option.tone === "danger";
-          return (
-            <button
-              key={option.value}
-              type="button"
-              className={[
-                "h-8 min-w-0 rounded-sm px-2 text-xs font-semibold leading-none transition-colors",
-                selected
-                  ? dangerSelected
-                    ? "bg-amber-500/18 text-amber-200 ring-1 ring-amber-500/55"
-                    : "bg-primary/18 text-foreground ring-1 ring-primary/45"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-              ].join(" ")}
-              onClick={() => onChange(option.value)}
-            >
-              <span className="truncate">{option.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+function importResultSurfaceTone(
+  success: boolean,
+  partialFailure: boolean,
+): StateSurfaceTone {
+  if (success) return "success";
+  if (partialFailure) return "warning";
+  return "danger";
 }
 
 function TargetPreviewLine({ preview }: { preview?: ImportTargetPreview }) {
@@ -550,7 +446,7 @@ function TargetPreviewLine({ preview }: { preview?: ImportTargetPreview }) {
       <p className="break-all text-muted-foreground">
         {preview.targetPath ?? preview.message ?? "無法產生目標路徑"}
       </p>
-      {preview.conflict && <Badge variant="destructive">目標衝突</Badge>}
+      {preview.conflict && <ToneBadge tone="danger">目標衝突</ToneBadge>}
     </div>
   );
 }
@@ -570,49 +466,48 @@ function PathDetails({
 }) {
   if (!sourceSupported) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        <p>{draft.sourceInfo?.message ?? "此來源目前無法導入"}</p>
-      </div>
+      <StatusMessage
+        tone="danger"
+        className="rounded-md px-3 py-2 text-xs"
+        icon={<AlertTriangle className="h-4 w-4" />}
+      >
+        {draft.sourceInfo?.message ?? "此來源目前無法導入"}
+      </StatusMessage>
     );
   }
 
   return (
-    <div className="rounded-md border border-border/70 bg-muted/10 px-3 py-2">
+    <SurfaceBox className="border-border/70 px-3 py-2">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 truncate text-xs text-muted-foreground/90">
           {preview?.conflict
             ? "目標位置已有同名項目"
             : "需要時可檢視來源與導入目標"}
         </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
+        <DisclosureButton
+          expanded={open}
+          chevronClassName="h-3.5 w-3.5"
           className="h-7 px-2 text-xs font-semibold"
           onClick={onToggle}
         >
-          <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform ${open ? "" : "-rotate-90"}`}
-          />
           {open ? "隱藏路徑" : "檢視路徑"}
-        </Button>
+        </DisclosureButton>
       </div>
       {open && (
         <div className="mt-2 space-y-2 border-t border-border/70 pt-2 text-xs">
           <div>
-            <p className="text-[11px] font-semibold text-foreground/55">來源</p>
+            <MetaLabel>來源</MetaLabel>
             <p className="mt-1 break-all text-foreground/78">{draft.sourcePath}</p>
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-foreground/55">目標</p>
+            <MetaLabel>目標</MetaLabel>
             <div className="mt-1">
               <TargetPreviewLine preview={preview} />
             </div>
           </div>
         </div>
       )}
-    </div>
+    </SurfaceBox>
   );
 }
 
@@ -639,7 +534,7 @@ function SourceContentsButton({
       onClick={onOpen}
     >
       {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Spinner />
       ) : kind === "zip" ? (
         <Archive className="h-4 w-4" />
       ) : (
@@ -666,7 +561,7 @@ function SourceContentsDialog({
     contents?.entries ??
     contents?.paths.map((path) => ({
       path,
-      isDirectory: isDirectoryEntry(path),
+      isDirectory: path.endsWith("/") || path.endsWith("\\"),
       sizeBytes: null,
     })) ??
     [];
@@ -684,65 +579,15 @@ function SourceContentsDialog({
               {sourceName(draft.sourcePath)}
             </DialogDescription>
           </DialogHeader>
-          {loading ? (
-            <div className="flex h-36 items-center justify-center rounded-md border border-border/70 bg-muted/15 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="ml-2 text-sm">正在讀取內容...</span>
-            </div>
-          ) : contents && entries.length > 0 ? (
-            <div className="overflow-hidden rounded-md border border-border bg-muted/15">
-              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-                <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-foreground/85">
-                  <span className="truncate">{contentTitle(kind)}</span>
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  共 {contents.fileCount} 個項目
-                </span>
-              </div>
-              <ScrollArea className="max-h-72">
-                <ul className="divide-y divide-border/60">
-                  {entries.map((entry) => {
-                    const directory =
-                      entry.isDirectory || isDirectoryEntry(entry.path);
-                    const sizeLabel = formatFileSize(entry.sizeBytes);
-                    return (
-                      <li
-                        key={entry.path}
-                        className="flex min-w-0 items-center gap-2 px-3 py-1.5 text-xs leading-5 text-muted-foreground"
-                      >
-                        {directory ? (
-                          <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
-                        ) : (
-                          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        )}
-                        <span
-                          className="min-w-0 flex-1 truncate font-mono text-foreground/78"
-                          title={entry.path}
-                        >
-                          {entry.path}
-                        </span>
-                        {sizeLabel && (
-                          <span className="shrink-0 pl-2 font-mono text-[11px] leading-none text-muted-foreground">
-                            {sizeLabel}
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </ScrollArea>
-              {contents.truncated && (
-                <div className="border-t border-border px-3 py-1.5 text-center text-[11px] text-muted-foreground">
-                  只列出前 {entries.length} 個，其餘 {hiddenCount} 個項目未顯示
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-8 text-center text-xs text-muted-foreground">
-              沒有可顯示的內容
-            </div>
-          )}
-          <DialogFooter>
+          <FileContentList
+            title={contentTitle(kind)}
+            totalCount={contents?.fileCount ?? 0}
+            entries={entries}
+            hiddenCount={hiddenCount}
+            loading={loading}
+            truncated={Boolean(contents?.truncated)}
+          />
+          <DialogActionBar layout="inset">
             <Button
               type="button"
               variant="outline"
@@ -758,7 +603,7 @@ function SourceContentsDialog({
             <Button type="button" onClick={() => onOpenChange(false)}>
               關閉
             </Button>
-          </DialogFooter>
+          </DialogActionBar>
         </DialogContent>
       )}
     </Dialog>
@@ -779,46 +624,17 @@ function MetadataDetails({
   const summary = metadataSummaryText(draft);
 
   return (
-    <div
-      className={[
-        "rounded-md border px-3 py-2 transition-colors",
-        open
-          ? "border-primary/55 bg-primary/8"
-          : "border-primary/35 bg-primary/5 shadow-sm hover:border-primary/55 hover:bg-primary/8",
-      ].join(" ")}
+    <DisclosurePanel
+      title="補充資料"
+      description={summary || "BOOTH、模型、標籤與備註"}
+      icon={<Sparkles className="h-3.5 w-3.5" />}
+      open={open}
+      size="compact"
+      toggleLabel={(expanded) => (expanded ? "收合" : summary ? "編輯" : "展開")}
+      onOpenChange={onToggle}
     >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <Sparkles className="h-3.5 w-3.5" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <p className="text-base font-semibold text-foreground/92">
-                補充資料
-              </p>
-              <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-                可選
-              </span>
-            </div>
-            <p className="mt-1 min-w-0 truncate text-xs text-muted-foreground">
-              {summary || "BOOTH、模型、標籤與備註"}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-1 text-xs font-semibold text-foreground/88 transition-colors hover:text-primary focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          onClick={onToggle}
-        >
-          <span>{open ? "收合" : summary ? "編輯" : "展開"}</span>
-          <ChevronDown
-            className={`h-4 w-4 transition-transform ${open ? "" : "-rotate-90"}`}
-          />
-        </button>
-      </div>
-      {open && <div className="mt-3">{children}</div>}
-    </div>
+      {children}
+    </DisclosurePanel>
   );
 }
 
@@ -830,22 +646,23 @@ function ConflictResolution({
   onChange: (value: ConflictStrategy) => void;
 }) {
   return (
-    <div className="rounded-md border border-amber-500/45 bg-amber-500/8 px-3 py-2">
-      <div className="mb-2 flex items-start gap-2 text-xs text-amber-200">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <div className="min-w-0">
-          <p className="font-semibold">目標位置已有同名項目</p>
-          <p className="mt-0.5 text-amber-200/80">這筆素材要怎麼處理？</p>
-        </div>
-      </div>
-      <SegmentedField
-        label="處理方式"
-        help="只有這筆素材發生同名衝突時才需要選。取消會讓這筆不導入；改名會自動加上不重複名稱；覆蓋會取代素材庫內同名項目。"
-        value={value}
-        options={conflictOptions}
-        onChange={onChange}
-      />
-    </div>
+    <StatusMessage
+      tone="warning"
+      className="rounded-md px-3 py-2 text-xs"
+      icon={<AlertTriangle className="h-4 w-4" />}
+      title="目標位置已有同名項目"
+      action={
+        <SegmentedField
+          label="處理方式"
+          help="只有這筆素材發生同名衝突時才需要選。取消會讓這筆不導入；改名會自動加上不重複名稱；覆蓋會取代素材庫內同名項目。"
+          value={value}
+          options={conflictOptions}
+          onChange={onChange}
+        />
+      }
+    >
+      這筆素材要怎麼處理？
+    </StatusMessage>
   );
 }
 
@@ -873,15 +690,16 @@ function BulkApplyControls({
     .join(" / ");
 
   return (
-    <div className="rounded-md border border-border bg-muted/10">
+    <SurfaceBox>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
           onClick={() => onOpenChange(!open)}
         >
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+          <DisclosureChevron
+            expanded={open}
+            className="shrink-0 text-muted-foreground"
           />
           <span className="min-w-0">
             <span className="block text-sm font-medium">批量套用</span>
@@ -933,84 +751,7 @@ function BulkApplyControls({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function SuggestedMetadataActions({
-  draft,
-  onAddModel,
-  onAddTag,
-}: {
-  draft: BatchImportDraft;
-  onAddModel: (model: SuggestedBoothModel) => void;
-  onAddTag: (tagName: string) => void;
-}) {
-  if (draft.suggestedModels.length === 0 && draft.suggestedTags.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/25 p-2">
-      {draft.suggestedModels.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">
-            BOOTH 建議模型
-          </p>
-          <div className="flex min-w-0 flex-wrap gap-2">
-            {draft.suggestedModels.map((model) => (
-              <Button
-                key={model.name}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 min-w-0 !max-w-full !shrink px-2 text-xs"
-                onClick={() => onAddModel(model)}
-              >
-                <Plus className="h-3 w-3 shrink-0" />
-                <span className="min-w-0 truncate">{model.label}</span>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-      {draft.suggestedTags.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">
-            BOOTH 建議標籤
-          </p>
-          <div className="flex min-w-0 flex-wrap gap-2">
-            {draft.suggestedTags.map((tagName) => {
-              const originText = boothTagOriginText(
-                draft.suggestedTagOrigins,
-                tagName,
-              );
-              return (
-                <Button
-                  key={tagName}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-auto min-h-7 min-w-0 !max-w-full !shrink px-2 py-1 text-left text-xs"
-                  onClick={() => onAddTag(tagName)}
-                  title={originText ?? undefined}
-                >
-                  <Plus className="h-3 w-3 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block truncate">{tagName}</span>
-                    {originText && (
-                      <span className="block truncate text-[10px] text-muted-foreground">
-                        {originText}
-                      </span>
-                    )}
-                  </span>
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+    </SurfaceBox>
   );
 }
 
@@ -1063,22 +804,16 @@ function ItemMetadataFields({
           : null;
 
   return (
-    <div className="space-y-3 rounded-md bg-muted/15 p-3">
+    <SurfaceBox className="space-y-3 border-transparent bg-muted/15 p-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            顯示名稱
-          </label>
+        <FormField label="顯示名稱" variant="compact">
           <Input
             value={draft.displayName}
             onChange={(event) => onUpdate({ displayName: event.target.value })}
             placeholder={sourceName(draft.sourcePath)}
           />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            BOOTH 連結
-          </label>
+        </FormField>
+        <FormField label="BOOTH 連結" variant="compact">
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
             <Input
               value={draft.boothUrl}
@@ -1090,58 +825,51 @@ function ItemMetadataFields({
               }
               placeholder="https://booth.pm/ja/items/..."
             />
-            <Button
-              type="button"
+            <IconButton
+              label="抓取 BOOTH 資訊"
               variant="outline"
-              size="icon"
-              title="抓取 BOOTH 資訊"
-              aria-label="抓取 BOOTH 資訊"
+              icon={loadingBooth ? <Spinner /> : <Sparkles className="h-4 w-4" />}
               disabled={!draft.boothUrl.trim() || loadingBooth}
               onClick={onFetchBooth}
-            >
-              {loadingBooth ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-            </Button>
+            />
           </div>
           {boothStatusText && (
             <p
-              className={[
+              className={cn(
                 "text-xs",
                 draft.boothFetchStatus === "error"
                   ? "text-destructive"
                   : draft.boothFetchStatus === "success"
                     ? "text-emerald-300"
                     : "text-muted-foreground",
-              ].join(" ")}
+              )}
             >
               {boothStatusText}
             </p>
           )}
-        </div>
+        </FormField>
       </div>
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">
-          備註
-        </label>
+      <BoothShopFields
+        shopName={draft.boothShopName}
+        shopUrl={draft.boothShopUrl}
+        variant="compact"
+        onShopNameChange={(boothShopName) => onUpdate({ boothShopName })}
+        onShopUrlChange={(boothShopUrl) => onUpdate({ boothShopUrl })}
+      />
+      <FormField label="備註" variant="compact">
         <Textarea
           value={draft.note}
           onChange={(event) => onUpdate({ note: event.target.value })}
           rows={2}
           placeholder="添加備註..."
         />
-      </div>
+      </FormField>
       <div className="grid gap-3 lg:grid-cols-2">
         <ModelSelectionField
+          {...compactModelSelectionPreset}
           models={models}
           selectedModelIds={draft.modelIds}
           selectedModelIdSet={selectedModelIdSet}
-          actionsLayout="compact"
-          actionButtonClassName="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-          labelClassName="text-xs font-medium text-muted-foreground"
-          listClassName="max-h-28 space-y-1.5 overflow-y-auto rounded-md border border-border/70 bg-background/40 p-2"
           onSelectAll={() =>
             onUpdate({ modelIds: models.map((model) => model.id) })
           }
@@ -1151,14 +879,10 @@ function ItemMetadataFields({
           }
         />
         <TagSelectionField
+          {...compactTagSelectionPreset}
           tags={tags}
           selectedTagIds={draft.tagIds}
           selectedTagIdSet={selectedTagIdSet}
-          actionsLayout="compact"
-          actionButtonClassName="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-          labelClassName="text-xs font-medium text-muted-foreground"
-          listClassName="flex max-h-36 min-h-14 min-w-0 flex-wrap content-start gap-2 overflow-y-auto rounded-md border border-border/70 bg-background/35 p-3"
-          tagClassName="min-w-0 !max-w-full !shrink cursor-pointer truncate rounded-md px-2.5 py-1 text-xs leading-none transition-colors hover:brightness-110"
           onSelectAll={() => onUpdate({ tagIds: tags.map((tag) => tag.id) })}
           onClear={() => onUpdate({ tagIds: [] })}
           onToggle={(tagId) =>
@@ -1167,22 +891,23 @@ function ItemMetadataFields({
         />
       </div>
       <RelatedLinksEditor
+        {...compactRelatedLinksPreset}
         links={draft.relatedLinks}
-        layout="stacked"
-        actionsLayout="inline"
-        actionButtonClassName="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-        labelClassName="text-xs font-medium text-muted-foreground"
         onAdd={addRelatedLink}
         onCreateFirst={addRelatedLink}
         onUpdate={updateDraftRelatedLink}
         onRemove={removeDraftRelatedLink}
       />
-      <SuggestedMetadataActions
-        draft={draft}
-        onAddModel={onAddSuggestedModel}
-        onAddTag={onAddSuggestedTag}
+      <BoothModelSuggestionPanel
+        models={draft.suggestedModels}
+        onAdd={onAddSuggestedModel}
       />
-    </div>
+      <BoothTagSuggestionPanel
+        origins={draft.suggestedTagOrigins}
+        tags={draft.suggestedTags}
+        onAdd={onAddSuggestedTag}
+      />
+    </SurfaceBox>
   );
 }
 
@@ -1211,38 +936,34 @@ function BatchImportReport({
               : XCircle;
 
           return (
-            <div
+            <StateSurface
               key={result.sourcePath}
-              className={[
-                "rounded-md border p-3",
-                result.success
-                  ? "border-emerald-500/35 bg-emerald-500/5"
-                  : partialFailure
-                    ? "border-amber-500/45 bg-amber-500/5"
-                    : "border-destructive/45 bg-destructive/5",
-              ].join(" ")}
+              className="p-3"
+              tone={importResultSurfaceTone(result.success, partialFailure)}
             >
               <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <StatusIcon
-                      className={[
+                      className={cn(
                         "h-4 w-4",
                         result.success
                           ? "text-emerald-500"
                           : partialFailure
                             ? "text-amber-500"
                             : "text-destructive",
-                      ].join(" ")}
+                      )}
                     />
                     <p className="min-w-0 flex-1 truncate text-sm font-medium">
                       {sourceName(result.sourcePath)}
                     </p>
-                    <Badge
-                      variant={
-                        result.success || partialFailure
-                          ? "outline"
-                          : "destructive"
+                    <ToneBadge
+                      tone={
+                        result.success
+                          ? "success"
+                          : partialFailure
+                            ? "warning"
+                            : "danger"
                       }
                     >
                       {result.success
@@ -1250,40 +971,36 @@ function BatchImportReport({
                         : partialFailure
                           ? "檔案已處理"
                           : "失敗"}
-                    </Badge>
-                    <Badge variant="outline">
+                    </ToneBadge>
+                    <ToneBadge>
                       {resultOperationLabel(result.operation)}
-                    </Badge>
+                    </ToneBadge>
                   </div>
                   <p
-                    className={[
+                    className={cn(
                       "mt-1 text-xs",
                       result.success
                         ? "text-emerald-300"
                         : partialFailure
                           ? "text-amber-300"
                           : "text-destructive",
-                    ].join(" ")}
+                    )}
                   >
                     {result.message}
                   </p>
                 </div>
                 {result.finalPath && (
-                  <Button
-                    type="button"
+                  <IconButton
+                    label="開啟目標資料夾"
                     variant="ghost"
-                    size="icon"
                     className="justify-self-end"
-                    title="開啟目標資料夾"
-                    aria-label="開啟目標資料夾"
+                    icon={<FolderOpen className="h-4 w-4" />}
                     onClick={() =>
                       void invokeTauri("open_file_location", {
                         path: result.finalPath,
                       })
                     }
-                  >
-                    <FolderOpen className="h-4 w-4" />
-                  </Button>
+                  />
                 )}
               </div>
               <div className="mt-3 grid gap-2 text-xs">
@@ -1302,13 +1019,13 @@ function BatchImportReport({
                   </div>
                 )}
               </div>
-            </div>
+            </StateSurface>
           );
         })}
       </div>
-      <DialogFooter>
+      <DialogActionBar className="px-0 pb-0">
         <Button onClick={onClose}>完成</Button>
-      </DialogFooter>
+      </DialogActionBar>
     </DialogContent>
   );
 }
@@ -1542,6 +1259,8 @@ export function BatchImportDialog({
               ? item.displayName
               : (info.title ?? item.displayName),
             thumbnailUrl: info.thumbnailUrl ?? item.thumbnailUrl,
+            boothShopName: info.shopName ?? item.boothShopName,
+            boothShopUrl: info.shopUrl ?? item.boothShopUrl,
             modelIds: mergeIds(item.modelIds, applied.matchedModelIds),
             tagIds: mergeIds(item.tagIds, applied.matchedTagIds),
             suggestedModels: mergeSuggestedModels(
@@ -1730,12 +1449,12 @@ export function BatchImportDialog({
               )}
               <div className="space-y-2">
                 {drafts.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border bg-muted/10 px-4 py-8 text-center">
+                  <SurfaceBox variant="dashed" className="px-4 py-8 text-center">
                     <p className="text-sm font-medium">尚未選取素材</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       請拖曳資料夾、.zip 或 .unitypackage 到視窗中
                     </p>
-                  </div>
+                  </SurfaceBox>
                 ) : (
                   drafts.map((draft, index) => {
                     const sourceKind = sourceKindForDraft(draft);
@@ -1750,37 +1469,33 @@ export function BatchImportDialog({
                       !draft.confirmed;
 
                     return (
-                      <div
+                      <StateSurface
                         key={draft.id}
-                        className={[
-                          "space-y-3 rounded-md border p-3 transition-colors",
-                          !sourceSupported
-                            ? "border-destructive/50 bg-destructive/5"
-                            : hasConflict
-                              ? "border-amber-500/45 bg-amber-500/5"
-                              : draft.confirmed
-                                ? "border-emerald-500/35 bg-emerald-500/5"
-                                : "border-border/90 bg-background",
-                        ].join(" ")}
+                        className="space-y-3 p-3"
+                        tone={draftSurfaceTone({
+                          confirmed: draft.confirmed,
+                          hasConflict,
+                          sourceSupported,
+                        })}
                       >
                         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                           <div className="min-w-0 space-y-2">
                             <div className="flex min-w-0 items-start gap-2">
-                              <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/35 text-muted-foreground">
+                              <IconTile
+                                size="sm"
+                                className="mt-0.5 bg-muted/35"
+                              >
                                 <SourceKindIcon kind={sourceKind} />
-                              </span>
+                              </IconTile>
                               <div className="min-w-0 flex-1">
                                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                                   <p className="min-w-0 max-w-full truncate text-[15px] font-semibold leading-5 text-foreground/92">
                                     {draft.sourceInfo?.name ??
                                       sourceName(draft.sourcePath)}
                                   </p>
-                                  <Badge
-                                    className="h-5 px-1.5 text-[11px] leading-none text-muted-foreground"
-                                    variant="outline"
-                                  >
+                                  <ToneBadge>
                                     {sourceKindLabel(sourceKind)}
-                                  </Badge>
+                                  </ToneBadge>
                                   <StatusBadge
                                     draft={draft}
                                     preview={preview}
@@ -1824,12 +1539,11 @@ export function BatchImportDialog({
                               type="button"
                               variant={draft.confirmed ? "outline" : "default"}
                               size="sm"
-                              className={[
+                              className={cn(
                                 "min-w-24 font-semibold transition-shadow",
                                 needsConfirmationAttention
-                                  ? "bg-amber-500/25 text-amber-100 ring-2 ring-amber-300/80 ring-offset-2 ring-offset-background motion-safe:animate-pulse"
-                                  : "",
-                              ].join(" ")}
+                                  && "bg-amber-500/25 text-amber-100 ring-2 ring-amber-300/80 ring-offset-2 ring-offset-background motion-safe:animate-pulse",
+                              )}
                               disabled={!sourceSupported}
                               onClick={() => {
                                 clearConfirmAttentionFor(draft.id);
@@ -1853,20 +1567,15 @@ export function BatchImportDialog({
                               loading={loadingContentId === draft.id}
                               onOpen={() => openSourceContents(draft)}
                             />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
+                            <DisclosureButton
+                              expanded={expanded}
                               className="shrink-0 font-semibold"
                               onClick={() =>
                                 setExpandedDraftId(expanded ? null : draft.id)
                               }
                             >
-                              <ChevronDown
-                                className={`h-4 w-4 transition-transform ${expanded ? "" : "-rotate-90"}`}
-                              />
                               {expanded ? "收合" : "調整"}
-                            </Button>
+                            </DisclosureButton>
                           </div>
                         </div>
 
@@ -1953,13 +1662,13 @@ export function BatchImportDialog({
                             </MetadataDetails>
                           </div>
                         )}
-                      </div>
+                      </StateSurface>
                     );
                   })
                 )}
               </div>
             </div>
-            <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:items-center sm:justify-between">
+            <DialogActionBar justify="between">
               <div className="min-w-0 text-left">
                 <p className="text-sm text-muted-foreground">{footerMessage}</p>
                 <p className="mt-1 text-xs text-muted-foreground/80">
@@ -1989,7 +1698,7 @@ export function BatchImportDialog({
                   {saving ? "導入中" : "開始導入"}
                 </Button>
               </div>
-            </DialogFooter>
+            </DialogActionBar>
           </DialogContent>
         )}
       </Dialog>

@@ -10,6 +10,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { AddModelDialog } from "@/components/add-model-dialog";
 import { AddTagDialog } from "@/components/add-tag-dialog";
@@ -18,6 +19,7 @@ import { AppSettingsDialog } from "@/components/app-settings-dialog";
 import { AssetDetail } from "@/components/asset-detail";
 import { AssetGrid } from "@/components/asset-grid";
 import { BatchImportDialog } from "@/components/batch-import-dialog";
+import { BoothShopBackfillProgressView } from "@/components/booth-shop-backfill-progress";
 import { CommandPalette } from "@/components/command-palette/command-palette";
 import { AssetRelatedDialog } from "@/components/asset-related-dialog";
 import { ReleaseNotesDialog } from "@/components/release-notes-dialog";
@@ -25,11 +27,15 @@ import { Sidebar } from "@/components/sidebar";
 import { ShortcutHelpDialog } from "@/components/shortcuts/shortcut-help-dialog";
 import { useAppShortcuts } from "@/components/shortcuts/use-app-shortcuts";
 import { Button } from "@/components/ui/button";
+import { FloatingMenuItem } from "@/components/ui/floating-menu";
+import { FloatingSurface } from "@/components/ui/floating-surface";
+import { IconButton } from "@/components/ui/icon-button";
+import { Toaster } from "@/components/ui/sonner";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
 import { useReleaseNotesController, type ReleaseNotesController } from "@/lib/use-release-notes";
 import { VccProjects } from "@/components/vcc-projects";
 import { useAssetStore } from "@/stores/asset-store";
-import type { AssetSortOrder } from "@/types";
+import type { AssetSortOrder, BoothShopBackfillProgress } from "@/types";
 
 type MainView = "assets" | "vcc";
 
@@ -45,6 +51,9 @@ type AppController = {
   isShortcutHelpOpen: boolean;
   mainView: MainView;
   notice: string | null;
+  noticeTone: "success" | "loading";
+  boothShopBackfilling: boolean;
+  boothShopBackfillProgress: BoothShopBackfillProgress | null;
   releaseNotes: ReleaseNotesController;
   selectedAssetId: number | null;
   setIsCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
@@ -55,6 +64,17 @@ type AppController = {
   setIsShortcutHelpOpen: Dispatch<SetStateAction<boolean>>;
   setMainView: Dispatch<SetStateAction<MainView>>;
 };
+
+const NOTICE_TOAST_ID = "asset-store-notice";
+const ERROR_TOAST_ID = "asset-store-error";
+
+function isBoothShopBackfillNotice(notice: string | null, backfilling: boolean) {
+  return Boolean(
+    backfilling ||
+      notice?.includes("BOOTH Shop 回填") ||
+      notice?.includes("BOOTH Shop 資訊"),
+  );
+}
 
 function mergeBatchImportPaths(current: string[], next: string[]) {
   const seen = new Set(current.map((path) => path.trim().toLocaleLowerCase()));
@@ -77,6 +97,11 @@ function useAppController(): AppController {
   const selectedAssetId = useAssetStore((state) => state.selectedAssetId);
   const error = useAssetStore((state) => state.error);
   const notice = useAssetStore((state) => state.notice);
+  const noticeTone = useAssetStore((state) => state.noticeTone);
+  const boothShopBackfilling = useAssetStore((state) => state.boothShopBackfilling);
+  const boothShopBackfillProgress = useAssetStore(
+    (state) => state.boothShopBackfillProgress,
+  );
   const clearError = useAssetStore((state) => state.clearError);
   const clearNotice = useAssetStore((state) => state.clearNotice);
   const [mainView, setMainView] = useState<MainView>("assets");
@@ -145,7 +170,8 @@ function useAppController(): AppController {
   return {
     batchImportPaths, clearError, clearNotice, error, isBatchImportOpen, isDraggingFiles,
     isCommandPaletteOpen, isSettingsOpen,
-    isShortcutHelpOpen, mainView, notice, releaseNotes, selectedAssetId,
+    boothShopBackfilling, boothShopBackfillProgress, isShortcutHelpOpen, mainView, notice, noticeTone,
+    releaseNotes, selectedAssetId,
     setBatchImportPaths, setIsBatchImportOpen, setIsCommandPaletteOpen, setIsDraggingFiles,
     setIsSettingsOpen, setIsShortcutHelpOpen, setMainView,
   };
@@ -187,11 +213,7 @@ function HeaderIconButton({
   label: string;
   onClick: () => void;
 }) {
-  return (
-    <Button type="button" variant="ghost" size="icon" title={label} aria-label={label} onClick={onClick}>
-      <Icon className="h-4 w-4" />
-    </Button>
-  );
+  return <IconButton label={label} icon={<Icon className="h-4 w-4" />} onClick={onClick} />;
 }
 
 function MainViewButton({
@@ -268,27 +290,32 @@ function AssetSortControl() {
         <span className="min-w-0 truncate text-xs">{activeOption.label}</span>
       </Button>
       {open && (
-        <div className="absolute top-full right-0 z-50 mt-1 w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg">
+        <FloatingSurface
+          padding="menu"
+          shadow="lg"
+          className="absolute top-full right-0 z-50 mt-1 w-40"
+        >
           {assetSortOptions.map((option) => {
             const selected = option.value === sortOrder;
             return (
-              <button
+              <FloatingMenuItem
                 key={option.value}
-                type="button"
-                className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                selected={selected}
+                leading={
+                  <Check
+                    className={selected ? "h-4 w-4" : "h-4 w-4 opacity-0"}
+                  />
+                }
                 onClick={() => {
                   setAssetSortOrder(option.value);
                   setOpen(false);
                 }}
               >
-                <Check
-                  className={selected ? "h-4 w-4" : "h-4 w-4 opacity-0"}
-                />
-                <span className="min-w-0 truncate">{option.label}</span>
-              </button>
+                {option.label}
+              </FloatingMenuItem>
             );
           })}
-        </div>
+        </FloatingSurface>
       )}
     </div>
   );
@@ -383,37 +410,116 @@ function AppDialogs({ controller }: { controller: AppController }) {
   );
 }
 
-function AppToast({
-  message,
-  tone,
-  onClose,
-}: {
-  message: string;
-  tone: "error" | "notice";
-  onClose: () => void;
-}) {
-  return (
-    <div className={`fixed bottom-4 left-1/2 z-50 flex max-w-[520px] -translate-x-1/2 items-center gap-3 rounded-md border bg-card px-4 py-3 text-sm shadow-lg ${tone === "error" ? "border-destructive/30 text-destructive" : "border-primary/30 text-foreground"}`}>
-      <span className="min-w-0 flex-1">{message}</span>
-      <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-        關閉
-      </Button>
-    </div>
-  );
-}
-
 function AppNotifications({ controller }: { controller: AppController }) {
-  if (controller.error) {
-    return (
-      <AppToast message={controller.error} tone="error" onClose={controller.clearError} />
+  const lastErrorRef = useRef<string | null>(null);
+  const lastNoticeRef = useRef<string | null>(null);
+
+  const {
+    boothShopBackfillProgress,
+    boothShopBackfilling,
+    clearError,
+    clearNotice,
+    error,
+    notice,
+    noticeTone,
+  } = controller;
+
+  useEffect(() => {
+    if (!error) {
+      lastErrorRef.current = null;
+      return;
+    }
+    if (error === lastErrorRef.current) {
+      return;
+    }
+
+    lastErrorRef.current = error;
+    toast.error("發生錯誤", {
+      description: error,
+      id: ERROR_TOAST_ID,
+      duration: 8000,
+      onDismiss: clearError,
+      onAutoClose: clearError,
+    });
+  }, [clearError, error]);
+
+  useEffect(() => {
+    if (!notice) {
+      lastNoticeRef.current = null;
+      toast.dismiss(NOTICE_TOAST_ID);
+      return;
+    }
+    const boothBackfillNotice = isBoothShopBackfillNotice(
+      notice,
+      boothShopBackfilling,
     );
-  }
-  if (controller.notice) {
-    return (
-      <AppToast message={controller.notice} tone="notice" onClose={controller.clearNotice} />
-    );
-  }
-  return null;
+    const noticeKey = boothShopBackfillProgress
+      ? `${noticeTone}:${notice}:${boothShopBackfillProgress.current}:${boothShopBackfillProgress.total}:${boothShopBackfillProgress.updated}:${boothShopBackfillProgress.skipped}:${boothShopBackfillProgress.failed}`
+      : `${noticeTone}:${notice}:${boothShopBackfilling ? "backfilling" : "idle"}`;
+    if (noticeKey === lastNoticeRef.current) {
+      return;
+    }
+
+    lastNoticeRef.current = noticeKey;
+    if (noticeTone === "loading") {
+      if (boothBackfillNotice) {
+        toast(
+          <BoothShopBackfillProgressView
+            message={notice}
+            progress={boothShopBackfillProgress}
+            status="loading"
+            variant="toast"
+          />,
+          {
+            id: NOTICE_TOAST_ID,
+            duration: Infinity,
+          },
+        );
+        return;
+      }
+
+      toast.loading("處理中", {
+        description: notice,
+        id: NOTICE_TOAST_ID,
+        duration: Infinity,
+      });
+      return;
+    }
+
+    if (boothBackfillNotice && boothShopBackfillProgress) {
+      toast(
+        <BoothShopBackfillProgressView
+          message={notice}
+          progress={boothShopBackfillProgress}
+          status="success"
+          variant="toast"
+        />,
+        {
+          id: NOTICE_TOAST_ID,
+          duration: 7000,
+          onDismiss: clearNotice,
+          onAutoClose: clearNotice,
+        },
+      );
+      return;
+    }
+
+    toast.success("完成", {
+      description: notice,
+      id: NOTICE_TOAST_ID,
+      duration: 6000,
+      onDismiss: clearNotice,
+      onAutoClose: clearNotice,
+    });
+  }, [
+    boothShopBackfilling,
+    boothShopBackfillProgress,
+    clearNotice,
+    notice,
+    noticeTone,
+  ]);
+
+  return <Toaster />;
 }
 
 function DragImportOverlay({ visible }: { visible: boolean }) {

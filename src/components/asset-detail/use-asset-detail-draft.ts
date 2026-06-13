@@ -38,6 +38,8 @@ type AssetDetailDraftValues = {
   displayName: string;
   filePath: string;
   boothUrl: string;
+  boothShopName: string;
+  boothShopUrl: string;
   thumbnailUrl: string;
   note: string;
   modelIds: number[];
@@ -50,6 +52,8 @@ type AssetDetailDraftSetters = {
   setEditedDisplayName: (value: string) => void;
   setEditedFilePath: (value: string) => void;
   setEditedBoothUrl: (value: string) => void;
+  setEditedBoothShopName: (value: string) => void;
+  setEditedBoothShopUrl: (value: string) => void;
   setEditedThumbnailUrl: (value: string) => void;
   setEditedNote: (value: string) => void;
   setEditedModelIds: (value: number[] | ((current: number[]) => number[])) => void;
@@ -148,6 +152,8 @@ type ProductInfoFetcherOptions = {
   currentModels: Model[];
   currentTags: Tag[];
   setDisplayName: (name: string) => void;
+  setBoothShopName: (name: string) => void;
+  setBoothShopUrl: (url: string) => void;
   setIsFetchingProductInfo: (fetching: boolean) => void;
   setModelIds: AssetDetailDraftSetters["setEditedModelIds"];
   setTagIds: AssetDetailDraftSetters["setEditedTagIds"];
@@ -177,6 +183,8 @@ const emptyAssetDraftValues: AssetDetailDraftValues = {
   displayName: "",
   filePath: "",
   boothUrl: "",
+  boothShopName: "",
+  boothShopUrl: "",
   thumbnailUrl: "",
   note: "",
   modelIds: [],
@@ -189,6 +197,8 @@ function toAssetDraftValues(asset: Asset): AssetDetailDraftValues {
     displayName: asset.display_name || "",
     filePath: asset.file_path,
     boothUrl: asset.booth_url || "",
+    boothShopName: asset.booth_shop_name || "",
+    boothShopUrl: asset.booth_shop_url || "",
     thumbnailUrl: asset.thumbnail_url || "",
     note: asset.note || "",
     modelIds: asset.models.map((model) => model.id),
@@ -205,6 +215,8 @@ function hasAssetDraftChanges(
     draft.displayName !== original.displayName ||
     draft.filePath !== original.filePath ||
     draft.boothUrl !== original.boothUrl ||
+    draft.boothShopName !== original.boothShopName ||
+    draft.boothShopUrl !== original.boothShopUrl ||
     draft.thumbnailUrl !== original.thumbnailUrl ||
     draft.note !== original.note ||
     !sameIds(draft.modelIds, original.modelIds) ||
@@ -218,6 +230,8 @@ function toAssetUpdateInput(draft: AssetDetailDraftValues): UpdateAssetInput {
     display_name: draft.displayName || null,
     file_path: draft.filePath,
     booth_url: draft.boothUrl || null,
+    booth_shop_name: draft.boothShopName || null,
+    booth_shop_url: draft.boothShopUrl || null,
     thumbnail_url: draft.thumbnailUrl || null,
     note: draft.note || null,
     model_ids: draft.modelIds,
@@ -265,6 +279,8 @@ function useAssetDraftState(): AssetDetailDraftState {
     setEditedDisplayName: (value) => setField("displayName", value),
     setEditedFilePath: (value) => setField("filePath", value),
     setEditedBoothUrl: (value) => setField("boothUrl", value),
+    setEditedBoothShopName: (value) => setField("boothShopName", value),
+    setEditedBoothShopUrl: (value) => setField("boothShopUrl", value),
     setEditedThumbnailUrl: (value) => setField("thumbnailUrl", value),
     setEditedNote: (value) => setField("note", value),
     setEditedModelIds: (value) => updateIds("modelIds", value),
@@ -453,6 +469,8 @@ function createProductInfoFetcher({
   currentModels,
   currentTags,
   setDisplayName,
+  setBoothShopName,
+  setBoothShopUrl,
   setIsFetchingProductInfo,
   setModelIds,
   setTagIds,
@@ -473,6 +491,12 @@ function createProductInfoFetcher({
 
       if (info.thumbnailUrl) {
         setThumbnailUrl(info.thumbnailUrl);
+      }
+      if (info.shopName) {
+        setBoothShopName(info.shopName);
+      }
+      if (info.shopUrl) {
+        setBoothShopUrl(info.shopUrl);
       }
       if (shouldFillDisplayName && info.title) {
         setDisplayName(info.title);
@@ -531,6 +555,8 @@ function useAssetDraftDerivedState(
       displayName: draft.displayName,
       filePath: draft.filePath,
       boothUrl: draft.boothUrl,
+      boothShopName: draft.boothShopName,
+      boothShopUrl: draft.boothShopUrl,
       thumbnailUrl: draft.thumbnailUrl,
       note: draft.note,
       modelIds: draft.modelIds,
@@ -541,6 +567,8 @@ function useAssetDraftDerivedState(
       draft.displayName,
       draft.filePath,
       draft.boothUrl,
+      draft.boothShopName,
+      draft.boothShopUrl,
       draft.thumbnailUrl,
       draft.note,
       draft.modelIds,
@@ -623,6 +651,8 @@ function createAssetDetailDraftResult({
     editedDisplayName: draft.displayName,
     editedFilePath: draft.filePath,
     editedBoothUrl: draft.boothUrl,
+    editedBoothShopName: draft.boothShopName,
+    editedBoothShopUrl: draft.boothShopUrl,
     editedThumbnailUrl: draft.thumbnailUrl,
     editedNote: draft.note,
     editedModelIds: draft.modelIds,
@@ -635,6 +665,8 @@ function createAssetDetailDraftResult({
     setEditedDisplayName: draft.setEditedDisplayName,
     setEditedFilePath: draft.setEditedFilePath,
     setEditedBoothUrl: draft.setEditedBoothUrl,
+    setEditedBoothShopName: draft.setEditedBoothShopName,
+    setEditedBoothShopUrl: draft.setEditedBoothShopUrl,
     setEditedThumbnailUrl: draft.setEditedThumbnailUrl,
     setEditedNote: draft.setEditedNote,
     setEditedModelIds: draft.setEditedModelIds,
@@ -760,6 +792,8 @@ export function useAssetDetailDraft({
     currentModels: models,
     currentTags: tags,
     setDisplayName: draft.setEditedDisplayName,
+    setBoothShopName: draft.setEditedBoothShopName,
+    setBoothShopUrl: draft.setEditedBoothShopUrl,
     setIsFetchingProductInfo,
     setModelIds: draft.setEditedModelIds,
     setTagIds: draft.setEditedTagIds,

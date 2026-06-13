@@ -2,7 +2,10 @@
 
 import { Link2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DashedActionButton } from "@/components/ui/dashed-action-button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { SurfaceBox } from "@/components/ui/surface-box";
 import { cn } from "@/lib/utils";
 import type { RelatedLinkDraft } from "@/lib/asset-links";
 
@@ -71,7 +74,7 @@ function StackedRelatedLinkRow({
   onUpdate,
 }: Omit<RelatedLinkRowProps, "layout">) {
   return (
-    <div className="min-w-0 space-y-2 rounded-md border border-border p-2">
+    <SurfaceBox className="min-w-0 space-y-2 bg-transparent p-2">
       <div className="asset-detail-action-grid grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_2.25rem] gap-2">
         <Input
           value={link.label}
@@ -87,7 +90,7 @@ function StackedRelatedLinkRow({
         placeholder="https://..."
         className="min-w-0"
       />
-    </div>
+    </SurfaceBox>
   );
 }
 
@@ -148,14 +151,12 @@ function EmptyRelatedLinksButton({
   onCreateFirst,
 }: Pick<RelatedLinksEditorProps, "onCreateFirst">) {
   return (
-    <button
-      type="button"
-      className="flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+    <DashedActionButton
+      icon={<Link2 className="h-4 w-4" />}
       onClick={onCreateFirst}
     >
-      <Link2 className="h-4 w-4" />
-      <span className="min-w-0 truncate">新增論壇、教學或輔助插件連結</span>
-    </button>
+      新增論壇、教學或輔助插件連結
+    </DashedActionButton>
   );
 }
 
@@ -194,16 +195,11 @@ export function RelatedLinksEditor({
 
 function RemoveLinkButton({ onRemove }: { onRemove: () => void }) {
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
+    <IconButton
       className="!size-9"
-      title="移除連結"
-      aria-label="移除連結"
+      label="移除連結"
+      icon={<Trash2 className="h-4 w-4 text-destructive" />}
       onClick={onRemove}
-    >
-      <Trash2 className="h-4 w-4 text-destructive" />
-    </Button>
+    />
   );
 }

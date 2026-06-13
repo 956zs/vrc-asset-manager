@@ -1,9 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type SelectionActionsLayout = "inline" | "grid" | "compact";
+export type SelectionFieldListFlow = "stack" | "wrap";
+export type SelectionFieldListSurface = "panel" | "plain";
 
 type SelectionFieldHeaderProps = {
   actionButtonClassName: string;
@@ -14,6 +17,21 @@ type SelectionFieldHeaderProps = {
   selectedCount: number;
   onClear: () => void;
   onSelectAll: () => void;
+};
+
+type SelectionFieldFrameProps = SelectionFieldHeaderProps & {
+  children: ReactNode;
+};
+
+type SelectionFieldEmptyProps = {
+  children: ReactNode;
+};
+
+type SelectionFieldListProps = {
+  children: ReactNode;
+  className?: string;
+  flow?: SelectionFieldListFlow;
+  surface?: SelectionFieldListSurface;
 };
 
 export function SelectionFieldHeader({
@@ -69,6 +87,44 @@ export function SelectionFieldHeader({
           全不選
         </Button>
       </div>
+    </div>
+  );
+}
+
+export function SelectionFieldFrame({
+  children,
+  ...headerProps
+}: SelectionFieldFrameProps) {
+  return (
+    <div className="space-y-2">
+      <SelectionFieldHeader {...headerProps} />
+      {children}
+    </div>
+  );
+}
+
+export function SelectionFieldEmpty({ children }: SelectionFieldEmptyProps) {
+  return <p className="text-sm text-muted-foreground">{children}</p>;
+}
+
+export function SelectionFieldList({
+  children,
+  className,
+  flow = "stack",
+  surface = "panel",
+}: SelectionFieldListProps) {
+  return (
+    <div
+      className={cn(
+        surface === "panel" &&
+          "overflow-y-auto rounded-md border border-border/70 bg-background/35",
+        flow === "stack"
+          ? "space-y-2"
+          : "flex min-w-0 flex-wrap content-start gap-2",
+        className,
+      )}
+    >
+      {children}
     </div>
   );
 }

@@ -16,15 +16,8 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import {
   Download,
   GripVertical,
-  ListFilter,
   Package,
-  Plus,
-  Search,
-  Tag,
-  type LucideIcon,
   Upload,
-  User,
-  X,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -36,14 +29,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { SidebarFilterSectionHeader } from "@/components/sidebar-filter-section-header";
 import {
-  SidebarFilterRow,
-  type SidebarDropTarget,
-} from "@/components/sidebar-filter-row";
+  ActiveFilterSummary,
+  SidebarFilterPanel,
+  SidebarSearch,
+  type ModelFilterSectionProps,
+  type ShopFilterSectionProps,
+  type TagFilterSectionProps,
+} from "@/components/sidebar-filter-panel";
+import {
+  useSidebarDragController,
+  type DragPreviewPosition,
+} from "@/components/sidebar-drag";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { FloatingSurface } from "@/components/ui/floating-surface";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
 import { cn } from "@/lib/utils";
 import { type AssetStore, useAssetStore } from "@/stores/asset-store";
@@ -67,24 +66,6 @@ type DeleteTarget =
       label: string;
     };
 
-type DragState =
-  | {
-      type: "model";
-      id: number;
-    }
-  | {
-      type: "tag";
-      id: number;
-    };
-
-type DragPreviewPosition = {
-  x: number;
-  y: number;
-};
-
-type SidebarFilterKind = "model" | "tag";
-type SidebarFilterItem = { id: number };
-type SidebarReorder = (ids: number[]) => Promise<void>;
 type SidebarBooleanSetter = Dispatch<SetStateAction<boolean>>;
 type SidebarDialogOpenSetter = (open: boolean) => void;
 type SidebarDeleteAction = (id: number) => Promise<void>;
@@ -92,44 +73,6 @@ type SidebarSaveAction = (path: string) => Promise<void>;
 type SidebarModelSetter = (model: Model | null) => void;
 type SidebarTagSetter = (tag: AssetTag | null) => void;
 type SidebarStoreState = AssetStore;
-
-type SidebarDragOptions = {
-  models: readonly Model[];
-  tags: readonly AssetTag[];
-  isModelEditMode: boolean;
-  isTagEditMode: boolean;
-  reorderModels: SidebarReorder;
-  reorderTags: SidebarReorder;
-};
-
-type SidebarDragSetters = {
-  setDragState: Dispatch<SetStateAction<DragState | null>>;
-  setDragPreviewPosition: Dispatch<SetStateAction<DragPreviewPosition | null>>;
-  setModelDropTarget: Dispatch<SetStateAction<SidebarDropTarget | null>>;
-  setTagDropTarget: Dispatch<SetStateAction<SidebarDropTarget | null>>;
-};
-
-type SidebarDragListenerOptions = SidebarDragSetters &
-  Pick<SidebarDragOptions, "models" | "tags" | "reorderModels" | "reorderTags"> & {
-    dragState: DragState | null;
-  };
-
-type SidebarDragCommitOptions = Pick<
-  SidebarDragOptions,
-  "models" | "tags" | "reorderModels" | "reorderTags"
-> & {
-  dragState: DragState;
-  target: SidebarDropTarget | null;
-};
-
-type SidebarDragStartOptions = SidebarDragSetters &
-  Pick<SidebarDragOptions, "isModelEditMode" | "isTagEditMode">;
-
-type SidebarDragHandlers = {
-  onPointerMove: (event: PointerEvent) => void;
-  onPointerUp: (event: PointerEvent) => void;
-  onPointerCancel: () => void;
-};
 
 type SidebarResizeOptions = {
   sidebarRef: RefObject<HTMLElement | null>;
@@ -139,118 +82,6 @@ type SidebarResizeOptions = {
 type SidebarResizeHandlers = {
   onPointerMove: (event: PointerEvent) => void;
   onPointerUp: () => void;
-};
-
-type SidebarFilterListSectionProps<TItem extends SidebarFilterItem> = {
-  icon: LucideIcon;
-  kind: SidebarFilterKind;
-  label: string;
-  selectedCount: number;
-  open: boolean;
-  editing: boolean;
-  editLabel: string;
-  doneLabel: string;
-  addLabel: string;
-  items: readonly TItem[];
-  selectedIds: ReadonlySet<number>;
-  draggedId: number | null;
-  dropTarget: SidebarDropTarget | null;
-  rowEditLabel: string;
-  rowDeleteLabel: string;
-  getLabel: (item: TItem) => string;
-  getSwatchColor?: (item: TItem) => string;
-  onToggleOpen: () => void;
-  onToggleEditing: () => void;
-  onAdd: () => void;
-  onToggle: (id: number) => void;
-  onEdit: (item: TItem) => void;
-  onDelete: (item: TItem, label: string) => void;
-  onDragStart: (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    id: number,
-  ) => void;
-};
-
-type SidebarFilterRowsProps<TItem extends SidebarFilterItem> = Pick<
-  SidebarFilterListSectionProps<TItem>,
-  | "kind"
-  | "items"
-  | "selectedIds"
-  | "draggedId"
-  | "dropTarget"
-  | "editing"
-  | "rowEditLabel"
-  | "rowDeleteLabel"
-  | "getLabel"
-  | "getSwatchColor"
-  | "onToggle"
-  | "onEdit"
-  | "onDelete"
-  | "onDragStart"
->;
-
-type SidebarSearchProps = {
-  search: string;
-  statusFilters: readonly AssetStatusFilter[];
-  onSearchChange: (value: string) => void;
-  onStatusToggle: (status: AssetStatusFilter) => void;
-};
-
-type ActiveFilterSummaryProps = {
-  resultCount: number;
-  onClear: () => void;
-};
-
-type AddAssetButtonProps = {
-  onClick: () => void;
-};
-
-type ModelFilterSectionProps = {
-  selectedCount: number;
-  open: boolean;
-  editing: boolean;
-  models: readonly Model[];
-  selectedIds: ReadonlySet<number>;
-  draggedId: number | null;
-  dropTarget: SidebarDropTarget | null;
-  onToggleOpen: () => void;
-  onToggleEditing: () => void;
-  onAdd: () => void;
-  onToggle: (id: number) => void;
-  onEdit: (model: Model) => void;
-  onDelete: (model: Model, label: string) => void;
-  onDragStart: (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    id: number,
-  ) => void;
-};
-
-type TagFilterSectionProps = {
-  selectedCount: number;
-  open: boolean;
-  editing: boolean;
-  tags: readonly AssetTag[];
-  selectedIds: ReadonlySet<number>;
-  draggedId: number | null;
-  dropTarget: SidebarDropTarget | null;
-  onToggleOpen: () => void;
-  onToggleEditing: () => void;
-  onAdd: () => void;
-  onToggle: (id: number) => void;
-  onEdit: (tag: AssetTag) => void;
-  onDelete: (tag: AssetTag, label: string) => void;
-  onDragStart: (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    id: number,
-  ) => void;
-};
-
-type SidebarFilterPanelProps = {
-  onAddAsset: () => void;
-  category: AssetCategory | null;
-  onCategoryChange: (category: AssetCategory | null) => void;
-  modelFilter: ModelFilterSectionProps;
-  tagFilter: TagFilterSectionProps;
 };
 
 type ModelFilterSectionOptions = Pick<
@@ -317,6 +148,8 @@ type SidebarSectionState = {
   setIsModelFilterOpen: SidebarBooleanSetter;
   isTagFilterOpen: boolean;
   setIsTagFilterOpen: SidebarBooleanSetter;
+  isShopFilterOpen: boolean;
+  setIsShopFilterOpen: SidebarBooleanSetter;
   isModelEditMode: boolean;
   setIsModelEditMode: SidebarBooleanSetter;
   isTagEditMode: boolean;
@@ -326,11 +159,13 @@ type SidebarSectionState = {
 type SidebarFilterState = {
   selectedModelCount: number;
   selectedTagCount: number;
+  selectedShopCount: number;
   selectedStatusCount: number;
   hasActiveFilters: boolean;
   filteredCount: number;
   selectedModelIds: ReadonlySet<number>;
   selectedTagIds: ReadonlySet<number>;
+  selectedShopKeys: ReadonlySet<string>;
   selectedStatusFilters: ReadonlySet<AssetStatusFilter>;
 };
 
@@ -360,6 +195,7 @@ type SidebarLayoutProps = Omit<SidebarShellProps, "children"> &
   filterState: SidebarFilterState;
   modelFilter: ModelFilterSectionProps;
   tagFilter: TagFilterSectionProps;
+  shopFilter: ShopFilterSectionProps;
   category: AssetCategory | null;
   statusFilters: readonly AssetStatusFilter[];
   saving: boolean;
@@ -419,6 +255,8 @@ const SIDEBAR_MODEL_FILTER_OPEN_STORAGE_KEY =
   "vrc-asset-manager-sidebar-model-filter-open";
 const SIDEBAR_TAG_FILTER_OPEN_STORAGE_KEY =
   "vrc-asset-manager-sidebar-tag-filter-open";
+const SIDEBAR_SHOP_FILTER_OPEN_STORAGE_KEY =
+  "vrc-asset-manager-sidebar-shop-filter-open";
 const SIDEBAR_DEFAULT_WIDTH = 240;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 420;
@@ -437,13 +275,13 @@ const getInitialSidebarWidth = () => {
     : SIDEBAR_DEFAULT_WIDTH;
 };
 
-const getInitialSidebarSectionOpen = (key: string) => {
+const getInitialSidebarSectionOpen = (key: string, defaultOpen = true) => {
   if (typeof window === "undefined") {
-    return true;
+    return defaultOpen;
   }
 
   const saved = window.localStorage.getItem(key);
-  return saved === null ? true : saved === "true";
+  return saved === null ? defaultOpen : saved === "true";
 };
 
 function useStoredSidebarWidth() {
@@ -463,9 +301,9 @@ function useStoredSidebarWidth() {
   return [sidebarWidth, setSidebarWidth] as const;
 }
 
-function usePersistentSidebarSection(storageKey: string) {
+function usePersistentSidebarSection(storageKey: string, defaultOpen = true) {
   const [open, setOpen] = useState(() =>
-    getInitialSidebarSectionOpen(storageKey),
+    getInitialSidebarSectionOpen(storageKey, defaultOpen),
   );
 
   useEffect(() => {
@@ -571,6 +409,7 @@ function useSidebarFilterState(
 ): SidebarFilterState {
   const selectedModelCount = filters.modelIds.length;
   const selectedTagCount = filters.tagIds.length;
+  const selectedShopCount = filters.shopFilters.length;
   const selectedStatusCount = filters.statusFilters.length;
   const selectedModelIds = useMemo(
     () => new Set(filters.modelIds),
@@ -584,22 +423,34 @@ function useSidebarFilterState(
     () => new Set(filters.statusFilters),
     [filters.statusFilters],
   );
+  const selectedShopKeys = useMemo(
+    () =>
+      new Set(
+        filters.shopFilters.map(
+          (shop) => `${shop.name.trim()}|${shop.url?.trim() ?? ""}`,
+        ),
+      ),
+    [filters.shopFilters],
+  );
   const hasActiveFilters = Boolean(
     filters.search ||
       filters.category ||
       selectedModelCount > 0 ||
       selectedTagCount > 0 ||
+      selectedShopCount > 0 ||
       selectedStatusCount > 0,
   );
 
   return {
     selectedModelCount,
     selectedTagCount,
+    selectedShopCount,
     selectedStatusCount,
     hasActiveFilters,
     filteredCount: hasActiveFilters ? assetCount : 0,
     selectedModelIds,
     selectedTagIds,
+    selectedShopKeys,
     selectedStatusFilters,
   };
 }
@@ -621,6 +472,10 @@ function useSidebarSections(): SidebarSectionState {
   const [isTagFilterOpen, setIsTagFilterOpen] = usePersistentSidebarSection(
     SIDEBAR_TAG_FILTER_OPEN_STORAGE_KEY,
   );
+  const [isShopFilterOpen, setIsShopFilterOpen] = usePersistentSidebarSection(
+    SIDEBAR_SHOP_FILTER_OPEN_STORAGE_KEY,
+    false,
+  );
   const [isModelEditMode, setIsModelEditMode] = useState(false);
   const [isTagEditMode, setIsTagEditMode] = useState(false);
 
@@ -632,6 +487,8 @@ function useSidebarSections(): SidebarSectionState {
     setIsModelFilterOpen,
     isTagFilterOpen,
     setIsTagFilterOpen,
+    isShopFilterOpen,
+    setIsShopFilterOpen,
     isModelEditMode,
     setIsModelEditMode,
     isTagEditMode,
@@ -862,305 +719,6 @@ function useSidebarDialogController(store: SidebarStoreState) {
   };
 }
 
-type ReorderIdsOptions<T extends { id: number }> = {
-  items: readonly T[];
-  draggedId: number;
-  targetId: number;
-  placement: SidebarDropTarget["placement"];
-};
-
-function getReorderedIds<T extends { id: number }>({
-  items,
-  draggedId,
-  targetId,
-  placement,
-}: ReorderIdsOptions<T>) {
-  const draggedItem = items.find((item) => item.id === draggedId);
-  const remainingItems = items.filter((item) => item.id !== draggedId);
-  const targetIndex = remainingItems.findIndex((item) => item.id === targetId);
-
-  if (!draggedItem || targetIndex < 0) {
-    return null;
-  }
-
-  const insertIndex = placement === "after" ? targetIndex + 1 : targetIndex;
-  const nextItems = [...remainingItems];
-  nextItems.splice(insertIndex, 0, draggedItem);
-
-  const currentIds = items.map((item) => item.id);
-  const nextIds = nextItems.map((item) => item.id);
-
-  return nextIds.every((id, index) => id === currentIds[index]) ? null : nextIds;
-}
-
-function getPointerDropTargetId(
-  type: DragState["type"],
-  clientX: number,
-  clientY: number,
-): SidebarDropTarget | null {
-  const target = document.elementFromPoint(clientX, clientY);
-  const attribute = type === "model" ? "data-model-id" : "data-tag-id";
-  const row = target?.closest<HTMLElement>(`[${attribute}]`);
-  const id = Number(row?.getAttribute(attribute));
-
-  if (!row || !Number.isFinite(id)) {
-    return null;
-  }
-
-  const rect = row.getBoundingClientRect();
-  return {
-    id,
-    placement: clientY > rect.top + rect.height / 2 ? "after" : "before",
-  };
-}
-
-function clearSidebarDragState(setters: SidebarDragSetters) {
-  setters.setDragState(null);
-  setters.setDragPreviewPosition(null);
-  setters.setModelDropTarget(null);
-  setters.setTagDropTarget(null);
-}
-
-function useDragPreviewLabel(
-  dragState: DragState | null,
-  models: readonly Model[],
-  tags: readonly AssetTag[],
-) {
-  const modelById = useMemo(
-    () => new Map(models.map((model) => [model.id, model])),
-    [models],
-  );
-  const tagById = useMemo(
-    () => new Map(tags.map((tag) => [tag.id, tag])),
-    [tags],
-  );
-
-  return useMemo(() => {
-    if (!dragState) {
-      return null;
-    }
-
-    if (dragState.type === "model") {
-      const model = modelById.get(dragState.id);
-      return model?.display_name || model?.name || null;
-    }
-
-    return tagById.get(dragState.id)?.name ?? null;
-  }, [dragState, modelById, tagById]);
-}
-
-function updateSidebarDropTarget(
-  dragState: DragState,
-  event: PointerEvent,
-  setters: SidebarDragSetters,
-) {
-  event.preventDefault();
-  setters.setDragPreviewPosition({ x: event.clientX, y: event.clientY });
-  const target = getPointerDropTargetId(
-    dragState.type,
-    event.clientX,
-    event.clientY,
-  );
-  const nextTarget = target?.id !== dragState.id ? target : null;
-
-  if (dragState.type === "model") {
-    setters.setModelDropTarget(nextTarget);
-  } else {
-    setters.setTagDropTarget(nextTarget);
-  }
-}
-
-function commitSidebarDragSort({
-  dragState,
-  target,
-  models,
-  tags,
-  reorderModels,
-  reorderTags,
-}: SidebarDragCommitOptions) {
-  if (target === null || target.id === dragState.id) {
-    return;
-  }
-
-  const nextIds =
-    dragState.type === "model"
-      ? getReorderedIds({
-          items: models,
-          draggedId: dragState.id,
-          targetId: target.id,
-          placement: target.placement,
-        })
-      : getReorderedIds({
-          items: tags,
-          draggedId: dragState.id,
-          targetId: target.id,
-          placement: target.placement,
-        });
-  const reorder = dragState.type === "model" ? reorderModels : reorderTags;
-
-  if (nextIds) {
-    void reorder(nextIds).catch(() => {
-      // The store owns the visible error message.
-    });
-  }
-}
-
-function attachSidebarDragListeners(handlers: SidebarDragHandlers) {
-  const previousCursor = document.body.style.cursor;
-  const previousUserSelect = document.body.style.userSelect;
-
-  document.body.style.cursor = "grabbing";
-  document.body.style.userSelect = "none";
-  window.addEventListener("pointermove", handlers.onPointerMove);
-  window.addEventListener("pointerup", handlers.onPointerUp);
-  window.addEventListener("pointercancel", handlers.onPointerCancel);
-
-  return () => {
-    document.body.style.cursor = previousCursor;
-    document.body.style.userSelect = previousUserSelect;
-    window.removeEventListener("pointermove", handlers.onPointerMove);
-    window.removeEventListener("pointerup", handlers.onPointerUp);
-    window.removeEventListener("pointercancel", handlers.onPointerCancel);
-  };
-}
-
-function sidebarDragSetters(options: SidebarDragSetters): SidebarDragSetters {
-  return {
-    setDragState: options.setDragState,
-    setDragPreviewPosition: options.setDragPreviewPosition,
-    setModelDropTarget: options.setModelDropTarget,
-    setTagDropTarget: options.setTagDropTarget,
-  };
-}
-
-function useSidebarDragListeners(options: SidebarDragListenerOptions) {
-  const { dragState, models, tags, reorderModels, reorderTags } = options;
-
-  useEffect(() => {
-    if (!dragState) {
-      return;
-    }
-
-    const setters = sidebarDragSetters(options);
-    const onPointerCancel = () => clearSidebarDragState(setters);
-    const onPointerMove = (event: PointerEvent) =>
-      updateSidebarDropTarget(dragState, event, setters);
-    const onPointerUp = (event: PointerEvent) => {
-      const target = getPointerDropTargetId(
-        dragState.type,
-        event.clientX,
-        event.clientY,
-      );
-      commitSidebarDragSort({
-        dragState,
-        target,
-        models,
-        tags,
-        reorderModels,
-        reorderTags,
-      });
-      clearSidebarDragState(setters);
-    };
-
-    return attachSidebarDragListeners({
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel,
-    });
-  }, [dragState, models, tags, reorderModels, reorderTags]);
-}
-
-function startSidebarDrag(
-  event: ReactPointerEvent<HTMLButtonElement>,
-  dragState: DragState,
-  setters: SidebarDragSetters,
-) {
-  event.preventDefault();
-  event.stopPropagation();
-  setters.setDragState(dragState);
-  setters.setDragPreviewPosition({ x: event.clientX, y: event.clientY });
-
-  if (dragState.type === "model") {
-    setters.setModelDropTarget(null);
-  } else {
-    setters.setTagDropTarget(null);
-  }
-}
-
-function useSidebarDragStartHandlers(options: SidebarDragStartOptions) {
-  const handleModelDragStart = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    modelId: number,
-  ) => {
-    if (!options.isModelEditMode) {
-      return;
-    }
-    startSidebarDrag(event, { type: "model", id: modelId }, options);
-  };
-
-  const handleTagDragStart = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    tagId: number,
-  ) => {
-    if (!options.isTagEditMode) {
-      return;
-    }
-    startSidebarDrag(event, { type: "tag", id: tagId }, options);
-  };
-
-  return { handleModelDragStart, handleTagDragStart };
-}
-
-function useSidebarDragSorting(options: SidebarDragOptions) {
-  const [dragState, setDragState] = useState<DragState | null>(null);
-  const [dragPreviewPosition, setDragPreviewPosition] =
-    useState<DragPreviewPosition | null>(null);
-  const [modelDropTarget, setModelDropTarget] =
-    useState<SidebarDropTarget | null>(null);
-  const [tagDropTarget, setTagDropTarget] =
-    useState<SidebarDropTarget | null>(null);
-  const setters = {
-    setDragState,
-    setDragPreviewPosition,
-    setModelDropTarget,
-    setTagDropTarget,
-  };
-
-  useSidebarDragListeners({ ...options, ...setters, dragState });
-  const dragPreviewLabel = useDragPreviewLabel(
-    dragState,
-    options.models,
-    options.tags,
-  );
-  const { handleModelDragStart, handleTagDragStart } =
-    useSidebarDragStartHandlers({ ...options, ...setters });
-
-  return {
-    dragPreviewPosition,
-    dragPreviewLabel,
-    draggedModelId: dragState?.type === "model" ? dragState.id : null,
-    draggedTagId: dragState?.type === "tag" ? dragState.id : null,
-    modelDropTarget,
-    tagDropTarget,
-    handleModelDragStart,
-    handleTagDragStart,
-  };
-}
-
-function useSidebarDragController(
-  store: SidebarStoreState,
-  sections: SidebarSectionState,
-) {
-  return useSidebarDragSorting({
-    models: store.models,
-    tags: store.tags,
-    isModelEditMode: sections.isModelEditMode,
-    isTagEditMode: sections.isTagEditMode,
-    reorderModels: store.reorderModels,
-    reorderTags: store.reorderTags,
-  });
-}
-
 function createSidebarFilterPanelProps({
   store,
   sections,
@@ -1201,74 +759,20 @@ function createSidebarFilterPanelProps({
       setAddDialogOpen: store.setAddTagDialogOpen,
       setDeleteTarget: dialogs.setDeleteTarget,
     }),
+    shopFilter: {
+      selectedCount: filterState.selectedShopCount,
+      open: sections.isShopFilterOpen,
+      backfilling: store.boothShopBackfilling,
+      progress: store.boothShopBackfillProgress,
+      options: store.shopOptions,
+      selectedKeys: filterState.selectedShopKeys,
+      onToggleOpen: () => sections.setIsShopFilterOpen((current) => !current),
+      onToggle: store.toggleShopFilter,
+      onBackfill: () => {
+        void store.backfillBoothShopMetadata().catch(() => undefined);
+      },
+    },
   };
-}
-
-function SidebarFilterListSection<TItem extends SidebarFilterItem>(
-  props: SidebarFilterListSectionProps<TItem>,
-) {
-  return (
-    <div>
-      <SidebarFilterSectionHeader
-        icon={props.icon}
-        label={props.label}
-        selectedCount={props.selectedCount}
-        open={props.open}
-        editing={props.editing}
-        editLabel={props.editLabel}
-        doneLabel={props.doneLabel}
-        addLabel={props.addLabel}
-        onToggleOpen={props.onToggleOpen}
-        onToggleEditing={props.onToggleEditing}
-        onAdd={props.onAdd}
-      />
-      {props.open && <SidebarFilterRows {...props} />}
-    </div>
-  );
-}
-
-function SidebarFilterRows<TItem extends SidebarFilterItem>({
-  kind,
-  items,
-  selectedIds,
-  draggedId,
-  dropTarget,
-  editing,
-  rowEditLabel,
-  rowDeleteLabel,
-  getLabel,
-  getSwatchColor,
-  onToggle,
-  onEdit,
-  onDelete,
-  onDragStart,
-}: SidebarFilterRowsProps<TItem>) {
-  return (
-    <div className="space-y-1">
-      {items.map((item) => {
-        const itemLabel = getLabel(item);
-        return (
-          <SidebarFilterRow
-            key={item.id}
-            kind={kind}
-            id={item.id}
-            label={itemLabel}
-            checked={selectedIds.has(item.id)}
-            editing={editing}
-            dragging={draggedId === item.id}
-            dropTarget={dropTarget}
-            swatchColor={getSwatchColor?.(item)}
-            editLabel={rowEditLabel}
-            deleteLabel={rowDeleteLabel}
-            onToggle={() => onToggle(item.id)}
-            onEdit={() => onEdit(item)}
-            onDelete={() => onDelete(item, itemLabel)}
-            onDragStart={onDragStart}
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 function SidebarHeader() {
@@ -1279,312 +783,6 @@ function SidebarHeader() {
         <span className="truncate">VRC Asset Manager</span>
       </h1>
     </div>
-  );
-}
-
-function SidebarSearch({
-  search,
-  statusFilters,
-  onSearchChange,
-  onStatusToggle,
-}: SidebarSearchProps) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const selectedStatusFilters = useMemo(
-    () => new Set(statusFilters),
-    [statusFilters],
-  );
-
-  useEffect(() => {
-    if (!advancedOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !containerRef.current?.contains(event.target)
-      ) {
-        setAdvancedOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setAdvancedOpen(false);
-      }
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [advancedOpen]);
-
-  return (
-    <div ref={containerRef} className="relative p-3">
-      <div className="flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            data-shortcut="asset-search"
-            placeholder="搜尋素材..."
-            className="border-sidebar-border bg-sidebar-accent pl-8 text-sidebar-foreground placeholder:text-muted-foreground"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={cn(
-            "relative border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent/80",
-            advancedOpen && "ring-2 ring-ring/35",
-          )}
-          title="進階篩選"
-          aria-label="進階篩選"
-          aria-expanded={advancedOpen}
-          onClick={() => setAdvancedOpen((open) => !open)}
-        >
-          <ListFilter className="h-4 w-4" />
-          {statusFilters.length > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none text-primary-foreground">
-              {statusFilters.length}
-            </span>
-          )}
-        </Button>
-      </div>
-      {advancedOpen && (
-        <div className="absolute top-full right-3 left-3 z-30 mt-1 rounded-md border border-sidebar-border bg-sidebar p-3 shadow-lg">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-sidebar-foreground">
-              <ListFilter className="h-4 w-4 shrink-0" />
-              <span className="truncate">進階篩選</span>
-            </div>
-            {statusFilters.length > 0 && (
-              <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] text-muted-foreground">
-                {statusFilters.length} 項
-              </span>
-            )}
-          </div>
-          <StatusFilterSection
-            selected={selectedStatusFilters}
-            onToggle={onStatusToggle}
-            showHeading={false}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActiveFilterSummary({
-  resultCount,
-  onClear,
-}: ActiveFilterSummaryProps) {
-  return (
-    <div className="flex items-center justify-between px-3 pb-2">
-      <span className="text-xs text-muted-foreground">{resultCount} 個結果</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 px-2 text-xs text-muted-foreground hover:text-sidebar-foreground"
-        onClick={onClear}
-      >
-        <X className="mr-1 h-3 w-3" />
-        清除篩選
-      </Button>
-    </div>
-  );
-}
-
-function AddAssetButton({ onClick }: AddAssetButtonProps) {
-  return (
-    <Button className="w-full justify-start" onClick={onClick}>
-      <Plus className="mr-2 h-4 w-4" />
-      新增素材
-    </Button>
-  );
-}
-
-const categoryRows: { value: AssetCategory | null; label: string }[] = [
-  { value: null, label: "全部" },
-  { value: "avatar", label: "素體" },
-  { value: "accessory", label: "素體配件" },
-  { value: "world", label: "世界" },
-];
-
-const statusRows: { value: AssetStatusFilter; label: string }[] = [
-  { value: "missingRelatedLinks", label: "缺少相關連結" },
-  { value: "missingBoothUrl", label: "缺少 BOOTH 連結" },
-  { value: "missingThumbnail", label: "缺少縮圖" },
-  { value: "missingModels", label: "缺少相容模型" },
-  { value: "missingTags", label: "缺少標籤" },
-  { value: "missingNote", label: "缺少備註" },
-  { value: "missingFile", label: "檔案遺失" },
-];
-
-function CategoryFilterSection({
-  selected,
-  onChange,
-}: {
-  selected: AssetCategory | null;
-  onChange: (category: AssetCategory | null) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
-        <Package className="h-4 w-4" />
-        素材庫
-      </div>
-      <div className="space-y-1">
-        {categoryRows.map((row) => (
-          <button
-            key={row.value ?? "all"}
-            type="button"
-            className={cn(
-              "flex h-8 w-full items-center rounded-md px-3 text-left text-sm transition-colors hover:bg-sidebar-accent",
-              selected === row.value && "bg-sidebar-accent font-medium text-sidebar-foreground",
-            )}
-            onClick={() => onChange(row.value)}
-          >
-            {row.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StatusFilterSection({
-  selected,
-  onToggle,
-  showHeading = true,
-}: {
-  selected: ReadonlySet<AssetStatusFilter>;
-  onToggle: (status: AssetStatusFilter) => void;
-  showHeading?: boolean;
-}) {
-  return (
-    <div className="space-y-2">
-      {showHeading && (
-        <div className="flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
-          <ListFilter className="h-4 w-4" />
-          資料狀態
-          {selected.size > 0 && (
-            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] text-sidebar-foreground">
-              {selected.size}
-            </span>
-          )}
-        </div>
-      )}
-      <div className="space-y-1">
-        {statusRows.map((row) => {
-          const active = selected.has(row.value);
-          return (
-            <button
-              key={row.value}
-              type="button"
-              className={cn(
-                "flex h-8 w-full items-center rounded-md px-3 text-left text-sm transition-colors hover:bg-sidebar-accent",
-                active && "bg-sidebar-accent font-medium text-sidebar-foreground",
-              )}
-              onClick={() => onToggle(row.value)}
-            >
-              {row.label}
-            </button>
-          );
-        })}
-      </div>
-      {selected.size > 1 && (
-        <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-          多個狀態會同時符合才顯示。
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ModelFilterSection(props: ModelFilterSectionProps) {
-  return (
-    <SidebarFilterListSection
-      icon={User}
-      kind="model"
-      label="依模型篩選"
-      selectedCount={props.selectedCount}
-      open={props.open}
-      editing={props.editing}
-      editLabel="編輯模型清單"
-      doneLabel="完成編輯模型"
-      addLabel="新增模型"
-      items={props.models}
-      selectedIds={props.selectedIds}
-      draggedId={props.draggedId}
-      dropTarget={props.dropTarget}
-      rowEditLabel="編輯模型"
-      rowDeleteLabel="刪除模型"
-      getLabel={(model) => model.display_name || model.name}
-      onToggleOpen={props.onToggleOpen}
-      onToggleEditing={props.onToggleEditing}
-      onAdd={props.onAdd}
-      onToggle={props.onToggle}
-      onEdit={props.onEdit}
-      onDelete={props.onDelete}
-      onDragStart={props.onDragStart}
-    />
-  );
-}
-
-function TagFilterSection(props: TagFilterSectionProps) {
-  return (
-    <SidebarFilterListSection
-      icon={Tag}
-      kind="tag"
-      label="依標籤篩選"
-      selectedCount={props.selectedCount}
-      open={props.open}
-      editing={props.editing}
-      editLabel="編輯標籤清單"
-      doneLabel="完成編輯標籤"
-      addLabel="新增標籤"
-      items={props.tags}
-      selectedIds={props.selectedIds}
-      draggedId={props.draggedId}
-      dropTarget={props.dropTarget}
-      rowEditLabel="編輯標籤"
-      rowDeleteLabel="刪除標籤"
-      getLabel={(tag) => tag.name}
-      getSwatchColor={(tag) => tag.color}
-      onToggleOpen={props.onToggleOpen}
-      onToggleEditing={props.onToggleEditing}
-      onAdd={props.onAdd}
-      onToggle={props.onToggle}
-      onEdit={props.onEdit}
-      onDelete={props.onDelete}
-      onDragStart={props.onDragStart}
-    />
-  );
-}
-
-function SidebarFilterPanel({
-  onAddAsset,
-  category,
-  onCategoryChange,
-  modelFilter,
-  tagFilter,
-}: SidebarFilterPanelProps) {
-  return (
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="space-y-6 p-3">
-        <AddAssetButton onClick={onAddAsset} />
-        <CategoryFilterSection selected={category} onChange={onCategoryChange} />
-        <ModelFilterSection {...modelFilter} />
-        <TagFilterSection {...tagFilter} />
-      </div>
-    </ScrollArea>
   );
 }
 
@@ -1651,8 +849,10 @@ function SidebarDragPreview({ position, label }: SidebarDragPreviewProps) {
   }
 
   return (
-    <div
-      className="pointer-events-none fixed z-[60] max-w-80 -translate-y-1/2 rounded-md border border-border bg-popover px-3 py-2 text-sm font-medium text-popover-foreground shadow-lg"
+    <FloatingSurface
+      padding="tooltip"
+      shadow="lg"
+      className="pointer-events-none fixed z-[60] max-w-80 -translate-y-1/2 text-sm font-medium"
       style={{
         left: position.x + 14,
         top: position.y,
@@ -1662,7 +862,7 @@ function SidebarDragPreview({ position, label }: SidebarDragPreviewProps) {
         <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="truncate">{label}</span>
       </div>
-    </div>
+    </FloatingSurface>
   );
 }
 
@@ -1762,12 +962,11 @@ function SidebarTop(props: Pick<
         onSearchChange={props.onSearchChange}
         onStatusToggle={props.onStatusToggle}
       />
-      {props.filterState.hasActiveFilters && (
-        <ActiveFilterSummary
-          resultCount={props.filterState.filteredCount}
-          onClear={props.onClearFilters}
-        />
-      )}
+      <ActiveFilterSummary
+        visible={props.filterState.hasActiveFilters}
+        resultCount={props.filterState.filteredCount}
+        onClear={props.onClearFilters}
+      />
     </>
   );
 }
@@ -1818,6 +1017,7 @@ function SidebarLayout(props: SidebarLayoutProps) {
         onCategoryChange={props.onCategoryChange}
         modelFilter={props.modelFilter}
         tagFilter={props.tagFilter}
+        shopFilter={props.shopFilter}
       />
       <SidebarSaveActions
         saving={props.saving}
@@ -1841,7 +1041,7 @@ function useSidebarController(): SidebarLayoutProps {
     store.filters,
   );
   const drag = useSidebarDragController(store, sections);
-  const { modelFilter, tagFilter } = createSidebarFilterPanelProps({
+  const { modelFilter, tagFilter, shopFilter } = createSidebarFilterPanelProps({
     store,
     sections,
     filterState,
@@ -1855,6 +1055,7 @@ function useSidebarController(): SidebarLayoutProps {
     filterState,
     modelFilter,
     tagFilter,
+    shopFilter,
     category: store.filters.category,
     statusFilters: store.filters.statusFilters,
     saving: store.saving,

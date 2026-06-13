@@ -1,10 +1,13 @@
 "use client";
 
 import {
-  SelectionFieldHeader,
+  SelectionFieldEmpty,
+  SelectionFieldFrame,
+  SelectionFieldList,
   type SelectionActionsLayout,
+  type SelectionFieldListSurface,
 } from "@/components/asset-form/selection-field-header";
-import { Badge } from "@/components/ui/badge";
+import { TagChip } from "@/components/ui/tag-chip";
 import type { Tag } from "@/types";
 
 type TagSelectionFieldProps = {
@@ -15,6 +18,7 @@ type TagSelectionFieldProps = {
   actionButtonClassName?: string;
   labelClassName?: string;
   listClassName?: string;
+  listSurface?: SelectionFieldListSurface;
   tagClassName?: string;
   onSelectAll: () => void;
   onClear: () => void;
@@ -32,24 +36,10 @@ type TagBadgeListProps = {
   tags: Tag[];
   selectedTagIdSet: Set<number>;
   listClassName?: string;
+  listSurface: SelectionFieldListSurface;
   tagClassName: string;
   onToggle: (tagId: number) => void;
 };
-
-function getTagBadgeStyle(tag: Tag, selected: boolean) {
-  if (selected) {
-    return {
-      backgroundColor: tag.color,
-      borderColor: tag.color,
-      color: "#fff",
-    };
-  }
-
-  return {
-    borderColor: tag.color,
-    color: tag.color,
-  };
-}
 
 function TagBadgeOption({
   selected,
@@ -58,14 +48,13 @@ function TagBadgeOption({
   onToggle,
 }: TagBadgeOptionProps) {
   return (
-    <Badge
-      variant={selected ? "default" : "outline"}
+    <TagChip
+      color={tag.color}
+      label={tag.name}
+      variant={selected ? "solid" : "outline"}
       className={tagClassName}
-      style={getTagBadgeStyle(tag, selected)}
       onClick={() => onToggle(tag.id)}
-    >
-      {tag.name}
-    </Badge>
+    />
   );
 }
 
@@ -73,11 +62,16 @@ function TagBadgeList({
   tags,
   selectedTagIdSet,
   listClassName,
+  listSurface,
   tagClassName,
   onToggle,
 }: TagBadgeListProps) {
   return (
-    <div className={listClassName ?? "flex min-w-0 flex-wrap gap-2"}>
+    <SelectionFieldList
+      flow="wrap"
+      surface={listSurface}
+      className={listClassName ?? "min-w-0"}
+    >
       {tags.length > 0 ? (
         tags.map((tag) => (
           <TagBadgeOption
@@ -89,9 +83,9 @@ function TagBadgeList({
           />
         ))
       ) : (
-        <p className="text-sm text-muted-foreground">尚無標籤</p>
+        <SelectionFieldEmpty>尚無標籤</SelectionFieldEmpty>
       )}
-    </div>
+    </SelectionFieldList>
   );
 }
 
@@ -103,30 +97,31 @@ export function TagSelectionField({
   actionButtonClassName = "h-7 px-2 text-xs",
   labelClassName = "text-sm font-medium",
   listClassName,
+  listSurface = "plain",
   tagClassName = "min-w-0 !max-w-full !shrink cursor-pointer truncate transition-colors",
   onSelectAll,
   onClear,
   onToggle,
 }: TagSelectionFieldProps) {
   return (
-    <div className="space-y-2">
-      <SelectionFieldHeader
-        actionButtonClassName={actionButtonClassName}
-        actionsLayout={actionsLayout}
-        itemCount={tags.length}
-        label="標籤"
-        labelClassName={labelClassName}
-        selectedCount={selectedTagIds.length}
-        onClear={onClear}
-        onSelectAll={onSelectAll}
-      />
+    <SelectionFieldFrame
+      actionButtonClassName={actionButtonClassName}
+      actionsLayout={actionsLayout}
+      itemCount={tags.length}
+      label="標籤"
+      labelClassName={labelClassName}
+      selectedCount={selectedTagIds.length}
+      onClear={onClear}
+      onSelectAll={onSelectAll}
+    >
       <TagBadgeList
         tags={tags}
         selectedTagIdSet={selectedTagIdSet}
         listClassName={listClassName}
+        listSurface={listSurface}
         tagClassName={tagClassName}
         onToggle={onToggle}
       />
-    </div>
+    </SelectionFieldFrame>
   );
 }

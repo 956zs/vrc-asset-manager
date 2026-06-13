@@ -8,6 +8,9 @@ import type {
   AssetFilters,
   AssetSortOrder,
   AssetStatusFilter,
+  BoothShopOption,
+  BoothShopBackfillReport,
+  BoothShopBackfillProgress,
   CreateAssetInput,
   ImportSourceInfo,
   ImportTargetPreview,
@@ -51,6 +54,8 @@ type BackendAsset = {
   category: AssetCategory;
   filePath: string;
   boothUrl: string | null;
+  boothShopName: string | null;
+  boothShopUrl: string | null;
   thumbnailUrl: string | null;
   note: string | null;
   createdAt: string;
@@ -78,6 +83,7 @@ type BackendSaveSummary = {
 
 export type AssetStore = {
   assets: Asset[];
+  shopOptions: BoothShopOption[];
   models: Model[];
   tags: Tag[];
   filters: AssetFilters;
@@ -91,8 +97,11 @@ export type AssetStore = {
   relatedAssetSearchId: number | null;
   loading: boolean;
   saving: boolean;
+  boothShopBackfilling: boolean;
   error: string | null;
   notice: string | null;
+  noticeTone: "success" | "loading";
+  boothShopBackfillProgress: BoothShopBackfillProgress | null;
   librarySettings: LibrarySettings | null;
   importReport: ManagedImportBatchReport | null;
   loadAll: () => Promise<void>;
@@ -113,9 +122,12 @@ export type AssetStore = {
   listZipContents: (sourcePath: string) => Promise<ZipContentList>;
   listImportSourceContents: (sourcePath: string) => Promise<SourceContentList>;
   managedImportBatch: (items: ManagedImportItemInput[]) => Promise<ManagedImportBatchReport>;
+  backfillBoothShopMetadata: () => Promise<BoothShopBackfillReport>;
   setSearchFilter: (search: string) => void;
   setCategoryFilter: (category: AssetCategory | null) => void;
   setAssetSortOrder: (sortOrder: AssetSortOrder) => void;
+  setShopFilter: (shop: BoothShopOption) => void;
+  toggleShopFilter: (shop: BoothShopOption) => void;
   toggleStatusFilter: (status: AssetStatusFilter) => void;
   setFilters: (filters: AssetFilters) => void;
   toggleModelFilter: (modelId: number) => void;
@@ -151,6 +163,7 @@ type AssetStoreGet = Parameters<StateCreator<AssetStore>>[1];
 type AssetStoreStateFields = Pick<
   AssetStore,
   | "assets"
+  | "shopOptions"
   | "models"
   | "tags"
   | "filters"
@@ -164,8 +177,11 @@ type AssetStoreStateFields = Pick<
   | "relatedAssetSearchId"
   | "loading"
   | "saving"
+  | "boothShopBackfilling"
   | "error"
   | "notice"
+  | "noticeTone"
+  | "boothShopBackfillProgress"
   | "librarySettings"
   | "importReport"
 >;
@@ -175,12 +191,14 @@ const defaultFilters: AssetFilters = {
   category: null,
   modelIds: [],
   tagIds: [],
+  shopFilters: [],
   statusFilters: [],
   sortOrder: "updatedDesc",
 };
 
 const initialAssetStoreState: AssetStoreStateFields = {
   assets: [],
+  shopOptions: [],
   models: [],
   tags: [],
   filters: defaultFilters,
@@ -194,8 +212,11 @@ const initialAssetStoreState: AssetStoreStateFields = {
   relatedAssetSearchId: null,
   loading: false,
   saving: false,
+  boothShopBackfilling: false,
   error: null,
   notice: null,
+  noticeTone: "success",
+  boothShopBackfillProgress: null,
   librarySettings: null,
   importReport: null,
 };
@@ -242,6 +263,8 @@ const toAsset = (asset: BackendAsset): Asset => ({
   file_path: asset.filePath,
   category: asset.category ?? "accessory",
   booth_url: asset.boothUrl,
+  booth_shop_name: asset.boothShopName,
+  booth_shop_url: asset.boothShopUrl,
   thumbnail_url: asset.thumbnailUrl,
   note: asset.note,
   created_at: asset.createdAt,
@@ -257,6 +280,7 @@ const cleanFilters = (filters: AssetFilters) => ({
   category: filters.category ?? undefined,
   modelIds: filters.modelIds,
   tagIds: filters.tagIds,
+  shopFilters: filters.shopFilters,
   statusFilters: filters.statusFilters,
   sortOrder: filters.sortOrder,
 });
@@ -266,6 +290,39 @@ const loadBackendAssets = async (filters: AssetFilters) => {
     filters: cleanFilters(filters),
   });
   return assets.map(toAsset);
+};
+
+const loadBackendShopOptions = () =>
+  invokeTauri<BoothShopOption[]>("get_booth_shop_options");
+
+const shopFilterKey = (shop: { name: string; url: string | null }) =>
+  `${shop.name.trim()}|${shop.url?.trim() ?? ""}`;
+
+const boothShopBackfillProgressEvent = "booth-shop-backfill-progress";
+
+const initialBoothShopBackfillProgress: BoothShopBackfillProgress = {
+  total: 0,
+  current: 0,
+  updated: 0,
+  skipped: 0,
+  failed: 0,
+};
+
+const boothShopBackfillProgressText = (progress: BoothShopBackfillProgress) => {
+  if (progress.total === 0) {
+    return "沒有需要補齊的既有素材。";
+  }
+
+  const percent = Math.round((progress.current / progress.total) * 100);
+  return `BOOTH Shop 回填中：${progress.current}/${progress.total}（${percent}%）。已更新 ${progress.updated}，略過 ${progress.skipped}，失敗 ${progress.failed}。`;
+};
+
+const boothShopBackfillReportText = (report: BoothShopBackfillReport) => {
+  if (report.totalCandidates === 0) {
+    return "沒有需要補齊的 BOOTH Shop 資訊。";
+  }
+
+  return `BOOTH Shop 回填完成：更新 ${report.updated} 筆，略過 ${report.skipped} 筆，失敗 ${report.failed} 筆`;
 };
 
 const errorState = (
@@ -297,6 +354,12 @@ const toBackendInput = (asset: Asset, updates: UpdateAssetInput) => ({
   filePath: updates.file_path ?? asset.file_path,
   category: updates.category ?? asset.category,
   boothUrl: updates.booth_url !== undefined ? updates.booth_url : asset.booth_url,
+  boothShopName:
+    updates.booth_shop_name !== undefined
+      ? updates.booth_shop_name
+      : asset.booth_shop_name,
+  boothShopUrl:
+    updates.booth_shop_url !== undefined ? updates.booth_shop_url : asset.booth_shop_url,
   thumbnailUrl:
     updates.thumbnail_url !== undefined ? updates.thumbnail_url : asset.thumbnail_url,
   note: updates.note !== undefined ? updates.note : asset.note,
@@ -315,6 +378,8 @@ const toCreateBackendInput = (asset: CreateAssetInput) => ({
   category: asset.category,
   filePath: asset.file_path,
   boothUrl: asset.booth_url,
+  boothShopName: asset.booth_shop_name,
+  boothShopUrl: asset.booth_shop_url,
   thumbnailUrl: asset.thumbnail_url,
   note: asset.note,
   modelIds: asset.model_ids,
@@ -336,12 +401,14 @@ const createLoadActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
         loadBackendAssets(get().filters),
         invokeTauri<LibrarySettings>("get_library_settings"),
       ]);
+      const shopOptions = await loadBackendShopOptions();
       if (!isCurrentAssetLoad(generation)) return;
 
       set({
         models: models.map(toModel),
         tags: tags.map(toTag),
         assets,
+        shopOptions,
         librarySettings,
         loading: false,
       });
@@ -354,7 +421,8 @@ const createLoadActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
     set({ loading: true, error: null });
     try {
       const assets = await loadBackendAssets(get().filters);
-      if (isCurrentAssetLoad(generation)) set({ assets, loading: false });
+      const shopOptions = await loadBackendShopOptions();
+      if (isCurrentAssetLoad(generation)) set({ assets, shopOptions, loading: false });
     } catch (error) {
       if (isCurrentAssetLoad(generation)) set(errorState(error, { loading: false }));
     }
@@ -372,7 +440,7 @@ const createLoadActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
 
 const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
   clearError: () => set({ error: null }),
-  clearNotice: () => set({ notice: null }),
+  clearNotice: () => set({ notice: null, boothShopBackfillProgress: null }),
   clearImportReport: () => set({ importReport: null }),
   configureLibraryRoot: async (rootPath: string) => {
     set({ saving: true, error: null });
@@ -380,7 +448,7 @@ const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
       const librarySettings = await invokeTauri<LibrarySettings>("configure_library_root", {
         rootPath,
       });
-      set({ librarySettings, saving: false, notice: "素材庫根目錄已設定" });
+      set({ librarySettings, saving: false, notice: "素材庫根目錄已設定", noticeTone: "success" });
     } catch (error) {
       set(errorState(error, { saving: false }));
       throw error;
@@ -392,7 +460,7 @@ const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
       const librarySettings = await invokeTauri<LibrarySettings>("update_library_settings", {
         input,
       });
-      set({ librarySettings, saving: false, notice: "素材庫設定已更新" });
+      set({ librarySettings, saving: false, notice: "素材庫設定已更新", noticeTone: "success" });
     } catch (error) {
       set(errorState(error, { saving: false }));
       throw error;
@@ -429,10 +497,67 @@ const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
         saving: false,
         importReport: report,
         notice: `導入完成：${report.succeeded} 成功，${report.failed} 失敗`,
+        noticeTone: "success",
       });
       return report;
     } catch (error) {
       set(errorState(error, { saving: false }));
+      throw error;
+    }
+  },
+  backfillBoothShopMetadata: async () => {
+    if (get().boothShopBackfilling) {
+      throw new Error("BOOTH Shop 回填已在進行中");
+    }
+    set({
+      saving: true,
+      boothShopBackfilling: true,
+      error: null,
+      notice: "BOOTH Shop 回填中：正在準備既有素材清單...",
+      noticeTone: "loading",
+      boothShopBackfillProgress: initialBoothShopBackfillProgress,
+    });
+    let unlisten: (() => void) | null = null;
+    try {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen<BoothShopBackfillProgress>(
+        boothShopBackfillProgressEvent,
+        (event) => {
+          set({
+            notice: boothShopBackfillProgressText(event.payload),
+            noticeTone: "loading",
+            boothShopBackfillProgress: event.payload,
+          });
+        },
+      );
+      const report = await invokeTauri<BoothShopBackfillReport>(
+        "backfill_booth_shop_metadata",
+      );
+      unlisten?.();
+      unlisten = null;
+      await get().loadAssets();
+      set({
+        saving: false,
+        boothShopBackfilling: false,
+        notice: boothShopBackfillReportText(report),
+        noticeTone: "success",
+        boothShopBackfillProgress: {
+          total: report.totalCandidates,
+          current: report.totalCandidates,
+          updated: report.updated,
+          skipped: report.skipped,
+          failed: report.failed,
+        },
+      });
+      return report;
+    } catch (error) {
+      unlisten?.();
+      set({
+        ...errorState(error, { saving: false }),
+        boothShopBackfilling: false,
+        notice: null,
+        boothShopBackfillProgress: null,
+      });
       throw error;
     }
   },
@@ -446,6 +571,34 @@ const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
   },
   setAssetSortOrder: (sortOrder: AssetSortOrder) => {
     set((state) => ({ filters: { ...state.filters, sortOrder } }));
+    void get().loadAssets();
+  },
+  setShopFilter: (shop: BoothShopOption) => {
+    set((state) => ({
+      filters: {
+        ...state.filters,
+        shopFilters: [{ name: shop.name, url: shop.url }],
+      },
+    }));
+    void get().loadAssets();
+  },
+  toggleShopFilter: (shop: BoothShopOption) => {
+    set((state) => {
+      const key = shopFilterKey(shop);
+      const selected = state.filters.shopFilters.some(
+        (current) => shopFilterKey(current) === key,
+      );
+      return {
+        filters: {
+          ...state.filters,
+          shopFilters: selected
+            ? state.filters.shopFilters.filter(
+                (current) => shopFilterKey(current) !== key,
+              )
+            : [...state.filters.shopFilters, { name: shop.name, url: shop.url }],
+        },
+      };
+    });
     void get().loadAssets();
   },
   toggleStatusFilter: (status: AssetStatusFilter) => {
@@ -720,6 +873,7 @@ const createExportSaveAction = (set: AssetStoreSet) => async (path: string) => {
     set({
       saving: false,
       notice: `已匯出存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案${vccBackupText}`,
+      noticeTone: "success",
     });
   } catch (error) {
     set(errorState(error, { saving: false }));
@@ -738,6 +892,7 @@ const createImportSaveAction = (set: AssetStoreSet, get: AssetStoreGet) => async
     set({
       saving: false,
       notice: `已匯入存檔：${summary.assets} 個素材、${summary.models} 個模型、${summary.tags} 個標籤、${summary.vccProjects} 個 VCC 專案`,
+      noticeTone: "success",
     });
   } catch (error) {
     set(errorState(error, { saving: false }));

@@ -1,8 +1,11 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
+import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
+import { assetDetailRelatedLinksPreset } from "@/components/asset-form/field-presets";
 import { RelatedLinksEditor } from "@/components/asset-form/related-links-editor";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { ListRow } from "@/components/ui/list-row";
 import type { RelatedLinkDraft } from "@/lib/asset-links";
 import type { AssetLink } from "@/types";
 
@@ -30,11 +33,8 @@ function EditableRelatedLinks({
 }: Omit<AssetDetailRelatedLinksSectionProps, "isEditing" | "relatedLinks" | "onOpen">) {
   return (
     <RelatedLinksEditor
+      {...assetDetailRelatedLinksPreset}
       links={editedRelatedLinks}
-      layout="stacked"
-      actionsLayout="grid"
-      actionButtonClassName="h-8 w-full px-2 text-xs"
-      labelClassName="text-sm font-medium text-muted-foreground"
       onAdd={onAdd}
       onCreateFirst={onCreateFirst}
       onUpdate={onUpdate}
@@ -51,23 +51,20 @@ function ReadonlyRelatedLinkRow({
   onOpen: (url: string) => void;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-2">
-      <div className="min-w-0 flex-1" data-context-url={link.url}>
-        <p className="truncate text-sm font-medium text-foreground">{link.label}</p>
-        <p className="break-all text-xs text-muted-foreground">{link.url}</p>
-      </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        title="開啟連結"
-        aria-label="開啟連結"
-        data-context-url={link.url}
-        onClick={() => onOpen(link.url)}
-      >
-        <ExternalLink className="h-4 w-4" />
-      </Button>
-    </div>
+    <ListRow
+      description={<span data-context-url={link.url}>{link.url}</span>}
+      descriptionWrap="break"
+      title={link.label}
+      trailing={
+        <IconButton
+          variant="outline"
+          label="開啟連結"
+          icon={<ExternalLink className="h-4 w-4" />}
+          data-context-url={link.url}
+          onClick={() => onOpen(link.url)}
+        />
+      }
+    />
   );
 }
 
@@ -77,7 +74,7 @@ function ReadonlyRelatedLinks({
 }: Pick<AssetDetailRelatedLinksSectionProps, "relatedLinks" | "onOpen">) {
   return (
     <>
-      <label className="text-sm font-medium text-muted-foreground">相關連結</label>
+      <DetailFieldLabel>相關連結</DetailFieldLabel>
       <div className="mt-2 min-w-0 space-y-2">
         {relatedLinks.length > 0 ? (
           relatedLinks.map((link) => (

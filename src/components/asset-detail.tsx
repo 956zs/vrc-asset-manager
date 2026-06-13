@@ -3,21 +3,24 @@
 import { invokeTauri } from "@/lib/tauri-runtime";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { AssetDetailBoothSection } from "@/components/asset-detail/booth-section";
+import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
+import { DetailFieldValue } from "@/components/asset-detail/detail-field-value";
 import { AssetDetailFooter } from "@/components/asset-detail/footer";
 import { AssetDetailHeader } from "@/components/asset-detail/header";
 import { AssetDetailLocationSection } from "@/components/asset-detail/location-section";
 import { AssetDetailModelSection } from "@/components/asset-detail/model-section";
 import { AssetDetailRelatedLinksSection } from "@/components/asset-detail/related-links-section";
+import { AssetDetailShell } from "@/components/asset-detail/shell";
 import { AssetDetailTagSection } from "@/components/asset-detail/tag-section";
 import { AssetDetailThumbnail } from "@/components/asset-detail/thumbnail";
 import { useAssetDetailDraft } from "@/components/asset-detail/use-asset-detail-draft";
-import { Button } from "@/components/ui/button";
+import { BoothModelSuggestionPanel, BoothTagSuggestionPanel } from "@/components/booth-suggestion-panel";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { StatusMessage } from "@/components/ui/status-message";
 import { Textarea } from "@/components/ui/textarea";
-import { boothTagOriginText } from "@/lib/booth-product-info";
 import { hasSensitiveTags } from "@/lib/sensitive-content";
 import { selectSelectedAsset, useAssetStore } from "@/stores/asset-store";
 import type { Asset, Model, Tag as AssetTag } from "@/types";
@@ -34,10 +37,13 @@ type AssetDetailController = {
   thumbnailUrl: string;
   filePath: string;
   boothUrl: string;
+  boothShopName: string;
+  boothShopUrl: string;
   relatedLinks: Asset["related_links"];
   onClose: () => void;
   onDelete: () => Promise<void>;
   onOpenBooth: () => Promise<void>;
+  onOpenBoothShop: () => Promise<void>;
   onOpenRelatedLink: (url: string) => Promise<void>;
   onOpenFolder: () => Promise<void>;
   onBrowseFile: () => Promise<void>;
@@ -58,8 +64,11 @@ type AssetDetailBodyProps = Pick<
   | "thumbnailUrl"
   | "filePath"
   | "boothUrl"
+  | "boothShopName"
+  | "boothShopUrl"
   | "relatedLinks"
   | "onOpenBooth"
+  | "onOpenBoothShop"
   | "onOpenRelatedLink"
   | "onBrowseFile"
   | "onBrowseFolder"
@@ -73,40 +82,39 @@ type AssetDetailFooterControllerProps = Pick<
 type AssetDetailViewState = Pick<
   AssetDetailController,
   "displayName" | "thumbnailUrl" | "filePath" | "boothUrl" | "relatedLinks"
+  | "boothShopName" | "boothShopUrl"
 >;
 
 function EmptyAssetDetail() {
   return (
-    <div
-      className="asset-detail-panel flex h-full min-h-0 shrink-0 items-center justify-center overflow-x-hidden border-l border-border bg-card"
-      style={{ width: "clamp(18rem, 34vw, 25rem)" }}
-    >
+    <AssetDetailShell className="items-center justify-center">
       <div className="space-y-2 p-6 text-center">
         <p className="text-muted-foreground">選擇一個素材以查看詳情</p>
       </div>
-    </div>
+    </AssetDetailShell>
   );
 }
 
 function MissingFileNotice({ editing }: { editing: boolean }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
-      <div className="min-w-0 text-sm">
-        <p className="font-medium">檔案遺失</p>
-        <p className="text-xs opacity-80">
-          {editing ? "請重新指定素材位置" : "請進入編輯模式重新指定素材位置"}
-        </p>
-      </div>
-    </div>
+    <StatusMessage
+      tone="danger"
+      className="p-3"
+      icon={<AlertTriangle className="h-4 w-4" />}
+      title="檔案遺失"
+    >
+      <p className="text-xs opacity-80">
+        {editing ? "請重新指定素材位置" : "請進入編輯模式重新指定素材位置"}
+      </p>
+    </StatusMessage>
   );
 }
 
 function AssetNameField({ asset }: { asset: Asset }) {
   return (
     <div className="min-w-0">
-      <label className="text-sm font-medium text-muted-foreground">檔案名稱</label>
-      <p className="mt-1 break-all text-sm text-foreground">{asset.name}</p>
+      <DetailFieldLabel>檔案名稱</DetailFieldLabel>
+      <DetailFieldValue>{asset.name}</DetailFieldValue>
     </div>
   );
 }
@@ -114,7 +122,7 @@ function AssetNameField({ asset }: { asset: Asset }) {
 function DisplayNameField({ asset, draft }: { asset: Asset; draft: AssetDetailDraft }) {
   return (
     <div className="min-w-0">
-      <label className="text-sm font-medium text-muted-foreground">顯示名稱</label>
+      <DetailFieldLabel>顯示名稱</DetailFieldLabel>
       {draft.isEditingAsset ? (
         <Input
           value={draft.editedDisplayName}
@@ -123,9 +131,7 @@ function DisplayNameField({ asset, draft }: { asset: Asset; draft: AssetDetailDr
           className="mt-1 min-w-0"
         />
       ) : (
-        <p className="mt-1 break-all text-sm text-foreground">
-          {asset.display_name || "未設定"}
-        </p>
+        <DetailFieldValue>{asset.display_name || "未設定"}</DetailFieldValue>
       )}
     </div>
   );
@@ -134,7 +140,7 @@ function DisplayNameField({ asset, draft }: { asset: Asset; draft: AssetDetailDr
 function NoteSection({ asset, draft }: { asset: Asset; draft: AssetDetailDraft }) {
   return (
     <div className="min-w-0">
-      <label className="text-sm font-medium text-muted-foreground">備註</label>
+      <DetailFieldLabel>備註</DetailFieldLabel>
       {draft.isEditingAsset ? (
         <Textarea
           value={draft.editedNote}
@@ -144,9 +150,7 @@ function NoteSection({ asset, draft }: { asset: Asset; draft: AssetDetailDraft }
           rows={3}
         />
       ) : (
-        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">
-          {asset.note || "無備註"}
-        </p>
+        <DetailFieldValue wrap="pre-wrap">{asset.note || "無備註"}</DetailFieldValue>
       )}
     </div>
   );
@@ -170,7 +174,10 @@ function ModelAndTagSections({
         onClear={() => draft.setEditedModelIds([])}
         onToggle={draft.toggleModel}
       />
-      <SuggestedBoothModels draft={draft} />
+      <BoothModelSuggestionPanel
+        models={draft.isEditingAsset ? draft.suggestedModels : []}
+        onAdd={(model) => void draft.addSuggestedModel(model)}
+      />
       <Separator />
       <AssetDetailTagSection
         tags={tags}
@@ -183,74 +190,6 @@ function ModelAndTagSections({
         onToggle={draft.toggleTag}
       />
     </>
-  );
-}
-
-function SuggestedBoothModels({ draft }: { draft: AssetDetailDraft }) {
-  if (!draft.isEditingAsset || draft.suggestedModels.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">BOOTH 建議模型</p>
-      <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
-        {draft.suggestedModels.map((model) => (
-          <Button
-            key={model.name}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 min-w-0 !max-w-full !shrink gap-1 px-2 text-xs"
-            onClick={() => void draft.addSuggestedModel(model)}
-          >
-            <Plus className="h-3 w-3 shrink-0" />
-            <span className="min-w-0 truncate">{model.label}</span>
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SuggestedBoothTags({ draft }: { draft: AssetDetailDraft }) {
-  if (!draft.isEditingAsset || draft.suggestedTags.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">BOOTH 建議標籤</p>
-      <div className="flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
-        {draft.suggestedTags.map((tagName) => {
-          const originText = boothTagOriginText(
-            draft.suggestedTagOrigins,
-            tagName,
-          );
-          return (
-            <Button
-              key={tagName}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-auto min-h-7 min-w-0 !max-w-full !shrink gap-1 px-2 py-1 text-left text-xs"
-              onClick={() => void draft.addSuggestedTag(tagName)}
-              title={originText ?? undefined}
-            >
-              <Plus className="h-3 w-3 shrink-0" />
-              <span className="min-w-0">
-                <span className="block truncate">{tagName}</span>
-                {originText && (
-                  <span className="block truncate text-[10px] text-muted-foreground">
-                    {originText}
-                  </span>
-                )}
-              </span>
-            </Button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -274,15 +213,24 @@ function AssetDetailBody(props: AssetDetailBodyProps) {
         <DisplayNameField asset={asset} draft={draft} />
         <Separator />
         <ModelAndTagSections asset={asset} draft={draft} models={props.models} tags={props.tags} />
-        <SuggestedBoothTags draft={draft} />
+        <BoothTagSuggestionPanel
+          origins={draft.suggestedTagOrigins}
+          tags={draft.isEditingAsset ? draft.suggestedTags : []}
+          onAdd={(tagName) => void draft.addSuggestedTag(tagName)}
+        />
         <Separator />
         <AssetDetailBoothSection
           isEditing={draft.isEditingAsset}
           boothUrl={props.boothUrl}
+          boothShopName={props.boothShopName}
+          boothShopUrl={props.boothShopUrl}
           fetching={draft.isFetchingProductInfo}
           onBoothUrlChange={draft.setEditedBoothUrl}
+          onBoothShopNameChange={draft.setEditedBoothShopName}
+          onBoothShopUrlChange={draft.setEditedBoothShopUrl}
           onFetchProductInfo={() => void draft.fetchProductInfo()}
           onOpenBooth={() => void props.onOpenBooth()}
+          onOpenBoothShop={() => void props.onOpenBoothShop()}
         />
         <Separator />
         <AssetDetailRelatedLinksSection
@@ -336,10 +284,9 @@ function AssetDetailFooterController({
 
 function AssetDetailLayout(props: AssetDetailLayoutProps) {
   return (
-    <div
-      className="asset-detail-panel flex h-full min-h-0 shrink-0 flex-col overflow-x-hidden overflow-y-hidden border-l border-border bg-card"
-      data-asset-detail-editing={props.draft.isEditingAsset ? "true" : undefined}
-      style={{ width: "clamp(18rem, 34vw, 25rem)" }}
+    <AssetDetailShell
+      className="flex-col overflow-y-hidden"
+      editing={props.draft.isEditingAsset}
     >
       <AssetDetailHeader
         isEditing={props.draft.isEditingAsset}
@@ -348,7 +295,7 @@ function AssetDetailLayout(props: AssetDetailLayoutProps) {
       />
       <AssetDetailBody {...props} />
       <AssetDetailFooterController {...props} />
-    </div>
+    </AssetDetailShell>
   );
 }
 
@@ -375,6 +322,12 @@ function getAssetDetailViewState(
       : asset?.thumbnail_url || "",
     filePath: draft.isEditingAsset ? draft.editedFilePath : asset?.file_path || "",
     boothUrl: draft.isEditingAsset ? draft.editedBoothUrl : asset?.booth_url || "",
+    boothShopName: draft.isEditingAsset
+      ? draft.editedBoothShopName
+      : asset?.booth_shop_name || "",
+    boothShopUrl: draft.isEditingAsset
+      ? draft.editedBoothShopUrl
+      : asset?.booth_shop_url || "",
     relatedLinks: asset?.related_links ?? [],
   };
 }
@@ -410,6 +363,7 @@ function useAssetDetailController(): AssetDetailController {
     onClose: () => store.selectAsset(null),
     onDelete: deleteSelectedAsset,
     onOpenBooth: () => openTrimmedUrl(viewState.boothUrl),
+    onOpenBoothShop: () => openTrimmedUrl(viewState.boothShopUrl),
     onOpenRelatedLink: openTrimmedUrl,
     onOpenFolder: () => openAssetLocation(viewState.filePath),
     onBrowseFile: () => browseAssetPath(false, draft),

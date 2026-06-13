@@ -1,8 +1,10 @@
 "use client";
 
 import { FileSearch, FolderSearch } from "lucide-react";
+import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MonoText } from "@/components/ui/mono-text";
 
 type AssetDetailLocationSectionProps = {
   isEditing: boolean;
@@ -69,19 +71,21 @@ function EditableLocationField({
 
 function ReadonlyLocationField({ filePath }: { filePath: string }) {
   return (
-    <p
-      className="mt-1 break-all font-mono text-xs text-foreground"
+    <MonoText
+      className="mt-1"
       data-context-path={filePath}
+      tone="default"
+      wrap="break"
     >
       {filePath}
-    </p>
+    </MonoText>
   );
 }
 
 export function AssetDetailLocationSection(props: AssetDetailLocationSectionProps) {
   return (
     <div className="min-w-0">
-      <label className="text-sm font-medium text-muted-foreground">素材位置</label>
+      <DetailFieldLabel>素材位置</DetailFieldLabel>
       {props.isEditing ? (
         <EditableLocationField {...props} />
       ) : (
