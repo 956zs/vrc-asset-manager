@@ -76,12 +76,3 @@ export const issueLabel = (status: string) => {
       return status;
   }
 };
-
-export const issueBadgeVariant = (
-  status: string,
-): "destructive" | "outline" | "secondary" =>
-  status === "missing" || status === "unreadable"
-    ? "destructive"
-    : status === "unsupported"
-      ? "outline"
-      : "secondary";

@@ -2,18 +2,26 @@ import {
   Activity,
   CheckCircle2,
   FolderOpen,
-  Loader2,
   Pencil,
   RefreshCw,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { IconButton } from "@/components/ui/icon-button";
+import { IconTile } from "@/components/ui/icon-tile";
+import { ListRow } from "@/components/ui/list-row";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { MetricCard, type MetricCardTone } from "@/components/ui/metric-card";
+import { Panel } from "@/components/ui/panel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusMessage } from "@/components/ui/status-message";
+import { ToneBadge } from "@/components/ui/tone-badge";
 import type { AssetHealthIssue, AssetHealthSummary } from "@/types";
-import { displayIssueName, issueBadgeVariant, issueLabel } from "./utils";
+import { SettingsSection } from "./settings-section";
+import { displayIssueName, issueLabel } from "./utils";
 
 type HealthSectionProps = {
   summary: AssetHealthSummary | null;
@@ -46,18 +54,18 @@ function HealthSummaryCard({
     : "尚未掃描";
 
   return (
-    <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+    <Panel className="p-5">
       <div className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <IconTile tone="primary">
             <ShieldCheck className="h-5 w-5" />
-          </span>
+          </IconTile>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold text-foreground">素材健康</h3>
-              <Badge variant={issueCount > 0 ? "destructive" : summary ? "secondary" : "outline"}>
+              <HealthStatusBadge issueCount={issueCount} scanned={Boolean(summary)}>
                 {statusLabel}
-              </Badge>
+              </HealthStatusBadge>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               {summary
@@ -73,7 +81,7 @@ function HealthSummaryCard({
           onClick={() => void onScan()}
         >
           {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner />
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
@@ -81,7 +89,7 @@ function HealthSummaryCard({
         </Button>
       </div>
       {summary && <HealthStatsGrid summary={summary} />}
-    </div>
+    </Panel>
   );
 }
 
@@ -100,28 +108,22 @@ function HealthStatsGrid({ summary }: { summary: AssetHealthSummary }) {
 
 function HealthErrorMessage({ error }: { error: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-      <TriangleAlert className="h-4 w-4" />
+    <StatusMessage tone="danger" icon={<TriangleAlert className="h-4 w-4" />}>
       {error}
-    </div>
+    </StatusMessage>
   );
 }
 
 function HealthOkMessage() {
   return (
-    <div className="grid min-h-[260px] place-items-center rounded-lg border border-primary/30 bg-card p-8 text-center text-card-foreground shadow-sm">
-      <div className="max-w-sm space-y-3">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <CheckCircle2 className="h-6 w-6" />
-        </div>
-        <div>
-          <p className="text-base font-semibold text-foreground">目前沒有素材路徑問題</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            所有已登錄素材都可以正常讀取。
-          </p>
-        </div>
-      </div>
-    </div>
+    <EmptyState
+      tone="success"
+      className="min-h-[260px]"
+      icon={<CheckCircle2 className="h-6 w-6" />}
+      iconClassName="size-12"
+      title="目前沒有素材路徑問題"
+      description="所有已登錄素材都可以正常讀取。"
+    />
   );
 }
 
@@ -131,7 +133,7 @@ function HealthIssueList({
   onEditIssueAsset,
 }: HealthIssueListProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <Panel className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium text-foreground">
         <TriangleAlert className="h-4 w-4 text-destructive" />
         需要處理的素材
@@ -148,7 +150,7 @@ function HealthIssueList({
           ))}
         </div>
       </ScrollArea>
-    </div>
+    </Panel>
   );
 }
 
@@ -157,27 +159,22 @@ function HealthEmptyState({
   onScan,
 }: Pick<HealthSectionProps, "loading" | "onScan">) {
   return (
-    <div className="grid min-h-[320px] place-items-center rounded-lg border border-dashed border-border bg-card p-8 text-center text-card-foreground shadow-sm">
-      <div className="max-w-sm space-y-4">
-        <div className="mx-auto flex size-14 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Activity className="h-7 w-7" />
-        </div>
-        <div>
-          <p className="text-base font-semibold text-foreground">尚未掃描素材</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            執行一次掃描後，這裡會顯示素材路徑狀態與需要處理的項目。
-          </p>
-        </div>
+    <EmptyState
+      className="min-h-[320px]"
+      icon={<Activity className="h-7 w-7" />}
+      title="尚未掃描素材"
+      description="執行一次掃描後，這裡會顯示素材路徑狀態與需要處理的項目。"
+      action={
         <Button type="button" disabled={loading} onClick={() => void onScan()}>
           {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner />
           ) : (
             <RefreshCw className="h-4 w-4" />
           )}
           掃描素材
         </Button>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
@@ -205,10 +202,10 @@ function HealthDetails({
 
 export function HealthSection(props: HealthSectionProps) {
   return (
-    <section className="flex min-h-full flex-col gap-4">
+    <SettingsSection>
       <HealthSummaryCard {...props} />
       <HealthDetails {...props} />
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -221,17 +218,43 @@ function HealthStat({
   value: number;
   tone?: "good" | "warn";
 }) {
+  const metricTone: MetricCardTone =
+    tone === "warn" && value === 0 ? "default" : (tone ?? "default");
+
   return (
-    <div
-      className={cn(
-        "flex h-full min-h-[76px] flex-col justify-center rounded-lg border border-border bg-background px-3 py-2",
-        tone === "good" && "border-primary/30 bg-primary/10",
-        tone === "warn" && value > 0 && "border-destructive/30 bg-destructive/10",
-      )}
-    >
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
-    </div>
+    <MetricCard label={label} value={value} size="compact" tone={metricTone} />
+  );
+}
+
+function HealthStatusBadge({
+  children,
+  issueCount,
+  scanned,
+}: {
+  children: string;
+  issueCount: number;
+  scanned: boolean;
+}) {
+  if (issueCount > 0) {
+    return <ToneBadge tone="danger">{children}</ToneBadge>;
+  }
+
+  return (
+    <MetaBadge variant={scanned ? "secondary" : "outline"}>
+      {children}
+    </MetaBadge>
+  );
+}
+
+function HealthIssueStatusBadge({ status }: { status: string }) {
+  if (status === "missing" || status === "unreadable") {
+    return <ToneBadge tone="danger">{issueLabel(status)}</ToneBadge>;
+  }
+
+  return (
+    <MetaBadge variant={status === "unsupported" ? "outline" : "secondary"}>
+      {issueLabel(status)}
+    </MetaBadge>
   );
 }
 
@@ -245,41 +268,33 @@ function HealthIssueRow({
   onEditIssueAsset: (issue: AssetHealthIssue) => void;
 }) {
   return (
-    <div className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-      <div className="min-w-0">
+    <ListRow
+      className="p-3"
+      title={
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className="min-w-0 truncate text-sm font-medium text-foreground">
-            {displayIssueName(issue)}
-          </p>
-          <Badge variant={issueBadgeVariant(issue.status)} className="shrink-0">
-            {issueLabel(issue.status)}
-          </Badge>
+          <span className="min-w-0 truncate">{displayIssueName(issue)}</span>
+          <HealthIssueStatusBadge status={issue.status} />
         </div>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{issue.filePath}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{issue.message}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          title="開啟素材位置"
-          aria-label="開啟素材位置"
-          onClick={() => void onOpenIssueLocation(issue)}
-        >
-          <FolderOpen className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          title="編輯素材"
-          aria-label="編輯素材"
-          onClick={() => onEditIssueAsset(issue)}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
+      }
+      description={issue.filePath}
+      trailing={
+        <div className="flex items-center gap-2">
+          <IconButton
+            size="icon-sm"
+            label="開啟素材位置"
+            icon={<FolderOpen className="h-4 w-4" />}
+            onClick={() => void onOpenIssueLocation(issue)}
+          />
+          <IconButton
+            size="icon-sm"
+            label="編輯素材"
+            icon={<Pencil className="h-4 w-4" />}
+            onClick={() => onEditIssueAsset(issue)}
+          />
+        </div>
+      }
+    >
+      <p className="mt-1 text-xs text-muted-foreground">{issue.message}</p>
+    </ListRow>
   );
 }

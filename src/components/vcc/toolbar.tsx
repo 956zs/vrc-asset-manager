@@ -1,7 +1,7 @@
 import { FolderPlus, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 type VccToolbarProps = {
   projectCount: number;
@@ -32,7 +32,7 @@ export function VccToolbar({
           disabled={loading}
           onClick={onRefresh}
         >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
           重新掃描
         </Button>
         <Button type="button" size="sm" disabled={loading} onClick={onAddProject}>

@@ -1,9 +1,11 @@
 "use client";
 
 import { AlertTriangle, Image as ImageIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { MetaBadge } from "@/components/ui/meta-badge";
 import { hasSensitiveAssetTags } from "@/lib/sensitive-content";
 import { Card } from "@/components/ui/card";
+import { TagChip } from "@/components/ui/tag-chip";
+import { ToneBadge } from "@/components/ui/tone-badge";
 import { cn } from "@/lib/utils";
 import type { Asset } from "@/types";
 
@@ -95,10 +97,10 @@ function AssetThumbnail({
 function MissingFileBadge() {
   return (
     <div className="absolute top-2 right-2">
-      <Badge variant="destructive" className="gap-1 px-1.5 py-0.5">
+      <ToneBadge tone="danger" className="gap-1">
         <AlertTriangle className="h-3 w-3" />
         <span className="text-xs">檔案遺失</span>
-      </Badge>
+      </ToneBadge>
     </div>
   );
 }
@@ -117,18 +119,13 @@ function AssetTags({ tags }: { tags: Asset["tags"] }) {
     }
 
     badges.push(
-      <Badge
+      <TagChip
         key={tag.id}
-        variant="secondary"
+        color={tag.color}
+        label={tag.name}
+        variant="soft"
         className="px-1.5 py-0 text-xs"
-        style={{
-          backgroundColor: `${tag.color}20`,
-          color: tag.color,
-          borderColor: `${tag.color}40`,
-        }}
-      >
-        {tag.name}
-      </Badge>,
+      />,
     );
     renderedTagCount += 1;
   }
@@ -137,9 +134,9 @@ function AssetTags({ tags }: { tags: Asset["tags"] }) {
     <div className="flex flex-wrap gap-1">
       {badges}
       {tags.length > assetCardVisibleTagLimit && (
-        <Badge variant="secondary" className="px-1.5 py-0 text-xs">
+        <MetaBadge variant="secondary" className="py-0 text-xs">
           +{tags.length - assetCardVisibleTagLimit}
-        </Badge>
+        </MetaBadge>
       )}
     </div>
   );

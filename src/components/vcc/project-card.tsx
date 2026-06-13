@@ -1,8 +1,11 @@
 import { AlertTriangle, FolderOpen, RefreshCw, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { MonoText } from "@/components/ui/mono-text";
+import { Panel } from "@/components/ui/panel";
+import { Spinner } from "@/components/ui/spinner";
+import { ToneBadge } from "@/components/ui/tone-badge";
 import { cn } from "@/lib/utils";
 import type { VccProjectSnapshot } from "@/types";
 import { CollapseIconButton } from "./collapse-icon-button";
@@ -26,14 +29,10 @@ function ProjectStatusBadge({ snapshot }: { snapshot: VccProjectSnapshot }) {
   const { installedCount, availableCount } = getPackageCounts(snapshot.packages);
 
   if (snapshot.scan_error) {
-    return (
-      <Badge variant="outline" className="text-destructive">
-        掃描失敗
-      </Badge>
-    );
+    return <ToneBadge tone="danger">掃描失敗</ToneBadge>;
   }
 
-  return <Badge variant="secondary">{installedCount}/{availableCount}</Badge>;
+  return <MetaBadge variant="secondary">{installedCount}/{availableCount}</MetaBadge>;
 }
 
 function ProjectTitleBlock({ snapshot }: { snapshot: VccProjectSnapshot }) {
@@ -45,12 +44,13 @@ function ProjectTitleBlock({ snapshot }: { snapshot: VccProjectSnapshot }) {
         </h3>
         <ProjectStatusBadge snapshot={snapshot} />
       </div>
-      <p
-        className="mt-1 break-all font-mono text-xs text-muted-foreground"
+      <MonoText
+        className="mt-1"
         data-context-path={snapshot.project.path}
+        wrap="break"
       >
         {snapshot.project.path}
-      </p>
+      </MonoText>
     </div>
   );
 }
@@ -72,58 +72,26 @@ function ProjectActions({
         expandedLabel="收合 package 清單"
         onClick={() => onToggleCollapsed(snapshot.project.id)}
       />
-      <ProjectIconButton
-        title="開啟專案資料夾"
-        contextPath={snapshot.project.path}
+      <IconButton
+        label="開啟專案資料夾"
+        icon={<FolderOpen className="h-4 w-4" />}
+        data-context-path={snapshot.project.path}
         disabled={false}
         onClick={() => onOpenProject(snapshot.project.path)}
-      >
-        <FolderOpen className="h-4 w-4" />
-      </ProjectIconButton>
-      <ProjectIconButton
-        title="重新掃描專案"
+      />
+      <IconButton
+        label="重新掃描專案"
+        icon={busy ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
         disabled={busy}
         onClick={() => onScanProject(snapshot.project.id)}
-      >
-        <RefreshCw className={cn("h-4 w-4", busy && "animate-spin")} />
-      </ProjectIconButton>
-      <ProjectIconButton
-        title="移除專案"
+      />
+      <IconButton
+        label="移除專案"
+        icon={<Trash2 className="h-4 w-4 text-destructive" />}
         disabled={busy}
         onClick={() => onDeleteProject(snapshot)}
-      >
-        <Trash2 className="h-4 w-4 text-destructive" />
-      </ProjectIconButton>
+      />
     </div>
-  );
-}
-
-function ProjectIconButton({
-  title,
-  contextPath,
-  disabled,
-  children,
-  onClick,
-}: {
-  title: string;
-  contextPath?: string;
-  disabled: boolean;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      title={title}
-      aria-label={title}
-      data-context-path={contextPath}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
   );
 }
 
@@ -174,7 +142,7 @@ function ProjectBody({
 
 export function ProjectCard(props: ProjectCardProps) {
   return (
-    <section className="rounded-md border border-border bg-card">
+    <Panel as="section" className="rounded-md shadow-none">
       <ProjectHeader {...props} />
       {!props.collapsed && (
         <ProjectBody
@@ -183,6 +151,6 @@ export function ProjectCard(props: ProjectCardProps) {
           onPackageFilterChange={props.onPackageFilterChange}
         />
       )}
-    </section>
+    </Panel>
   );
 }

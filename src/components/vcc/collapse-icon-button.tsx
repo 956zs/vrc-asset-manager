@@ -1,6 +1,5 @@
-import { ChevronDown } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { DisclosureChevron } from "@/components/ui/disclosure";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 
 type CollapseIconButtonProps = {
@@ -21,19 +20,12 @@ export function CollapseIconButton({
   const label = collapsed ? collapsedLabel : expandedLabel;
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
+    <IconButton
       className={cn("!size-8", className)}
       aria-expanded={!collapsed}
-      title={label}
-      aria-label={label}
+      label={label}
+      icon={<DisclosureChevron expanded={!collapsed} />}
       onClick={onClick}
-    >
-      <ChevronDown
-        className={cn("h-4 w-4 transition-transform", collapsed && "-rotate-90")}
-      />
-    </Button>
+    />
   );
 }

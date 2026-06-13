@@ -1,5 +1,10 @@
 import type { MouseEvent, RefObject } from "react";
-import { cn } from "@/lib/utils";
+import {
+  FloatingMenuEmpty,
+  FloatingMenuItem,
+  FloatingMenuSeparator,
+} from "@/components/ui/floating-menu";
+import { FloatingSurface } from "@/components/ui/floating-surface";
 import type { ContextMenuItem, MenuState } from "./types";
 
 type ContextMenuPanelProps = {
@@ -10,7 +15,7 @@ type ContextMenuPanelProps = {
 };
 
 function ContextMenuSeparator({ id }: { id: string }) {
-  return <div key={id} className="my-1 h-px bg-border" role="separator" />;
+  return <FloatingMenuSeparator key={id} />;
 }
 
 function ContextMenuAction({
@@ -23,27 +28,23 @@ function ContextMenuAction({
   const Icon = item.icon;
 
   return (
-    <button
+    <FloatingMenuItem
       key={item.id}
-      type="button"
       role="menuitem"
       disabled={item.disabled}
-      className={cn(
-        "flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-sm outline-none transition-colors",
-        "hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
-        "disabled:pointer-events-none disabled:opacity-45",
-      )}
+      leading={<Icon className="h-4 w-4 text-muted-foreground" />}
+      trailing={
+        item.shortcut ? (
+          <span className="text-[11px] text-muted-foreground">{item.shortcut}</span>
+        ) : null
+      }
       onClick={() => {
         onClose();
         void Promise.resolve(item.onSelect()).catch(console.warn);
       }}
     >
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {item.shortcut && (
-        <span className="text-[11px] text-muted-foreground">{item.shortcut}</span>
-      )}
-    </button>
+      {item.label}
+    </FloatingMenuItem>
   );
 }
 
@@ -62,7 +63,7 @@ function ContextMenuRow({
 }
 
 function EmptyContextMenu() {
-  return <div className="px-2 py-1.5 text-sm text-muted-foreground">沒有可用動作</div>;
+  return <FloatingMenuEmpty>沒有可用動作</FloatingMenuEmpty>;
 }
 
 function stopNestedContextMenu(event: MouseEvent<HTMLDivElement>) {
@@ -79,9 +80,10 @@ export function ContextMenuPanel({
   const hasActions = items.some((item) => item.type === "item");
 
   return (
-    <div
+    <FloatingSurface
       ref={menuRef}
-      className="fixed z-[1000] w-56 rounded-md border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+      padding="panel"
+      className="fixed z-[1000] w-56"
       style={{ left: menu.x, top: menu.y }}
       role="menu"
       onContextMenu={stopNestedContextMenu}
@@ -93,6 +95,6 @@ export function ContextMenuPanel({
       ) : (
         <EmptyContextMenu />
       )}
-    </div>
+    </FloatingSurface>
   );
 }

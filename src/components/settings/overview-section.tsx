@@ -7,10 +7,13 @@ import {
   User,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { IconTile } from "@/components/ui/icon-tile";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Panel } from "@/components/ui/panel";
 import type { AssetHealthSummary } from "@/types";
+import { SettingsSection } from "./settings-section";
 import type { SettingsTab, UpdateStatus } from "./utils";
 
 type OverviewSectionProps = {
@@ -41,7 +44,7 @@ export function OverviewSection({
   onOpenTab,
 }: OverviewSectionProps) {
   return (
-    <section className="flex min-h-full flex-col gap-4">
+    <SettingsSection>
       <OverviewMetrics
         assetCount={assetCount}
         modelCount={modelCount}
@@ -57,7 +60,7 @@ export function OverviewSection({
         onScanHealth={onScanHealth}
         onOpenTab={onOpenTab}
       />
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -184,17 +187,12 @@ function OverviewMetric({
   value: number;
 }) {
   return (
-    <div className="flex h-full min-h-[96px] flex-col justify-center rounded-lg border border-border bg-card px-4 py-4 text-card-foreground shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-        </div>
-        <div className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
+    <MetricCard
+      label={label}
+      value={value}
+      icon={<Icon className="h-5 w-5" />}
+      className="bg-card shadow-sm"
+    />
   );
 }
 
@@ -216,12 +214,9 @@ function ActionPanel({
   onOpen: () => void;
 }) {
   return (
-    <div
-      className={cn(
-        "flex h-full min-h-[160px] flex-col justify-center rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm",
-        tone === "accent" && "border-primary/30",
-        tone === "warn" && "border-destructive/30",
-      )}
+    <Panel
+      tone={tone}
+      className="flex h-full min-h-[160px] flex-col justify-center p-4"
     >
       <div className="flex items-start justify-between gap-3">
         <button
@@ -229,13 +224,13 @@ function ActionPanel({
           className="flex min-w-0 flex-1 items-start gap-3 text-left"
           onClick={onOpen}
         >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <IconTile>
             <Icon className="h-5 w-5" />
-          </span>
+          </IconTile>
           <span className="min-w-0">
             <span className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-foreground">{title}</span>
-              <Badge variant="secondary">{badge}</Badge>
+              <MetaBadge variant="secondary">{badge}</MetaBadge>
             </span>
             <span className="mt-1 block text-sm text-muted-foreground">
               {description}
@@ -244,6 +239,6 @@ function ActionPanel({
         </button>
         <div className="shrink-0">{action}</div>
       </div>
-    </div>
+    </Panel>
   );
 }

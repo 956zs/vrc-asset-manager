@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Image as ImageIcon, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,8 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ListRow } from "@/components/ui/list-row";
+import { MetaBadge } from "@/components/ui/meta-badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
+import { SurfaceBox } from "@/components/ui/surface-box";
 import { useAssetStore } from "@/stores/asset-store";
 import type { Asset } from "@/types";
 
@@ -169,19 +171,19 @@ function SourceAssetSummary({ asset }: { asset: Asset | null }) {
   }
 
   return (
-    <div className="rounded-md border border-border bg-muted/40 p-3">
+    <SurfaceBox className="bg-muted/40 p-3">
       <p className="text-xs text-muted-foreground">來源素材</p>
       <p className="mt-1 truncate text-sm font-medium text-foreground">
         {displayAssetName(asset)}
       </p>
-    </div>
+    </SurfaceBox>
   );
 }
 
 function LoadingRelatedAssets() {
   return (
     <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-      <Search className="h-4 w-4 animate-pulse" />
+      <Spinner />
       搜尋中
     </div>
   );
@@ -207,9 +209,9 @@ function RelatedAssetReasons({ reasons }: { reasons: string[] }) {
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {reasons.slice(0, 4).map((reason) => (
-        <Badge key={reason} variant="secondary" className="text-[11px]">
+        <MetaBadge key={reason} variant="secondary">
           {reason}
-        </Badge>
+        </MetaBadge>
       ))}
     </div>
   );
@@ -225,23 +227,17 @@ function RelatedAssetRow({
   const { asset, reasons } = relatedAsset;
 
   return (
-    <button
-      type="button"
-      className={cn(
-        "grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-card p-2 text-left transition-colors",
-        "hover:border-primary/60 hover:bg-accent/50",
-      )}
+    <ListRow
+      surface="card"
+      className="p-2"
+      leading={<RelatedAssetThumbnail asset={asset} />}
       onClick={() => onSelectAsset(asset.id)}
+      title={displayAssetName(asset)}
+      titleClassName="text-card-foreground"
+      trailing={<ArrowRight className="h-4 w-4 text-muted-foreground" />}
     >
-      <RelatedAssetThumbnail asset={asset} />
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-card-foreground">
-          {displayAssetName(asset)}
-        </p>
-        <RelatedAssetReasons reasons={reasons} />
-      </div>
-      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-    </button>
+      <RelatedAssetReasons reasons={reasons} />
+    </ListRow>
   );
 }
 

@@ -3,11 +3,16 @@
 import { useEffect, useState } from "react";
 import { FolderCog, Save } from "lucide-react";
 import { LibraryRootActions } from "@/components/library-root-actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconTile } from "@/components/ui/icon-tile";
 import { Input } from "@/components/ui/input";
+import { MonoText } from "@/components/ui/mono-text";
+import { Panel } from "@/components/ui/panel";
+import { SurfaceBox } from "@/components/ui/surface-box";
+import { MetaBadge } from "@/components/ui/meta-badge";
 import { useAssetStore } from "@/stores/asset-store";
 import type { LibrarySettings } from "@/types";
+import { SettingsSection } from "./settings-section";
 
 type LibraryFolderDraft = {
   avatarFolder: string;
@@ -60,18 +65,18 @@ export function LibrarySection() {
   };
 
   return (
-    <section className="flex min-h-full flex-col gap-4">
-      <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+    <SettingsSection>
+      <Panel className="p-5">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <IconTile>
             <FolderCog className="h-5 w-5" />
-          </span>
+          </IconTile>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold text-foreground">素材庫</h3>
-              <Badge variant={librarySettings?.rootPath ? "secondary" : "outline"}>
+              <MetaBadge variant={librarySettings?.rootPath ? "secondary" : "outline"}>
                 {librarySettings?.rootPath ? "已設定" : "尚未設定"}
-              </Badge>
+              </MetaBadge>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               分類資料夾決定實體檔案位置；變更根目錄不會自動搬移既有素材。
@@ -81,8 +86,8 @@ export function LibrarySection() {
         <div className="mt-4">
           <LibraryRootActions />
         </div>
-      </div>
-      <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+      </Panel>
+      <Panel className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-foreground">分類資料夾名稱</h3>
@@ -122,8 +127,8 @@ export function LibrarySection() {
             儲存後會建立新名稱資料夾；既有素材檔案不會自動搬移。
           </p>
         )}
-      </div>
-    </section>
+      </Panel>
+    </SettingsSection>
   );
 }
 
@@ -139,12 +144,12 @@ function FolderNameRow({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="grid items-center gap-3 rounded-md border border-border bg-background/60 p-3 sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)]">
+    <SurfaceBox className="grid items-center gap-3 bg-background/60 p-3 sm:grid-cols-[minmax(0,160px)_minmax(0,1fr)]">
       <div className="min-w-0">
-        <p className="font-mono text-xs text-muted-foreground">{label}</p>
+        <MonoText>{label}</MonoText>
         <p className="mt-1 text-sm font-medium text-foreground">{description}</p>
       </div>
       <Input value={value} onChange={(event) => onChange(event.target.value)} />
-    </div>
+    </SurfaceBox>
   );
 }

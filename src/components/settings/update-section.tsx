@@ -5,12 +5,16 @@ import {
   ExternalLink,
   Info,
   Newspaper,
-  Loader2,
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { Panel } from "@/components/ui/panel";
+import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
+import { StatusMessage } from "@/components/ui/status-message";
+import { SettingsSection } from "./settings-section";
 import type { UpdateStatus } from "./utils";
 
 type UpdateSectionProps = {
@@ -54,14 +58,14 @@ function UpdateHeader({
   const busy = updateStatus === "checking" || updateStatus === "downloading";
 
   return (
-    <div className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+    <Panel className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-foreground">更新</h3>
-            <Badge variant="outline">
+            <MetaBadge>
               {appVersion ? `目前 v${appVersion}` : "版本未知"}
-            </Badge>
+            </MetaBadge>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{updateDescription}</p>
         </div>
@@ -74,14 +78,9 @@ function UpdateHeader({
         />
       </div>
       {updateStatus === "downloading" && (
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${downloadPercent ?? 18}%` }}
-          />
-        </div>
+        <Progress className="mt-4" value={downloadPercent ?? 18} />
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -103,7 +102,7 @@ function UpdateHeaderActions({
         onClick={() => void onCheckUpdate()}
       >
         {updateStatus === "checking" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Spinner />
         ) : (
           <RefreshCw className="h-4 w-4" />
         )}
@@ -121,26 +120,25 @@ function UpdateHeaderActions({
 
 function AvailableUpdateMessage({ update }: { update: Update }) {
   return (
-    <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm text-foreground">
-      <div className="flex items-center gap-2 font-medium">
-        <Download className="h-4 w-4 text-primary" />
-        v{update.version}
-      </div>
+    <StatusMessage
+      tone="success"
+      icon={<Download className="h-4 w-4" />}
+      title={`v${update.version}`}
+    >
       {update.body && (
         <p className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap text-muted-foreground">
           {update.body}
         </p>
       )}
-    </div>
+    </StatusMessage>
   );
 }
 
 function SuccessUpdateMessage({ children }: { children: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-4 text-sm text-foreground">
-      <CheckCircle2 className="h-4 w-4 text-primary" />
+    <StatusMessage tone="success" icon={<CheckCircle2 className="h-4 w-4" />}>
       {children}
-    </div>
+    </StatusMessage>
   );
 }
 
@@ -152,24 +150,23 @@ function UnavailableUpdateMessage({
   onOpenReleases: () => void | Promise<void>;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-background/70 p-4 text-sm text-foreground">
-      <div className="flex items-start gap-3">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <p className="text-muted-foreground">{message}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => void onOpenReleases()}
-          >
-            <ExternalLink className="h-4 w-4" />
-            開啟 Releases
-          </Button>
-        </div>
-      </div>
-    </div>
+    <StatusMessage
+      tone="info"
+      icon={<Info className="h-4 w-4" />}
+      action={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void onOpenReleases()}
+        >
+          <ExternalLink className="h-4 w-4" />
+          開啟 Releases
+        </Button>
+      }
+    >
+      {message}
+    </StatusMessage>
   );
 }
 
@@ -193,10 +190,9 @@ function UpdateStatusMessage({
   }
   if (updateStatus === "error" && updateMessage) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-        <TriangleAlert className="h-4 w-4" />
+      <StatusMessage tone="danger" icon={<TriangleAlert className="h-4 w-4" />}>
         {updateMessage}
-      </div>
+      </StatusMessage>
     );
   }
   return null;
@@ -206,7 +202,7 @@ function LocalReleaseNotesPanel({
   onOpenReleaseNotes,
 }: Pick<UpdateSectionProps, "onOpenReleaseNotes">) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
+    <Panel className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -222,16 +218,16 @@ function LocalReleaseNotesPanel({
           查看更新內容
         </Button>
       </div>
-    </div>
+    </Panel>
   );
 }
 
 export function UpdateSection(props: UpdateSectionProps) {
   return (
-    <section className="flex min-h-full flex-col gap-4">
+    <SettingsSection>
       <UpdateHeader {...props} />
       <LocalReleaseNotesPanel onOpenReleaseNotes={props.onOpenReleaseNotes} />
       <UpdateStatusMessage {...props} />
-    </section>
+    </SettingsSection>
   );
 }

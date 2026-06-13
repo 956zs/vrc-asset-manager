@@ -7,16 +7,17 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActionBar } from "@/components/ui/dialog-action-bar";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { Panel } from "@/components/ui/panel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
   ReleaseNote,
@@ -141,12 +142,16 @@ function ReleaseNoteCard({ note }: { note: ReleaseNote }) {
   const visibleSections = sectionConfigs.filter((config) => note[config.key].length > 0);
 
   return (
-    <article className="rounded-lg border border-white/14 bg-card text-card-foreground shadow-sm shadow-black/20">
+    <Panel as="article" className="border-white/14 shadow-black/20">
       <div className="border-b border-white/12 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="min-w-0 text-base font-semibold text-foreground">{note.title}</h3>
-          <Badge variant="outline">v{note.version}</Badge>
-          <Badge variant="secondary">{note.date}</Badge>
+          <MetaBadge className="border-white/20 text-foreground/70">
+            v{note.version}
+          </MetaBadge>
+          <MetaBadge variant="secondary" className="text-foreground/70">
+            {note.date}
+          </MetaBadge>
         </div>
         <p className="mt-2 text-sm leading-6 text-foreground/75">
           <InlineReleaseNoteText nodes={note.summaryNodes} />
@@ -162,7 +167,7 @@ function ReleaseNoteCard({ note }: { note: ReleaseNote }) {
           />
         ))}
       </div>
-    </article>
+    </Panel>
   );
 }
 
@@ -186,9 +191,13 @@ export function ReleaseNotesDialog({
               </DialogDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">目前 v{currentVersion}</Badge>
+              <MetaBadge className="border-white/20 text-foreground/70">
+                目前 v{currentVersion}
+              </MetaBadge>
               {lastSeenVersion && (
-                <Badge variant="secondary">上次已讀 v{lastSeenVersion}</Badge>
+                <MetaBadge variant="secondary" className="text-foreground/70">
+                  上次已讀 v{lastSeenVersion}
+                </MetaBadge>
               )}
             </div>
           </div>
@@ -200,7 +209,7 @@ export function ReleaseNotesDialog({
             ))}
           </div>
         </ScrollArea>
-        <DialogFooter className="border-t border-white/14 bg-background px-5 py-4">
+        <DialogActionBar className="border-white/14 px-5">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             <Clock3 className="h-4 w-4" />
             稍後再看
@@ -209,7 +218,7 @@ export function ReleaseNotesDialog({
             <CheckCircle2 className="h-4 w-4" />
             知道了
           </Button>
-        </DialogFooter>
+        </DialogActionBar>
       </DialogContent>
     </Dialog>
   );

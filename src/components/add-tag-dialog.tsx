@@ -6,10 +6,11 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActionBar } from "@/components/ui/dialog-action-bar";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { useAssetStore } from "@/stores/asset-store";
 import type { Tag } from "@/types";
@@ -107,16 +108,20 @@ function useTagDialogController(): TagDialogController {
 
 function TagNameField({ form }: { form: TagDialogForm }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium">
-        標籤名稱 <span className="text-destructive">*</span>
-      </label>
+    <FormField
+      variant="dialog"
+      label={
+        <>
+          標籤名稱 <span className="text-destructive">*</span>
+        </>
+      }
+    >
       <Input
         value={form.name}
         onChange={(event) => form.setName(event.target.value)}
         placeholder="例：飾品"
       />
-    </div>
+    </FormField>
   );
 }
 
@@ -183,18 +188,16 @@ function CustomColorInputs({ form }: { form: TagDialogForm }) {
 
 function TagColorField({ form }: { form: TagDialogForm }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium">標籤顏色</label>
+    <FormField variant="dialog" label="標籤顏色">
       <PresetColorGrid form={form} />
       <CustomColorInputs form={form} />
-    </div>
+    </FormField>
   );
 }
 
 function TagPreview({ form }: { form: TagDialogForm }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium">預覽</label>
+    <FormField variant="dialog" label="預覽">
       <div className="flex items-center gap-2">
         <span
           className="inline-flex items-center rounded-md px-2 py-1 text-sm font-medium text-white"
@@ -203,7 +206,7 @@ function TagPreview({ form }: { form: TagDialogForm }) {
           {form.name || "標籤名稱"}
         </span>
       </div>
-    </div>
+    </FormField>
   );
 }
 
@@ -224,14 +227,14 @@ function TagDialogFooter({
   onSubmit,
 }: Pick<TagDialogController, "form" | "isEditing" | "onClose" | "onSubmit">) {
   return (
-    <DialogFooter>
+    <DialogActionBar layout="inset">
       <Button type="button" variant="outline" onClick={onClose}>
         取消
       </Button>
       <Button type="button" onClick={() => void onSubmit()} disabled={!form.canSubmit}>
         {isEditing ? "儲存標籤" : "新增標籤"}
       </Button>
-    </DialogFooter>
+    </DialogActionBar>
   );
 }
 

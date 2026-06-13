@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, CircleHelp } from "lucide-react";
+import { Check } from "lucide-react";
+import { DisclosureChevron } from "@/components/ui/disclosure";
+import { FloatingMenuItem } from "@/components/ui/floating-menu";
+import { FloatingSurface } from "@/components/ui/floating-surface";
+import { HelpHint } from "@/components/ui/help-hint";
 import { cn } from "@/lib/utils";
 
 type ImportOptionSelectProps<TValue extends string> = {
@@ -11,11 +15,6 @@ type ImportOptionSelectProps<TValue extends string> = {
   value: TValue;
   options: { value: TValue; label: string }[];
   onChange: (value: TValue) => void;
-};
-
-type TooltipPosition = {
-  left: number;
-  top: number;
 };
 
 type SelectPosition = {
@@ -27,26 +26,6 @@ type SelectPosition = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function HelpTooltip({
-  children,
-  position,
-}: {
-  children: string;
-  position: TooltipPosition | null;
-}) {
-  if (!position || typeof document === "undefined") return null;
-
-  return createPortal(
-    <span
-      className="pointer-events-none fixed z-[1000] w-64 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs font-normal leading-relaxed text-popover-foreground shadow-xl"
-      style={{ left: position.left, top: position.top }}
-    >
-      {children}
-    </span>,
-    document.body,
-  );
 }
 
 function SelectMenu<TValue extends string>({
@@ -71,11 +50,12 @@ function SelectMenu<TValue extends string>({
   if (!position || typeof document === "undefined") return null;
 
   return createPortal(
-    <div
+    <FloatingSurface
       ref={menuRef}
       id={id}
       role="listbox"
-      className="fixed z-[1000] overflow-y-auto rounded-md border border-border bg-popover p-1 text-sm text-popover-foreground shadow-xl outline-none"
+      padding="menu"
+      className="fixed z-[1000] overflow-y-auto text-sm"
       style={{
         left: position.left,
         top: position.top,
@@ -88,27 +68,27 @@ function SelectMenu<TValue extends string>({
         const isActive = index === activeIndex;
 
         return (
-          <button
+          <FloatingMenuItem
             key={option.value}
-            type="button"
             role="option"
             aria-selected={isSelected}
+            active={isActive}
+            selected={isSelected}
+            className="px-2.5"
+            trailing={
+              isSelected ? (
+                <Check className="h-4 w-4 shrink-0 text-primary" />
+              ) : null
+            }
             onMouseEnter={() => onHighlight(index)}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(option.value)}
-            className={cn(
-              "flex h-8 w-full items-center justify-between gap-2 rounded-sm px-2.5 text-left outline-none transition-colors",
-              isActive && "bg-accent text-accent-foreground",
-              isSelected && "font-medium text-foreground",
-              !isActive && "hover:bg-accent/80 hover:text-accent-foreground",
-            )}
           >
-            <span className="min-w-0 truncate">{option.label}</span>
-            {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" />}
-          </button>
+            {option.label}
+          </FloatingMenuItem>
         );
       })}
-    </div>,
+    </FloatingSurface>,
     document.body,
   );
 }
@@ -122,7 +102,6 @@ export function ImportOptionSelect<TValue extends string>({
 }: ImportOptionSelectProps<TValue>) {
   const selectId = useId();
   const listboxId = useId();
-  const helpButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
@@ -133,7 +112,6 @@ export function ImportOptionSelect<TValue extends string>({
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
   const [selectPosition, setSelectPosition] = useState<SelectPosition | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
 
   const updateSelectPosition = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -157,19 +135,6 @@ export function ImportOptionSelect<TValue extends string>({
       maxHeight,
     });
   }, [options.length]);
-
-  const showTooltip = useCallback(() => {
-    const rect = helpButtonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const tooltipWidth = 256;
-    const edgePadding = 12;
-    const center = rect.left + rect.width / 2;
-    setTooltipPosition({
-      left: clamp(center, edgePadding + tooltipWidth / 2, window.innerWidth - edgePadding - tooltipWidth / 2),
-      top: rect.bottom + 8,
-    });
-  }, []);
 
   const openSelect = useCallback(() => {
     setActiveIndex(selectedIndex);
@@ -221,21 +186,7 @@ export function ImportOptionSelect<TValue extends string>({
     <div className="block space-y-1.5 text-xs font-medium">
       <span className="flex items-center gap-1.5 text-muted-foreground">
         <label htmlFor={selectId}>{label}</label>
-        <span className="relative inline-flex">
-          <button
-            ref={helpButtonRef}
-            type="button"
-            aria-label={`${label}說明`}
-            onFocus={showTooltip}
-            onMouseEnter={showTooltip}
-            onBlur={() => setTooltipPosition(null)}
-            onMouseLeave={() => setTooltipPosition(null)}
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            <CircleHelp className="h-3.5 w-3.5" />
-          </button>
-          <HelpTooltip position={tooltipPosition}>{help}</HelpTooltip>
-        </span>
+        <HelpHint label={label}>{help}</HelpHint>
       </span>
       <span className="relative block">
         <button
@@ -283,11 +234,11 @@ export function ImportOptionSelect<TValue extends string>({
           }}
         >
           <span className="min-w-0 truncate">{selectedOption?.label ?? ""}</span>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-              isOpen && "rotate-180 text-foreground",
-            )}
+          <DisclosureChevron
+            expanded={isOpen}
+            collapsedClassName=""
+            expandedClassName="rotate-180 text-foreground"
+            className="shrink-0 text-muted-foreground"
           />
         </button>
         {isOpen && (

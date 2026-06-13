@@ -1,6 +1,7 @@
 import type { VccPackage } from "@/types";
 import { PackageFilterBar } from "./package-filter-bar";
 import { PackageRow } from "./package-row";
+import { PackageTableHeaderRow } from "./package-table-layout";
 import type { PackageFilter } from "./types";
 import { filterPackages, getPackageCounts } from "./types";
 
@@ -27,14 +28,7 @@ export function PackageTable({
         missingCount={missingCount}
         onPackageFilterChange={onPackageFilterChange}
       />
-      <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_auto] items-center gap-3 px-3 py-2 text-xs font-medium text-muted-foreground">
-        <span>Package</span>
-        <span>來源</span>
-        <span>需求</span>
-        <span>最新</span>
-        <span>已安裝</span>
-        <span />
-      </div>
+      <PackageTableHeaderRow />
       {filteredPackages.map((packageInfo) => (
         <PackageRow key={packageInfo.package_id} packageInfo={packageInfo} />
       ))}

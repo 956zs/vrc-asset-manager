@@ -1,7 +1,6 @@
 import { Filter } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { SegmentedControl } from "@/components/ui/segmented-field";
 import type { PackageFilter } from "./types";
 import { packageFilters } from "./types";
 
@@ -29,29 +28,13 @@ export function PackageFilterBar({
           {Math.max(availableCount - installedCount, 0)}，缺失 {missingCount}
         </span>
       </div>
-      <div className="flex shrink-0 items-center gap-1 rounded-md bg-muted p-1">
-        {packageFilters.map((filter) => {
-          const selected = packageFilter === filter.value;
-
-          return (
-            <Button
-              key={filter.value}
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={selected}
-              className={cn(
-                "h-7 px-2 text-xs",
-                selected &&
-                  "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground",
-              )}
-              onClick={() => onPackageFilterChange(filter.value)}
-            >
-              {filter.label}
-            </Button>
-          );
-        })}
-      </div>
+      <SegmentedControl
+        className="flex shrink-0 border-0 bg-muted"
+        options={packageFilters}
+        value={packageFilter}
+        variant="solid"
+        onChange={onPackageFilterChange}
+      />
     </div>
   );
 }

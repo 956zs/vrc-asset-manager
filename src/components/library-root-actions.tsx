@@ -3,6 +3,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { FolderSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SurfaceBox } from "@/components/ui/surface-box";
 import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/asset-store";
 
@@ -33,9 +34,10 @@ export function LibraryRootActions({ compact, className }: LibraryRootActionsPro
   };
 
   return (
-    <div
+    <SurfaceBox
+      variant="dashed"
       className={cn(
-        "space-y-3 rounded-md border border-dashed border-border bg-muted/30 p-3",
+        "space-y-3 p-3",
         hasRoot && "border-solid",
         className,
       )}
@@ -65,6 +67,6 @@ export function LibraryRootActions({ compact, className }: LibraryRootActionsPro
           選擇根目錄
         </Button>
       </div>
-    </div>
+    </SurfaceBox>
   );
 }

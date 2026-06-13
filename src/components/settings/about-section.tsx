@@ -5,8 +5,10 @@ import {
   Tag,
   User,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Panel } from "@/components/ui/panel";
 import appIconUrl from "@/assets/app-icon.png";
 
 type AboutSectionProps = {
@@ -27,7 +29,7 @@ export function AboutSection({
   onOpenReleases,
 }: AboutSectionProps) {
   return (
-    <section className="flex min-h-full overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <Panel className="flex min-h-full overflow-hidden">
       <div className="grid w-full content-center gap-6 px-5 py-6 text-center">
         <AboutHero appName={appName} appVersion={appVersion} />
         <AboutMetrics
@@ -38,7 +40,7 @@ export function AboutSection({
         <TechnologyBadges />
         <ReleaseButton onOpenReleases={onOpenReleases} />
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -65,7 +67,7 @@ function AboutHero({
       <div className="space-y-2">
         <h3 className="text-2xl font-semibold text-foreground">{appName}</h3>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Badge variant="outline">{appVersion ? `v${appVersion}` : "版本未知"}</Badge>
+          <MetaBadge>{appVersion ? `v${appVersion}` : "版本未知"}</MetaBadge>
           <span className="text-sm text-muted-foreground">本機素材管理工具</span>
         </div>
       </div>
@@ -90,12 +92,12 @@ function AboutMetrics({
 function TechnologyBadges() {
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
-      <Badge variant="secondary">
+      <MetaBadge variant="secondary">
         <Database className="h-3 w-3" />
         SQLite
-      </Badge>
-      <Badge variant="secondary">Tauri v2</Badge>
-      <Badge variant="secondary">React</Badge>
+      </MetaBadge>
+      <MetaBadge variant="secondary">Tauri v2</MetaBadge>
+      <MetaBadge variant="secondary">React</MetaBadge>
     </div>
   );
 }
@@ -123,12 +125,12 @@ function AboutMetric({
   value: number;
 }) {
   return (
-    <div className="flex h-full min-h-[132px] flex-col justify-center rounded-lg border border-border bg-background px-4 py-4">
-      <div className="mx-auto flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        <Icon className="h-5 w-5" />
-      </div>
-      <p className="mt-3 text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
-    </div>
+    <MetricCard
+      label={label}
+      value={value}
+      icon={<Icon className="h-5 w-5" />}
+      iconPlacement="center"
+      size="large"
+    />
   );
 }

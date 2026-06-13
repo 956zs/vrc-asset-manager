@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import appIconUrl from "@/assets/app-icon.png";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { IconTabNav, type IconTabNavItem } from "@/components/ui/icon-tab-nav";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/asset-store";
 import type { AssetHealthIssue, AssetHealthSummary } from "@/types";
 import { AboutSection } from "./settings/about-section";
@@ -48,16 +48,17 @@ type AppSettingsDialogProps = {
   showAssets: () => void;
 };
 
-const tabs: Array<{
-  id: SettingsTab;
-  label: string;
-  icon: typeof Info;
-}> = [
-  { id: "overview", label: "總覽", icon: Activity },
-  { id: "library", label: "素材庫", icon: FolderCog },
-  { id: "updates", label: "更新", icon: Download },
-  { id: "health", label: "素材健康", icon: ShieldCheck },
-  { id: "about", label: "關於", icon: Info },
+const tabs: Array<IconTabNavItem<SettingsTab>> = [
+  { value: "overview", label: "總覽", icon: Activity },
+  { value: "library", label: "素材庫", icon: FolderCog },
+  { value: "updates", label: "更新", icon: Download },
+  {
+    value: "health",
+    label: "素材健康",
+    icon: ShieldCheck,
+    itemClassName: "min-w-[120px]",
+  },
+  { value: "about", label: "關於", icon: Info },
 ];
 
 type AppMetadata = {
@@ -343,27 +344,12 @@ function SettingsTabList({
   onOpenTab: (tab: SettingsTab) => void;
 }) {
   return (
-    <div className="flex w-full max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/50 p-1 lg:w-auto">
-      {tabs.map((tab) => {
-        const Icon = tab.icon;
-        const selected = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            className={cn(
-              "flex h-8 min-w-[104px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 text-sm text-muted-foreground transition-colors",
-              tab.id === "health" && "min-w-[120px]",
-              selected && "bg-background text-foreground shadow-sm",
-            )}
-            onClick={() => onOpenTab(tab.id)}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+    <IconTabNav
+      className="lg:w-auto"
+      items={tabs}
+      value={activeTab}
+      onValueChange={onOpenTab}
+    />
   );
 }
 
@@ -373,17 +359,12 @@ function SettingsHeader(props: SettingsLayoutProps) {
       <div className="grid items-center gap-4 lg:grid-cols-[minmax(220px,1fr)_auto_auto]">
         <SettingsHeaderBrand appName={props.appName} appVersion={props.appVersion} />
         <SettingsTabList activeTab={props.activeTab} onOpenTab={props.onOpenTab} />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          title="關閉"
-          aria-label="關閉"
+        <IconButton
+          label="關閉"
           className="absolute top-3 right-3 lg:static"
+          icon={<X className="h-4 w-4" />}
           onClick={() => props.onOpenChange(false)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        />
       </div>
     </div>
   );

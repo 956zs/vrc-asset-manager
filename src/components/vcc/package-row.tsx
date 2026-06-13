@@ -1,6 +1,6 @@
-import { AlertTriangle, CheckCircle2, PackageSearch } from "lucide-react";
-
+import { MonoText } from "@/components/ui/mono-text";
 import type { VccPackage } from "@/types";
+import { PackageStatusIcon, PackageTableDataRow } from "./package-table-layout";
 
 type PackageRowProps = {
   packageInfo: VccPackage;
@@ -8,34 +8,20 @@ type PackageRowProps = {
 
 export function PackageRow({ packageInfo }: PackageRowProps) {
   return (
-    <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_auto] items-center gap-3 px-3 py-2 text-sm">
+    <PackageTableDataRow>
       <div className="min-w-0">
         <p className="truncate font-medium text-card-foreground">
           {packageInfo.display_name || packageInfo.package_id}
         </p>
-        <p className="truncate font-mono text-xs text-muted-foreground">
-          {packageInfo.package_id}
-        </p>
+        <MonoText>{packageInfo.package_id}</MonoText>
       </div>
       <p className="truncate text-xs text-muted-foreground">
         {packageInfo.source || "-"}
       </p>
-      <p className="truncate font-mono text-xs text-muted-foreground">
-        {packageInfo.requested_version || "-"}
-      </p>
-      <p className="truncate font-mono text-xs text-muted-foreground">
-        {packageInfo.latest_version || "-"}
-      </p>
-      <p className="truncate font-mono text-xs text-foreground">
-        {packageInfo.installed_version || "-"}
-      </p>
-      {packageInfo.installed ? (
-        <CheckCircle2 className="h-4 w-4 text-primary" />
-      ) : packageInfo.requested_version ? (
-        <AlertTriangle className="h-4 w-4 text-destructive" />
-      ) : (
-        <PackageSearch className="h-4 w-4 text-muted-foreground" />
-      )}
-    </div>
+      <MonoText>{packageInfo.requested_version || "-"}</MonoText>
+      <MonoText>{packageInfo.latest_version || "-"}</MonoText>
+      <MonoText tone="default">{packageInfo.installed_version || "-"}</MonoText>
+      <PackageStatusIcon packageInfo={packageInfo} />
+    </PackageTableDataRow>
   );
 }

@@ -6,10 +6,11 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogActionBar } from "@/components/ui/dialog-action-bar";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { useAssetStore } from "@/stores/asset-store";
 import type { Model } from "@/types";
@@ -102,18 +103,21 @@ function useModelDialogController(): ModelDialogController {
 function ModelDialogFields({ form }: { form: ModelDialogForm }) {
   return (
     <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          模型名稱 <span className="text-destructive">*</span>
-        </label>
+      <FormField
+        variant="dialog"
+        label={
+          <>
+            模型名稱 <span className="text-destructive">*</span>
+          </>
+        }
+      >
         <Input
           value={form.name}
           onChange={(event) => form.setName(event.target.value)}
           placeholder="例：桔子"
         />
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">顯示名稱</label>
+      </FormField>
+      <FormField variant="dialog" label="顯示名稱">
         <Input
           value={form.displayName}
           onChange={(event) => form.setDisplayName(event.target.value)}
@@ -122,7 +126,7 @@ function ModelDialogFields({ form }: { form: ModelDialogForm }) {
         <p className="text-xs text-muted-foreground">
           可選，用於在介面中顯示更易讀的名稱
         </p>
-      </div>
+      </FormField>
     </div>
   );
 }
@@ -134,14 +138,14 @@ function ModelDialogFooter({
   onSubmit,
 }: Pick<ModelDialogController, "form" | "isEditing" | "onClose" | "onSubmit">) {
   return (
-    <DialogFooter>
+    <DialogActionBar layout="inset">
       <Button type="button" variant="outline" onClick={onClose}>
         取消
       </Button>
       <Button type="button" onClick={() => void onSubmit()} disabled={!form.canSubmit}>
         {isEditing ? "儲存模型" : "新增模型"}
       </Button>
-    </DialogFooter>
+    </DialogActionBar>
   );
 }
 

@@ -1,8 +1,12 @@
 import { Database, Globe2, Plus, RefreshCw, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { ListRow } from "@/components/ui/list-row";
+import { MetaBadge } from "@/components/ui/meta-badge";
+import { Panel } from "@/components/ui/panel";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { VccRepository } from "@/types";
 import { CollapseIconButton } from "./collapse-icon-button";
@@ -48,7 +52,7 @@ function RepositoriesHeader({
           onClick={onToggleCollapsed}
         />
         <SyncRepositoriesButton loading={loading} onSync={onSyncRepositories} />
-        <Badge variant="secondary">{repositories.length}</Badge>
+        <MetaBadge variant="secondary">{repositories.length}</MetaBadge>
       </div>
     </div>
   );
@@ -77,7 +81,7 @@ function SyncRepositoriesButton({
 }) {
   return (
     <Button type="button" variant="outline" size="sm" disabled={loading} onClick={onSync}>
-      <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+      {loading ? <Spinner /> : <RefreshCw className="h-4 w-4" />}
       同步 VCC
     </Button>
   );
@@ -122,32 +126,24 @@ function RepositoryRow({
   repository: VccRepository;
 }) {
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md bg-muted/50 px-2 py-2">
-      <Globe2 className="h-4 w-4 text-muted-foreground" />
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-card-foreground">
-          {repository.name}
-        </p>
-        <p
-          className="truncate text-xs text-muted-foreground"
-          data-context-url={repository.url}
-        >
-          {repository.url}
-        </p>
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="!size-8"
-        title="移除套件來源"
-        aria-label="移除套件來源"
-        disabled={loading || isProtectedRepository(repository)}
-        onClick={() => onDeleteRepository(repository)}
-      >
-        <Trash2 className="h-4 w-4 text-destructive" />
-      </Button>
-    </div>
+    <ListRow
+      className="bg-muted/50 px-2 py-2"
+      leading={<Globe2 className="h-4 w-4 text-muted-foreground" />}
+      title={repository.name}
+      titleClassName="text-card-foreground"
+      description={
+        <span data-context-url={repository.url}>{repository.url}</span>
+      }
+      trailing={
+        <IconButton
+          className="!size-8"
+          label="移除套件來源"
+          icon={<Trash2 className="h-4 w-4 text-destructive" />}
+          disabled={loading || isProtectedRepository(repository)}
+          onClick={() => onDeleteRepository(repository)}
+        />
+      }
+    />
   );
 }
 
@@ -189,7 +185,7 @@ function RepositoriesBody(props: RepositoriesSectionProps) {
 
 export function RepositoriesSection(props: RepositoriesSectionProps) {
   return (
-    <section className="rounded-md border border-border bg-card">
+    <Panel as="section" className="rounded-md shadow-none">
       <RepositoriesHeader
         collapsed={props.collapsed}
         loading={props.loading}
@@ -198,6 +194,6 @@ export function RepositoriesSection(props: RepositoriesSectionProps) {
         onSyncRepositories={props.onSyncRepositories}
       />
       <RepositoriesBody {...props} />
-    </section>
+    </Panel>
   );
 }
