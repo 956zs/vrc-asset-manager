@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { boothTagOriginText } from "@/lib/booth-product-info";
+import { hasSensitiveTags } from "@/lib/sensitive-content";
 import { selectSelectedAsset, useAssetStore } from "@/stores/asset-store";
 import type { Asset, Model, Tag as AssetTag } from "@/types";
 
@@ -255,11 +256,19 @@ function SuggestedBoothTags({ draft }: { draft: AssetDetailDraft }) {
 
 function AssetDetailBody(props: AssetDetailBodyProps) {
   const { asset, draft } = props;
+  const visibleTags = draft.isEditingAsset
+    ? props.tags.filter((tag) => draft.editedTagIdSet.has(tag.id))
+    : asset.tags;
+  const sensitiveThumbnail = hasSensitiveTags(visibleTags);
 
   return (
     <div className="w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
       <div className="w-full max-w-full min-w-0 space-y-6 overflow-x-hidden px-5 py-5">
-        <AssetDetailThumbnail thumbnailUrl={props.thumbnailUrl} displayName={props.displayName} />
+        <AssetDetailThumbnail
+          thumbnailUrl={props.thumbnailUrl}
+          displayName={props.displayName}
+          sensitive={sensitiveThumbnail}
+        />
         {!asset.file_exists && <MissingFileNotice editing={draft.isEditingAsset} />}
         <AssetNameField asset={asset} />
         <DisplayNameField asset={asset} draft={draft} />

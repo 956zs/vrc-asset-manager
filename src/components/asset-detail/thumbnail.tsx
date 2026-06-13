@@ -6,19 +6,27 @@ import { cn } from "@/lib/utils";
 type AssetDetailThumbnailProps = {
   thumbnailUrl: string;
   displayName: string;
+  sensitive: boolean;
 };
 
 export function AssetDetailThumbnail({
   thumbnailUrl,
   displayName,
+  sensitive,
 }: AssetDetailThumbnailProps) {
   return (
-    <div className="relative h-72 min-w-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
+    <div
+      className="relative h-72 min-w-0 overflow-hidden rounded-lg border border-border/60 bg-muted"
+      data-sensitive-preview={sensitive ? "" : undefined}
+    >
       {thumbnailUrl ? (
         <img
           src={thumbnailUrl}
           alt={displayName}
-          className="h-full w-full object-contain"
+          className={cn(
+            "h-full w-full object-contain",
+            sensitive && "sensitive-thumbnail-media",
+          )}
           onError={(event) => {
             event.currentTarget.style.display = "none";
             event.currentTarget.nextElementSibling?.classList.remove("hidden");

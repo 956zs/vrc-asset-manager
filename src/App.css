@@ -189,6 +189,33 @@ body {
   white-space: nowrap;
 }
 
+[data-sensitive-preview] .sensitive-thumbnail-media {
+  filter: blur(18px);
+  transform: scale(1.05);
+  transition:
+    filter 220ms ease-out,
+    transform 220ms ease-out;
+}
+
+[data-sensitive-preview]:hover .sensitive-thumbnail-media,
+[data-sensitive-preview]:focus-within .sensitive-thumbnail-media,
+[data-command-palette-item][data-active="true"]
+  [data-sensitive-preview]
+  .sensitive-thumbnail-media {
+  filter: blur(0);
+  transform: scale(1);
+}
+
+[data-sensitive-preview] .sensitive-thumbnail-overlay {
+  opacity: 1;
+  transition: opacity 180ms ease-out;
+}
+
+[data-sensitive-preview]:hover .sensitive-thumbnail-overlay,
+[data-sensitive-preview]:focus-within .sensitive-thumbnail-overlay {
+  opacity: 0;
+}
+
 @container (max-width: 22rem) {
   .asset-detail-action-grid {
     grid-template-columns: minmax(0, 1fr) !important;

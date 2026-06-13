@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { hasSensitiveAssetTags } from "@/lib/sensitive-content";
 import { cn } from "@/lib/utils";
 import { type AssetStore, useAssetStore } from "@/stores/asset-store";
 import type { Asset, AssetFilters, Model, Tag as AssetTag } from "@/types";
@@ -198,6 +199,8 @@ const emptyFilters: AssetFilters = {
   category: null,
   modelIds: [],
   tagIds: [],
+  statusFilters: [],
+  sortOrder: "updatedDesc",
 };
 const assetPreviewModelLimit = 2;
 const assetPreviewTagLimit = 3;
@@ -271,6 +274,7 @@ function createAssetItem({
     badge: asset.file_exists ? undefined : "缺失",
     icon: Package,
     thumbnailUrl: asset.thumbnail_url,
+    sensitive: hasSensitiveAssetTags(asset),
     keywords: metadata.keywords,
     onSelect: () => {
       showAssets();
@@ -297,7 +301,14 @@ function createModelItem({
     keywords: [model.name, model.display_name ?? "", "model", "avatar", "模型", "素體"],
     onSelect: () => {
       showAssets();
-      setFilters({ search: "", category: null, modelIds: [model.id], tagIds: [] });
+      setFilters({
+        search: "",
+        category: null,
+        modelIds: [model.id],
+        tagIds: [],
+        statusFilters: [],
+        sortOrder: "updatedDesc",
+      });
     },
   };
 }
@@ -320,7 +331,14 @@ function createTagItem({
     keywords: [tag.name, "tag", "label", "標籤"],
     onSelect: () => {
       showAssets();
-      setFilters({ search: "", category: null, modelIds: [], tagIds: [tag.id] });
+      setFilters({
+        search: "",
+        category: null,
+        modelIds: [],
+        tagIds: [tag.id],
+        statusFilters: [],
+        sortOrder: "updatedDesc",
+      });
     },
   };
 }
@@ -567,7 +585,8 @@ function hasCommandPaletteActiveFilters(filters: AssetFilters) {
     filters.search.trim().length > 0 ||
     filters.category !== null ||
     filters.modelIds.length > 0 ||
-    filters.tagIds.length > 0
+    filters.tagIds.length > 0 ||
+    filters.statusFilters.length > 0
   );
 }
 
@@ -707,7 +726,14 @@ function createSearchActionItem(
     keywords: [cleanedQuery, "search", "find", "搜尋"],
     onSelect: () => {
       showAssets();
-      setFilters({ search: cleanedQuery, category: null, modelIds: [], tagIds: [] });
+      setFilters({
+        search: cleanedQuery,
+        category: null,
+        modelIds: [],
+        tagIds: [],
+        statusFilters: [],
+        sortOrder: "updatedDesc",
+      });
     },
   };
 }
@@ -906,6 +932,11 @@ function CommandPaletteItemIcon({ item }: CommandPaletteItemIconProps) {
 
   return (
     <span
+      data-sensitive-preview={
+        item.kind === "asset" && item.sensitive && item.thumbnailUrl
+          ? ""
+          : undefined
+      }
       className={cn(
         "flex size-10 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-muted-foreground",
         item.kind === "tag" && "border-transparent bg-transparent",
@@ -915,7 +946,10 @@ function CommandPaletteItemIcon({ item }: CommandPaletteItemIconProps) {
         <img
           src={item.thumbnailUrl}
           alt={item.title}
-          className="h-full w-full object-cover"
+          className={cn(
+            "h-full w-full object-cover",
+            item.sensitive && "sensitive-thumbnail-media",
+          )}
         />
       ) : item.kind === "tag" && item.accentColor ? (
         <span

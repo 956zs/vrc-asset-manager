@@ -98,6 +98,32 @@ pub struct AssetFilters {
     pub model_ids: Vec<i64>,
     #[serde(default)]
     pub tag_ids: Vec<i64>,
+    #[serde(default)]
+    pub status_filters: Vec<AssetStatusFilter>,
+    #[serde(default)]
+    pub sort_order: AssetSortOrder,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AssetSortOrder {
+    #[default]
+    UpdatedDesc,
+    CreatedDesc,
+    NameAsc,
+    NameDesc,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AssetStatusFilter {
+    MissingFile,
+    MissingBoothUrl,
+    MissingThumbnail,
+    MissingRelatedLinks,
+    MissingModels,
+    MissingTags,
+    MissingNote,
 }
 
 #[derive(Debug, Deserialize)]

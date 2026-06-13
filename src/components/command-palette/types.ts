@@ -11,6 +11,7 @@ export type CommandPaletteItem = {
   badge?: string;
   icon: LucideIcon;
   thumbnailUrl?: string | null;
+  sensitive?: boolean;
   accentColor?: string;
   keywords: string[];
   onSelect: () => void | Promise<void>;

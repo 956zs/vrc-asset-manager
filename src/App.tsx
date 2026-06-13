@@ -1,6 +1,15 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import "./App.css";
-import { Boxes, Images, Keyboard, MousePointer2, Settings, type LucideIcon } from "lucide-react";
+import {
+  ArrowUpDown,
+  Boxes,
+  Check,
+  Images,
+  Keyboard,
+  MousePointer2,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { AddModelDialog } from "@/components/add-model-dialog";
 import { AddTagDialog } from "@/components/add-tag-dialog";
@@ -18,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
 import { VccProjects } from "@/components/vcc-projects";
 import { useAssetStore } from "@/stores/asset-store";
+import type { AssetSortOrder } from "@/types";
 
 type MainView = "assets" | "vcc";
 
@@ -153,11 +163,11 @@ function DesktopOnlyScreen() {
 
 function ViewTitle({ mainView }: { mainView: MainView }) {
   return (
-    <div>
-      <h2 className="text-lg font-semibold text-foreground">
+    <div className="min-w-0">
+      <h2 className="truncate text-lg font-semibold text-foreground">
         {mainView === "assets" ? "素材庫" : "VCC 專案"}
       </h2>
-      <p className="text-xs text-muted-foreground">
+      <p className="truncate text-xs text-muted-foreground">
         {mainView === "assets" ? "管理你的 VRChat 素材" : "VPM 套件快照"}
       </p>
     </div>
@@ -199,11 +209,93 @@ function MainViewButton({
   );
 }
 
+const assetSortOptions: { value: AssetSortOrder; label: string }[] = [
+  { value: "updatedDesc", label: "最近更新" },
+  { value: "createdDesc", label: "最近新增" },
+  { value: "nameAsc", label: "名稱 A-Z" },
+  { value: "nameDesc", label: "名稱 Z-A" },
+];
+
+function AssetSortControl() {
+  const sortOrder = useAssetStore((state) => state.filters.sortOrder);
+  const setAssetSortOrder = useAssetStore((state) => state.setAssetSortOrder);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const activeOption =
+    assetSortOptions.find((option) => option.value === sortOrder) ??
+    assetSortOptions[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !rootRef.current?.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="max-w-36 justify-start gap-2 px-2"
+        title="素材排序"
+        aria-label="素材排序"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <ArrowUpDown className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 truncate text-xs">{activeOption.label}</span>
+      </Button>
+      {open && (
+        <div className="absolute top-full right-0 z-50 mt-1 w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg">
+          {assetSortOptions.map((option) => {
+            const selected = option.value === sortOrder;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                onClick={() => {
+                  setAssetSortOrder(option.value);
+                  setOpen(false);
+                }}
+              >
+                <Check
+                  className={selected ? "h-4 w-4" : "h-4 w-4 opacity-0"}
+                />
+                <span className="min-w-0 truncate">{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AppHeader({ controller }: { controller: AppController }) {
   return (
-    <header className="flex h-14 min-w-0 shrink-0 items-center justify-between gap-3 overflow-hidden border-b border-border px-4">
+    <header className="relative z-20 flex h-14 min-w-0 shrink-0 items-center justify-between gap-3 overflow-visible border-b border-border px-4">
       <ViewTitle mainView={controller.mainView} />
       <div className="flex min-w-0 shrink-0 items-center gap-2">
+        {controller.mainView === "assets" && <AssetSortControl />}
         <HeaderIconButton
           icon={Keyboard}
           label="快捷鍵"

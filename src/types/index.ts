@@ -25,6 +25,19 @@ export type ImportOperation = "move" | "copy";
 export type ArchiveStrategy = "keepArchive" | "extract";
 export type ConflictStrategy = "cancel" | "rename" | "overwrite";
 export type ImportSourceKind = "folder" | "zip" | "unityPackage" | "unsupported";
+export type AssetStatusFilter =
+  | "missingFile"
+  | "missingBoothUrl"
+  | "missingThumbnail"
+  | "missingRelatedLinks"
+  | "missingModels"
+  | "missingTags"
+  | "missingNote";
+export type AssetSortOrder =
+  | "updatedDesc"
+  | "createdDesc"
+  | "nameAsc"
+  | "nameDesc";
 
 export interface LibrarySettings {
   rootPath: string | null;
@@ -151,6 +164,8 @@ export interface AssetFilters {
   category: AssetCategory | null;
   modelIds: number[];
   tagIds: number[];
+  statusFilters: AssetStatusFilter[];
+  sortOrder: AssetSortOrder;
 }
 
 export interface CreateAssetInput {

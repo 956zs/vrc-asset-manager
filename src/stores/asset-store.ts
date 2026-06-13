@@ -6,6 +6,8 @@ import type {
   AssetCategory,
   ArchiveStrategy,
   AssetFilters,
+  AssetSortOrder,
+  AssetStatusFilter,
   CreateAssetInput,
   ImportSourceInfo,
   ImportTargetPreview,
@@ -113,6 +115,8 @@ export type AssetStore = {
   managedImportBatch: (items: ManagedImportItemInput[]) => Promise<ManagedImportBatchReport>;
   setSearchFilter: (search: string) => void;
   setCategoryFilter: (category: AssetCategory | null) => void;
+  setAssetSortOrder: (sortOrder: AssetSortOrder) => void;
+  toggleStatusFilter: (status: AssetStatusFilter) => void;
   setFilters: (filters: AssetFilters) => void;
   toggleModelFilter: (modelId: number) => void;
   toggleTagFilter: (tagId: number) => void;
@@ -171,6 +175,8 @@ const defaultFilters: AssetFilters = {
   category: null,
   modelIds: [],
   tagIds: [],
+  statusFilters: [],
+  sortOrder: "updatedDesc",
 };
 
 const initialAssetStoreState: AssetStoreStateFields = {
@@ -251,6 +257,8 @@ const cleanFilters = (filters: AssetFilters) => ({
   category: filters.category ?? undefined,
   modelIds: filters.modelIds,
   tagIds: filters.tagIds,
+  statusFilters: filters.statusFilters,
+  sortOrder: filters.sortOrder,
 });
 
 const loadBackendAssets = async (filters: AssetFilters) => {
@@ -436,8 +444,23 @@ const createFilterActions = (set: AssetStoreSet, get: AssetStoreGet) => ({
     set((state) => ({ filters: { ...state.filters, category } }));
     void get().loadAssets();
   },
+  setAssetSortOrder: (sortOrder: AssetSortOrder) => {
+    set((state) => ({ filters: { ...state.filters, sortOrder } }));
+    void get().loadAssets();
+  },
+  toggleStatusFilter: (status: AssetStatusFilter) => {
+    set((state) => ({
+      filters: {
+        ...state.filters,
+        statusFilters: state.filters.statusFilters.includes(status)
+          ? state.filters.statusFilters.filter((item) => item !== status)
+          : [...state.filters.statusFilters, status],
+      },
+    }));
+    void get().loadAssets();
+  },
   setFilters: (filters: AssetFilters) => {
-    set({ filters: { ...filters } });
+    set({ filters: { ...defaultFilters, ...filters } });
     void get().loadAssets();
   },
   toggleModelFilter: (modelId: number) => {

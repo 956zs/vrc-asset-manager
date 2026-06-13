@@ -1,8 +1,8 @@
 use crate::{
     db::DbState,
     types::{
-        Asset, AssetCategory, AssetFilters, AssetLink, AssetLinkInput, CreateAssetInput, Model,
-        Tag, UpdateAssetInput,
+        Asset, AssetCategory, AssetFilters, AssetLink, AssetLinkInput, AssetSortOrder,
+        AssetStatusFilter, CreateAssetInput, Model, Tag, UpdateAssetInput,
     },
 };
 use rusqlite::{params, params_from_iter, types::Value, Connection, Row, Transaction};
@@ -119,7 +119,8 @@ impl AssetListQuery {
             column: "tag_id",
             ids: &filters.tag_ids,
         });
-        query.sql.push_str(" ORDER BY a.updated_at DESC, a.id DESC");
+        query.push_status_filters(&filters.status_filters);
+        query.push_sort_order(filters.sort_order);
         query
     }
 
@@ -180,6 +181,53 @@ impl AssetListQuery {
         self.values
             .extend(filter.ids.iter().map(|id| Value::Integer(*id)));
         self.values.push(Value::Integer(filter.ids.len() as i64));
+    }
+
+    fn push_status_filters(&mut self, filters: &[AssetStatusFilter]) {
+        for filter in filters {
+            match filter {
+                AssetStatusFilter::MissingFile => {}
+                AssetStatusFilter::MissingBoothUrl => self
+                    .sql
+                    .push_str(" AND (a.booth_url IS NULL OR TRIM(a.booth_url) = '')"),
+                AssetStatusFilter::MissingThumbnail => self
+                    .sql
+                    .push_str(" AND (a.thumbnail_url IS NULL OR TRIM(a.thumbnail_url) = '')"),
+                AssetStatusFilter::MissingRelatedLinks => self.sql.push_str(
+                    " AND NOT EXISTS (
+                        SELECT 1 FROM asset_links al WHERE al.asset_id = a.id
+                    )",
+                ),
+                AssetStatusFilter::MissingModels => self.sql.push_str(
+                    " AND NOT EXISTS (
+                        SELECT 1 FROM asset_models am WHERE am.asset_id = a.id
+                    )",
+                ),
+                AssetStatusFilter::MissingTags => self.sql.push_str(
+                    " AND NOT EXISTS (
+                        SELECT 1 FROM asset_tags at WHERE at.asset_id = a.id
+                    )",
+                ),
+                AssetStatusFilter::MissingNote => self
+                    .sql
+                    .push_str(" AND (a.note IS NULL OR TRIM(a.note) = '')"),
+            }
+        }
+    }
+
+    fn push_sort_order(&mut self, sort_order: AssetSortOrder) {
+        let order_by = match sort_order {
+            AssetSortOrder::UpdatedDesc => " ORDER BY a.updated_at DESC, a.id DESC",
+            AssetSortOrder::CreatedDesc => " ORDER BY a.created_at DESC, a.id DESC",
+            AssetSortOrder::NameAsc => {
+                " ORDER BY LOWER(COALESCE(NULLIF(TRIM(a.display_name), ''), a.name)) COLLATE NOCASE ASC, a.id ASC"
+            }
+            AssetSortOrder::NameDesc => {
+                " ORDER BY LOWER(COALESCE(NULLIF(TRIM(a.display_name), ''), a.name)) COLLATE NOCASE DESC, a.id DESC"
+            }
+        };
+
+        self.sql.push_str(order_by);
     }
 }
 
@@ -1191,7 +1239,14 @@ pub fn get_assets(filters: AssetFilters, db: State<'_, DbState>) -> CommandResul
     let conn = connection(&db)?;
     let (sql, values) = AssetListQuery::new(&filters).into_parts();
     let bases = list_asset_bases(&conn, &sql, &values)?;
-    hydrate_assets(&conn, bases).map_err(db_error)
+    let mut assets = hydrate_assets(&conn, bases).map_err(db_error)?;
+    if filters
+        .status_filters
+        .contains(&AssetStatusFilter::MissingFile)
+    {
+        assets.retain(|asset| !asset.file_exists);
+    }
+    Ok(assets)
 }
 
 #[tauri::command]

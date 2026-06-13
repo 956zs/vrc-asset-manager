@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { hasSensitiveAssetTags } from "@/lib/sensitive-content";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Asset } from "@/types";
@@ -55,9 +56,13 @@ function AssetThumbnail({
   displayName: string;
 }) {
   const thumbnailIsSvg = isSvgThumbnail(asset.thumbnail_url);
+  const sensitive = hasSensitiveAssetTags(asset);
 
   return (
-    <div className="relative aspect-[4/3] overflow-hidden border-b border-border/60 bg-muted/70">
+    <div
+      className="relative aspect-[4/3] overflow-hidden border-b border-border/60 bg-muted/70"
+      data-sensitive-preview={sensitive ? "" : undefined}
+    >
       {asset.thumbnail_url ? (
         <img
           src={asset.thumbnail_url}
@@ -65,6 +70,7 @@ function AssetThumbnail({
           className={cn(
             "h-full w-full bg-muted",
             thumbnailIsSvg ? "object-contain p-3" : "object-cover",
+            sensitive && "sensitive-thumbnail-media",
           )}
           onError={(event) => {
             event.currentTarget.style.display = "none";

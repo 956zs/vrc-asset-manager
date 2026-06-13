@@ -16,6 +16,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import {
   Download,
   GripVertical,
+  ListFilter,
   Package,
   Plus,
   Search,
@@ -46,7 +47,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
 import { cn } from "@/lib/utils";
 import { type AssetStore, useAssetStore } from "@/stores/asset-store";
-import type { AssetCategory, AssetFilters, Model, Tag as AssetTag } from "@/types";
+import type {
+  AssetCategory,
+  AssetFilters,
+  AssetStatusFilter,
+  Model,
+  Tag as AssetTag,
+} from "@/types";
 
 type DeleteTarget =
   | {
@@ -184,7 +191,9 @@ type SidebarFilterRowsProps<TItem extends SidebarFilterItem> = Pick<
 
 type SidebarSearchProps = {
   search: string;
+  statusFilters: readonly AssetStatusFilter[];
   onSearchChange: (value: string) => void;
+  onStatusToggle: (status: AssetStatusFilter) => void;
 };
 
 type ActiveFilterSummaryProps = {
@@ -317,10 +326,12 @@ type SidebarSectionState = {
 type SidebarFilterState = {
   selectedModelCount: number;
   selectedTagCount: number;
+  selectedStatusCount: number;
   hasActiveFilters: boolean;
   filteredCount: number;
   selectedModelIds: ReadonlySet<number>;
   selectedTagIds: ReadonlySet<number>;
+  selectedStatusFilters: ReadonlySet<AssetStatusFilter>;
 };
 
 type SidebarShellProps = {
@@ -346,15 +357,17 @@ type SidebarOverlayLayerProps = {
 type SidebarLayoutProps = Omit<SidebarShellProps, "children"> &
   SidebarOverlayLayerProps & {
     search: string;
-    filterState: SidebarFilterState;
+  filterState: SidebarFilterState;
   modelFilter: ModelFilterSectionProps;
   tagFilter: TagFilterSectionProps;
   category: AssetCategory | null;
+  statusFilters: readonly AssetStatusFilter[];
   saving: boolean;
     appVersion: string | null;
     onSearchChange: (value: string) => void;
     onClearFilters: () => void;
     onCategoryChange: (category: AssetCategory | null) => void;
+    onStatusToggle: (status: AssetStatusFilter) => void;
     onAddAsset: () => void;
     onExport: () => void;
     onImport: () => void;
@@ -558,6 +571,7 @@ function useSidebarFilterState(
 ): SidebarFilterState {
   const selectedModelCount = filters.modelIds.length;
   const selectedTagCount = filters.tagIds.length;
+  const selectedStatusCount = filters.statusFilters.length;
   const selectedModelIds = useMemo(
     () => new Set(filters.modelIds),
     [filters.modelIds],
@@ -566,17 +580,27 @@ function useSidebarFilterState(
     () => new Set(filters.tagIds),
     [filters.tagIds],
   );
+  const selectedStatusFilters = useMemo(
+    () => new Set(filters.statusFilters),
+    [filters.statusFilters],
+  );
   const hasActiveFilters = Boolean(
-    filters.search || filters.category || selectedModelCount > 0 || selectedTagCount > 0,
+    filters.search ||
+      filters.category ||
+      selectedModelCount > 0 ||
+      selectedTagCount > 0 ||
+      selectedStatusCount > 0,
   );
 
   return {
     selectedModelCount,
     selectedTagCount,
+    selectedStatusCount,
     hasActiveFilters,
     filteredCount: hasActiveFilters ? assetCount : 0,
     selectedModelIds,
     selectedTagIds,
+    selectedStatusFilters,
   };
 }
 
@@ -1258,20 +1282,101 @@ function SidebarHeader() {
   );
 }
 
-function SidebarSearch({ search, onSearchChange }: SidebarSearchProps) {
+function SidebarSearch({
+  search,
+  statusFilters,
+  onSearchChange,
+  onStatusToggle,
+}: SidebarSearchProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selectedStatusFilters = useMemo(
+    () => new Set(statusFilters),
+    [statusFilters],
+  );
+
+  useEffect(() => {
+    if (!advancedOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !containerRef.current?.contains(event.target)
+      ) {
+        setAdvancedOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAdvancedOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [advancedOpen]);
+
   return (
-    <div className="p-3">
-      <div className="relative">
-        <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          type="search"
-          data-shortcut="asset-search"
-          placeholder="搜尋素材..."
-          className="border-sidebar-border bg-sidebar-accent pl-8 text-sidebar-foreground placeholder:text-muted-foreground"
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
+    <div ref={containerRef} className="relative p-3">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            data-shortcut="asset-search"
+            placeholder="搜尋素材..."
+            className="border-sidebar-border bg-sidebar-accent pl-8 text-sidebar-foreground placeholder:text-muted-foreground"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={cn(
+            "relative border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent/80",
+            advancedOpen && "ring-2 ring-ring/35",
+          )}
+          title="進階篩選"
+          aria-label="進階篩選"
+          aria-expanded={advancedOpen}
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          <ListFilter className="h-4 w-4" />
+          {statusFilters.length > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none text-primary-foreground">
+              {statusFilters.length}
+            </span>
+          )}
+        </Button>
       </div>
+      {advancedOpen && (
+        <div className="absolute top-full right-3 left-3 z-30 mt-1 rounded-md border border-sidebar-border bg-sidebar p-3 shadow-lg">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-sidebar-foreground">
+              <ListFilter className="h-4 w-4 shrink-0" />
+              <span className="truncate">進階篩選</span>
+            </div>
+            {statusFilters.length > 0 && (
+              <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] text-muted-foreground">
+                {statusFilters.length} 項
+              </span>
+            )}
+          </div>
+          <StatusFilterSection
+            selected={selectedStatusFilters}
+            onToggle={onStatusToggle}
+            showHeading={false}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1312,6 +1417,16 @@ const categoryRows: { value: AssetCategory | null; label: string }[] = [
   { value: "world", label: "世界" },
 ];
 
+const statusRows: { value: AssetStatusFilter; label: string }[] = [
+  { value: "missingRelatedLinks", label: "缺少相關連結" },
+  { value: "missingBoothUrl", label: "缺少 BOOTH 連結" },
+  { value: "missingThumbnail", label: "缺少縮圖" },
+  { value: "missingModels", label: "缺少相容模型" },
+  { value: "missingTags", label: "缺少標籤" },
+  { value: "missingNote", label: "缺少備註" },
+  { value: "missingFile", label: "檔案遺失" },
+];
+
 function CategoryFilterSection({
   selected,
   onChange,
@@ -1340,6 +1455,55 @@ function CategoryFilterSection({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function StatusFilterSection({
+  selected,
+  onToggle,
+  showHeading = true,
+}: {
+  selected: ReadonlySet<AssetStatusFilter>;
+  onToggle: (status: AssetStatusFilter) => void;
+  showHeading?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {showHeading && (
+        <div className="flex items-center gap-2 px-1 text-xs font-semibold text-muted-foreground">
+          <ListFilter className="h-4 w-4" />
+          資料狀態
+          {selected.size > 0 && (
+            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] text-sidebar-foreground">
+              {selected.size}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="space-y-1">
+        {statusRows.map((row) => {
+          const active = selected.has(row.value);
+          return (
+            <button
+              key={row.value}
+              type="button"
+              className={cn(
+                "flex h-8 w-full items-center rounded-md px-3 text-left text-sm transition-colors hover:bg-sidebar-accent",
+                active && "bg-sidebar-accent font-medium text-sidebar-foreground",
+              )}
+              onClick={() => onToggle(row.value)}
+            >
+              {row.label}
+            </button>
+          );
+        })}
+      </div>
+      {selected.size > 1 && (
+        <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
+          多個狀態會同時符合才顯示。
+        </p>
+      )}
     </div>
   );
 }
@@ -1582,14 +1746,21 @@ function SidebarShell({ sidebarRef, sidebarWidth, children }: SidebarShellProps)
 
 function SidebarTop(props: Pick<
   SidebarLayoutProps,
-  "search" | "filterState" | "onSearchChange" | "onClearFilters"
+  | "search"
+  | "statusFilters"
+  | "filterState"
+  | "onSearchChange"
+  | "onStatusToggle"
+  | "onClearFilters"
 >) {
   return (
     <>
       <SidebarHeader />
       <SidebarSearch
         search={props.search}
+        statusFilters={props.statusFilters}
         onSearchChange={props.onSearchChange}
+        onStatusToggle={props.onStatusToggle}
       />
       {props.filterState.hasActiveFilters && (
         <ActiveFilterSummary
@@ -1635,8 +1806,10 @@ function SidebarLayout(props: SidebarLayoutProps) {
     >
       <SidebarTop
         search={props.search}
+        statusFilters={props.statusFilters}
         filterState={props.filterState}
         onSearchChange={props.onSearchChange}
+        onStatusToggle={props.onStatusToggle}
         onClearFilters={props.onClearFilters}
       />
       <SidebarFilterPanel
@@ -1683,6 +1856,7 @@ function useSidebarController(): SidebarLayoutProps {
     modelFilter,
     tagFilter,
     category: store.filters.category,
+    statusFilters: store.filters.statusFilters,
     saving: store.saving,
     appVersion,
     dragPreviewPosition: drag.dragPreviewPosition,
@@ -1693,6 +1867,7 @@ function useSidebarController(): SidebarLayoutProps {
     onSearchChange: store.setSearchFilter,
     onClearFilters: store.clearFilters,
     onCategoryChange: store.setCategoryFilter,
+    onStatusToggle: store.toggleStatusFilter,
     onAddAsset: () => store.setAddAssetDialogOpen(true),
     onExport: () => void dialogs.handleExportSave(),
     onImport: () => void dialogs.handleSelectImportSave(),
