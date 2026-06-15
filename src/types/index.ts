@@ -114,6 +114,7 @@ export interface ManagedImportItemResult {
   asset: Asset | null;
   finalPath: string | null;
   operation: string;
+  failureStage: "preflight" | "fileOperation" | "dbRecord" | null;
   message: string;
 }
 

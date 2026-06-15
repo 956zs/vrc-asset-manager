@@ -431,6 +431,14 @@ pub struct ManagedImportBatchInput {
     pub items: Vec<ManagedImportItemInput>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ImportFailureStage {
+    Preflight,
+    FileOperation,
+    DbRecord,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManagedImportItemResult {
@@ -439,6 +447,7 @@ pub struct ManagedImportItemResult {
     pub asset: Option<Asset>,
     pub final_path: Option<String>,
     pub operation: String,
+    pub failure_stage: Option<ImportFailureStage>,
     pub message: String,
 }
 
@@ -1039,6 +1048,32 @@ fn source_kind(path: &Path) -> ImportSourceKind {
     }
 }
 
+fn looks_like_url(value: &str) -> bool {
+    let trimmed = value.trim();
+    reqwest::Url::parse(trimmed)
+        .ok()
+        .and_then(|url| url.scheme().starts_with("http").then_some(()))
+        .is_some()
+}
+
+fn unsupported_source_message(path: &Path) -> String {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase());
+
+    match extension.as_deref() {
+        Some("7z") | Some("rar") => {
+            ".7z / .rar 是未來預定支援的格式；目前第一版只支援資料夾、.zip、.unitypackage"
+                .to_string()
+        }
+        Some(_) if path.is_file() => {
+            "第一版不接受一般單檔作為素材；請拖入資料夾、.zip 或 .unitypackage".to_string()
+        }
+        _ => "第一版只支援資料夾、.zip、.unitypackage".to_string(),
+    }
+}
+
 fn import_source_info_for(path: &Path) -> ImportSourceInfo {
     let kind = source_kind(path);
     let source_path = path.to_string_lossy().to_string();
@@ -1049,11 +1084,11 @@ fn import_source_info_for(path: &Path) -> ImportSourceInfo {
         .unwrap_or(&source_path)
         .to_string();
     let supported = kind != ImportSourceKind::Unsupported;
-    let message = if path.exists() {
+    let message = if looks_like_url(&source_path) {
+        Some("拖曳的 URL 不會當作素材；請拖入資料夾、.zip 或 .unitypackage 檔案".to_string())
+    } else if path.exists() {
         match kind {
-            ImportSourceKind::Unsupported => {
-                Some("第一版只支援資料夾、.zip、.unitypackage".to_string())
-            }
+            ImportSourceKind::Unsupported => Some(unsupported_source_message(path)),
             _ => None,
         }
     } else {
@@ -1316,6 +1351,22 @@ fn import_zip_extract(
         fs::remove_file(source).map_err(db_error)?;
     }
     Ok(())
+}
+
+fn managed_import_operation_label(
+    kind: &ImportSourceKind,
+    archive_strategy: ArchiveStrategy,
+    operation: ImportOperation,
+) -> String {
+    if *kind == ImportSourceKind::Zip && archive_strategy == ArchiveStrategy::Extract {
+        return "extract".to_string();
+    }
+
+    match operation {
+        ImportOperation::Move => "move",
+        ImportOperation::Copy => "copy",
+    }
+    .to_string()
 }
 
 fn insert_asset_record(conn: &mut Connection, input: CreateAssetInput) -> CommandResult<Asset> {
@@ -1718,37 +1769,41 @@ fn managed_import_item(
 ) -> ManagedImportItemResult {
     let source = PathBuf::from(item.source_path.trim());
     let source_path = source.to_string_lossy().to_string();
-    let operation_label = match item.operation {
+    let mut operation_label = match item.operation {
         ImportOperation::Move => "move",
         ImportOperation::Copy => "copy",
     }
     .to_string();
 
-    let run = || -> Result<(Asset, String), (String, Option<String>)> {
+    let run = || -> Result<(Asset, String), (String, Option<String>, ImportFailureStage)> {
         let info = import_source_info_for(&source);
         if !info.supported {
             return Err((
                 info.message
                     .unwrap_or_else(|| "不支援的導入來源".to_string()),
                 None,
+                ImportFailureStage::Preflight,
             ));
         }
 
-        let root = require_library_root(settings).map_err(|message| (message, None))?;
-        ensure_category_folders(&root, settings).map_err(|message| (message, None))?;
+        let root = require_library_root(settings)
+            .map_err(|message| (message, None, ImportFailureStage::Preflight))?;
+        ensure_category_folders(&root, settings)
+            .map_err(|message| (message, None, ImportFailureStage::Preflight))?;
         let strategy = archive_strategy_for(&info.kind, item.archive_strategy);
+        operation_label = managed_import_operation_label(&info.kind, strategy, item.operation);
         let base_target = base_target_path(settings, &source, item.category, strategy)
-            .map_err(|message| (message, None))?;
+            .map_err(|message| (message, None, ImportFailureStage::Preflight))?;
         let conflict_strategy = item.conflict_strategy.unwrap_or(ConflictStrategy::Cancel);
         let final_target = prepare_target_path(&base_target, conflict_strategy)
-            .map_err(|message| (message, None))?;
+            .map_err(|message| (message, None, ImportFailureStage::Preflight))?;
 
         if info.kind == ImportSourceKind::Zip && strategy == ArchiveStrategy::Extract {
             import_zip_extract(&source, &final_target, item.operation)
-                .map_err(|message| (message, None))?;
+                .map_err(|message| (message, None, ImportFailureStage::FileOperation))?;
         } else {
             move_or_copy_path(&source, &final_target, item.operation)
-                .map_err(|message| (message, None))?;
+                .map_err(|message| (message, None, ImportFailureStage::FileOperation))?;
         }
 
         let final_path = final_target.to_string_lossy().to_string();
@@ -1772,6 +1827,7 @@ fn managed_import_item(
             (
                 format!("檔案已處理，但資料庫記錄建立失敗：{message}"),
                 Some(final_path.clone()),
+                ImportFailureStage::DbRecord,
             )
         })?;
         Ok((asset, final_path))
@@ -1784,14 +1840,16 @@ fn managed_import_item(
             asset: Some(asset),
             final_path: Some(final_path),
             operation: operation_label,
+            failure_stage: None,
             message: "導入完成".to_string(),
         },
-        Err((message, final_path)) => ManagedImportItemResult {
+        Err((message, final_path, failure_stage)) => ManagedImportItemResult {
             source_path,
             success: false,
             asset: None,
             final_path,
             operation: operation_label,
+            failure_stage: Some(failure_stage),
             message,
         },
     }
@@ -1972,32 +2030,5 @@ pub fn open_file_location(path: String) -> CommandResult<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::merge_booth_shop_field;
-
-    #[test]
-    fn booth_shop_backfill_treats_blank_existing_fields_as_missing() {
-        assert_eq!(
-            merge_booth_shop_field(Some(String::new()), Some("ねこまる商店".to_string())),
-            Some("ねこまる商店".to_string()),
-        );
-        assert_eq!(
-            merge_booth_shop_field(
-                Some("   ".to_string()),
-                Some("https://nekomaru.booth.pm".to_string())
-            ),
-            Some("https://nekomaru.booth.pm".to_string()),
-        );
-    }
-
-    #[test]
-    fn booth_shop_backfill_keeps_existing_non_blank_fields() {
-        assert_eq!(
-            merge_booth_shop_field(
-                Some("Existing Shop".to_string()),
-                Some("Fetched Shop".to_string())
-            ),
-            Some("Existing Shop".to_string()),
-        );
-    }
-}
+#[path = "assets_tests.rs"]
+mod tests;

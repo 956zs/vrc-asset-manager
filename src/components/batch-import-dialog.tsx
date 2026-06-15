@@ -401,8 +401,23 @@ function resultOperationLabel(operation: string) {
       return "移動";
     case "copy":
       return "複製";
+    case "extract":
+      return "解壓";
     default:
       return operation || "未記錄";
+  }
+}
+
+function resultFailureStageLabel(stage: string | null) {
+  switch (stage) {
+    case "preflight":
+      return "預檢失敗";
+    case "fileOperation":
+      return "檔案處理失敗";
+    case "dbRecord":
+      return "DB 記錄失敗";
+    default:
+      return null;
   }
 }
 
@@ -928,12 +943,16 @@ function BatchImportReport({
       </DialogHeader>
       <div className="space-y-2">
         {report.results.map((result) => {
-          const partialFailure = !result.success && Boolean(result.finalPath);
+          const partialFailure =
+            !result.success &&
+            result.failureStage === "dbRecord" &&
+            Boolean(result.finalPath);
           const StatusIcon = result.success
             ? CheckCircle2
             : partialFailure
               ? AlertTriangle
               : XCircle;
+          const failureStageLabel = resultFailureStageLabel(result.failureStage);
 
           return (
             <StateSurface
@@ -975,6 +994,11 @@ function BatchImportReport({
                     <ToneBadge>
                       {resultOperationLabel(result.operation)}
                     </ToneBadge>
+                    {failureStageLabel && (
+                      <ToneBadge tone={partialFailure ? "warning" : "danger"}>
+                        {failureStageLabel}
+                      </ToneBadge>
+                    )}
                   </div>
                   <p
                     className={cn(
@@ -988,6 +1012,11 @@ function BatchImportReport({
                   >
                     {result.message}
                   </p>
+                  {partialFailure && (
+                    <p className="mt-1 text-xs text-amber-200">
+                      檔案已經移入素材庫位置，但沒有建立素材資料。可先開啟目標位置手動確認檔案，再重新建立素材記錄。
+                    </p>
+                  )}
                 </div>
                 {result.finalPath && (
                   <IconButton
@@ -1015,6 +1044,14 @@ function BatchImportReport({
                     <p className="font-medium text-muted-foreground">最終路徑</p>
                     <p className="mt-0.5 break-all text-foreground/85">
                       {result.finalPath}
+                    </p>
+                  </div>
+                )}
+                {failureStageLabel && (
+                  <div>
+                    <p className="font-medium text-muted-foreground">失敗階段</p>
+                    <p className="mt-0.5 text-foreground/85">
+                      {failureStageLabel}
                     </p>
                   </div>
                 )}
