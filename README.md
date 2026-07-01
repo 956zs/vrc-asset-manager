@@ -102,7 +102,7 @@ VRC Asset Manager 是一個 Windows 桌面應用程式，用來整理 VRChat 創
 | 快速鍵 | 使用 `Ctrl+K` 開啟 Command Palette，快速搜尋與執行常用動作。 |
 | VCC 專案 | 追蹤 VCC / Unity 專案，掃描 package manifest 與 repository catalog。 |
 | 存檔備份 | 匯出 / 匯入素材、模型、標籤、連結、VCC 專案與 VCC 相關 metadata。 |
-| 更新準備 | 已接上 Tauri updater 與 GitHub Releases 簽章更新流程。 |
+| App 內更新 | 已接上 Tauri updater、GitHub Releases 簽章更新流程與安裝後重啟。 |
 
 ## <a id="quick-start"></a>快速開始
 
@@ -112,20 +112,6 @@ VRC Asset Manager 是一個 Windows 桌面應用程式，用來整理 VRChat 創
 - Node.js 與 npm
 - Rust toolchain
 - Tauri v2 的 Windows 建置環境
-
-### Clone
-
-此專案把 UI 參考 repo 掛在 `references/v0-vrc-asset-manager` submodule。第一次 clone 請一併抓取 submodule：
-
-```bash
-git clone --recurse-submodules https://github.com/956zs/vrc-asset-manager.git
-```
-
-如果已經用一般 `git clone` 下載專案，請在 repo 內初始化 submodule：
-
-```bash
-git submodule update --init --recursive
-```
 
 ### 開發模式
 
@@ -196,8 +182,6 @@ VRC Asset Manager 採用 local-first 設計。
 ## <a id="ui-reference"></a>UI 參考
 
 前端 UI 以 [v0-vrc-asset-manager](https://github.com/956zs/v0-vrc-asset-manager) 作為設計參考，並依照本專案的 Tauri、SQLite 與本機素材管理流程重新實作。
-
-參考 repo 已掛在 [`references/v0-vrc-asset-manager`](references/v0-vrc-asset-manager) submodule，GitHub 會在檔案列表中顯示對應的外部 repo 連結。
 
 ## 技術架構
 

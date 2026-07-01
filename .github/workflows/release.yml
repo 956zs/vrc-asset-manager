@@ -74,3 +74,7 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: "--bundles nsis"
+
+      - name: Check updater artifacts
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/check-release-version.ps1 -Tag "$env:RELEASE_TAG" -Artifacts

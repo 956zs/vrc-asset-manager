@@ -13,16 +13,16 @@ Done:
 - `tauri add updater` has added updater dependencies and permissions.
 - `src-tauri/tauri.conf.json` has the updater public key and GitHub Releases
   endpoint configured.
+- The settings UI can call `check()`, download with progress through
+  `downloadAndInstall(...)`, mark an update as installed, and relaunch the app
+  with Tauri's process plugin.
 - `.github/workflows/release.yml` builds a draft GitHub Release.
 - `.gitignore` blocks `.env`, signing keys, SQLite databases, build output, and
   release artifacts.
 - `src-tauri/tauri.conf.updater.example.json` shows the updater config shape.
 - GitHub repository secrets are configured for updater signing.
-
-Not done yet:
-
-- In-app update UI/checks should wait until releases are public. Do not embed a
-  GitHub token in the app.
+- `scripts/check-release-version.ps1 -Artifacts` validates the installer,
+  `.sig`, and `latest.json` before local release assets are uploaded.
 
 ## Next Steps
 
@@ -64,6 +64,26 @@ https://github.com/956zs/vrc-asset-manager/releases/latest/download/latest.json
 signature using the public key embedded in `tauri.conf.json`. GitHub Actions
 signs release artifacts using the private key stored in GitHub Secrets.
 
+For the current Windows release, the GitHub Release must include these assets:
+
+- `VRC Asset Manager_<version>_x64-setup.exe`
+- `VRC Asset Manager_<version>_x64-setup.exe.sig`
+- `latest.json`
+
+GitHub displays these uploaded assets with dots instead of spaces, for example
+`VRC.Asset.Manager_0.2.0-beta.4_x64-setup.exe`. `latest.json` must use the
+actual release asset URL.
+
+The static Tauri updater JSON must include:
+
+- `version`: the released semver without the leading `v`
+- `notes`: release notes shown in the app when an update is available
+- `pub_date`: UTC publish timestamp
+- `platforms.windows-x86_64.url`: the GitHub Release download URL for the
+  installer
+- `platforms.windows-x86_64.signature`: the exact text content of the matching
+  `.sig` file
+
 The private key must never be committed. Keep an offline backup; losing it means
 installed apps cannot trust future updater builds from a new key without a
 migration plan.
@@ -76,6 +96,20 @@ migration plan.
 
 Keep beta and RC builds as GitHub prereleases. Normal users should only receive
 stable releases through GitHub's latest release endpoint.
+
+Important channel behavior:
+
+- `https://github.com/956zs/vrc-asset-manager/releases/latest/download/latest.json`
+  follows GitHub's latest non-draft, non-prerelease release. It is the stable
+  channel.
+- Draft releases are never visible to the in-app updater.
+- Prerelease beta / RC tags are not served by the stable latest endpoint, so
+  installed beta apps using the current config will only auto-update once a
+  newer stable release is published.
+- If beta users should receive beta-to-beta in-app updates, ship beta builds
+  with a separate endpoint such as a GitHub Pages/raw `latest-beta.json` or a
+  maintained beta-channel release asset. Do not rely on `/releases/latest` for
+  beta updates.
 
 ## Local Draft Release
 
@@ -139,3 +173,37 @@ If a draft release already exists and you want to replace its assets:
 ```powershell
 npm run release:local -- -Tag v0.2.0-beta.4 -Clobber
 ```
+
+## Artifact Validation
+
+After a local build has produced NSIS updater artifacts, run:
+
+```powershell
+npm run release:check -- -Tag v0.2.0-beta.4 -Artifacts
+```
+
+The checker fails when:
+
+- the NSIS setup executable is missing or empty
+- the matching `.sig` is missing or empty
+- `latest.json` is missing `platforms.windows-x86_64`
+- the `latest.json` version does not match the tag
+- the `latest.json` signature differs from the `.sig` file content
+- the `latest.json` URL does not point at the expected GitHub Release asset
+
+`release:local` runs this check automatically before uploading assets.
+
+## Old-Version Update Test
+
+Use this before publishing a stable release:
+
+1. Install the previous public version, for example `v0.2.0-beta.3`.
+2. Confirm the app's settings screen shows the old version.
+3. Publish or temporarily expose the new release metadata endpoint.
+4. In the app, open Settings -> Updates and click check update.
+5. Confirm the app shows the new version and release notes from `latest.json`.
+6. Click download/install and confirm progress advances.
+7. When the installed state appears, click `立即重啟`.
+8. After restart, confirm the app version changed and existing local data still
+   loads.
+9. Confirm checking again reports the app is current.

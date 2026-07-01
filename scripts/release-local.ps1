@@ -49,6 +49,17 @@ function Read-Json($Path) {
   return Get-Content $Path -Raw | ConvertFrom-Json
 }
 
+function Write-JsonNoBom($Path, $Value) {
+  $json = $Value | ConvertTo-Json -Depth 10
+  $encoding = New-Object System.Text.UTF8Encoding $false
+  [System.IO.File]::WriteAllText($Path, $json, $encoding)
+}
+
+function Get-GitHubReleaseAssetName($Name) {
+  # ponytail: GitHub release assets in this repo normalize spaces to dots; query release assets if naming changes.
+  return $Name -replace '\s+', '.'
+}
+
 function Test-ReleaseExists($Gh, $Tag, $Repo) {
   $previousErrorActionPreference = $ErrorActionPreference
 
@@ -151,7 +162,7 @@ if (-not (Test-Path $signaturePath)) {
 }
 
 $signature = (Get-Content $signaturePath -Raw).Trim()
-$encodedInstallerName = [System.Uri]::EscapeDataString($installer.Name)
+$encodedInstallerName = [System.Uri]::EscapeDataString((Get-GitHubReleaseAssetName $installer.Name))
 $downloadUrl = "https://github.com/$Repo/releases/download/$Tag/$encodedInstallerName"
 $latestJsonPath = Join-Path $bundleDir "latest.json"
 
@@ -167,10 +178,28 @@ $latest = [ordered]@{
   }
 }
 
-$latest | ConvertTo-Json -Depth 10 | Set-Content -Path $latestJsonPath -Encoding utf8
+Write-JsonNoBom $latestJsonPath $latest
 
 $isPrerelease = $Tag -match "-(beta|rc)"
 $assetPaths = @($installer.FullName, $signaturePath, $latestJsonPath)
+
+Invoke-Step "powershell" @(
+  "-ExecutionPolicy",
+  "Bypass",
+  "-File",
+  (Join-Path $RepoRoot "scripts\check-release-version.ps1"),
+  "-Tag",
+  $Tag,
+  "-Artifacts",
+  "-Repo",
+  $Repo,
+  "-BundleDir",
+  $bundleDir,
+  "-InstallerPath",
+  $installer.FullName,
+  "-LatestJsonPath",
+  $latestJsonPath
+)
 
 if ($releaseExists) {
   if (-not $Clobber) {
