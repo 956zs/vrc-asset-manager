@@ -413,6 +413,48 @@ const modelAliasGroups: readonly ModelAliasGroup[] = [
     aliases: ["カザリス", "Cazalis"],
   },
   {
+    name: "Wendy",
+    displayName: "ウェンディ",
+    label: "ウェンディ / Wendy",
+    aliases: ["ウェンディ", "Wendy"],
+  },
+  {
+    name: "Minase",
+    displayName: "水瀬",
+    label: "水瀬 / Minase",
+    aliases: ["水瀬", "Minase"],
+  },
+  {
+    name: "Kanata",
+    displayName: "彼方",
+    label: "彼方 / Kanata",
+    aliases: ["彼方", "Kanata"],
+  },
+  {
+    name: "Komano",
+    displayName: "狛乃",
+    label: "狛乃 / Komano",
+    aliases: ["狛乃", "Komano"],
+  },
+  {
+    name: "Hanka",
+    displayName: "斑霞",
+    label: "斑霞 / Hanka",
+    aliases: ["斑霞", "Hanka"],
+  },
+  {
+    name: "Bokusei",
+    displayName: "墨惺",
+    label: "墨惺 / Bokusei",
+    aliases: ["墨惺", "Bokusei"],
+  },
+  {
+    name: "Nakiya",
+    displayName: "泣夜",
+    label: "泣夜 / Nakiya",
+    aliases: ["泣夜", "Nakiya"],
+  },
+  {
     name: "Miya",
     displayName: "ミヤ",
     label: "ミヤ / Miya",
