@@ -12,7 +12,6 @@ export type ReleaseNoteInlineNode =
 
 export type ReleaseNoteItem = {
   key: string;
-  text: string;
   nodes: ReleaseNoteInlineNode[];
 };
 
@@ -20,7 +19,6 @@ export type ReleaseNote = {
   version: string;
   date: string;
   title: string;
-  summary: string;
   summaryNodes: ReleaseNoteInlineNode[];
   features: ReleaseNoteItem[];
   improvements: ReleaseNoteItem[];
@@ -28,47 +26,9 @@ export type ReleaseNote = {
   breakingChanges: ReleaseNoteItem[];
 };
 
-type ReleaseNoteFrontmatter = {
-  version?: string;
-  date?: string;
-  title?: string;
-  summary?: string;
-};
-
 type ParsedVersion = {
   core: number[];
   prerelease: string[];
-};
-
-const releaseNoteMarkdownSources = Object.values(
-  import.meta.glob<string>("../release-notes/*.md", {
-    eager: true,
-    import: "default",
-    query: "?raw",
-  }),
-);
-
-const sectionHeadingMap: Record<string, ReleaseNoteSectionKey> = {
-  added: "features",
-  feature: "features",
-  features: "features",
-  "new features": "features",
-  "新功能": "features",
-  changed: "improvements",
-  change: "improvements",
-  improved: "improvements",
-  improvements: "improvements",
-  "改善": "improvements",
-  fixed: "fixes",
-  fix: "fixes",
-  fixes: "fixes",
-  "修正": "fixes",
-  breaking: "breakingChanges",
-  "breaking changes": "breakingChanges",
-  caution: "breakingChanges",
-  notes: "breakingChanges",
-  "需要注意": "breakingChanges",
-  "破壞性變更": "breakingChanges",
 };
 
 const prereleaseRank: Record<string, number> = {
@@ -78,6 +38,96 @@ const prereleaseRank: Record<string, number> = {
   preview: 2,
   rc: 3,
 };
+
+function text(text: string): ReleaseNoteInlineNode {
+  return { type: "text", text };
+}
+
+function strong(text: string): ReleaseNoteInlineNode {
+  return { type: "strong", text };
+}
+
+function highlight(text: string): ReleaseNoteInlineNode {
+  return { type: "highlight", text };
+}
+
+function code(text: string): ReleaseNoteInlineNode {
+  return { type: "code", text };
+}
+
+function nodes(...parts: ReleaseNoteInlineNode[]) {
+  return parts;
+}
+
+function item(key: string, itemNodes: ReleaseNoteInlineNode[]): ReleaseNoteItem {
+  return { key, nodes: itemNodes };
+}
+
+export const releaseNotes: ReleaseNote[] = [
+  {
+    version: "0.2.0-beta.4",
+    date: "2026-06-14",
+    title: "BOOTH Shop 整理",
+    summaryNodes: nodes(
+      text("這版讓 "),
+      strong("BOOTH Shop"),
+      text(" 成為素材資料的一部分，可以抓取、編輯、搜尋與篩選賣家資訊，也能 "),
+      highlight("補齊既有素材的 Shop 資料"),
+      text("。"),
+    ),
+    features: [
+      item("beta4-feature-1", nodes(
+        text("素材現在可以保存 "),
+        strong("BOOTH Shop 名稱"),
+        text("與 "),
+        strong("Shop URL"),
+        text("，並在新增、批次導入與素材詳情中直接查看或編輯。"),
+      )),
+      item("beta4-feature-2", nodes(text("從 BOOTH 連結「抓取資訊」時，會一併帶入商品標題、縮圖、建議模型、建議標籤與 Shop 資訊。"))),
+      item("beta4-feature-3", nodes(text("側邊欄新增「依 BOOTH Shop 篩選」，可以依賣家快速縮小素材清單。"))),
+      item("beta4-feature-4", nodes(text("側邊欄新增「補齊既有素材」，會從已有 BOOTH 連結回填缺少的 Shop 名稱與 URL，並顯示更新、略過與失敗數量。"))),
+    ],
+    improvements: [
+      item("beta4-improvement-1", nodes(text("搜尋素材時會納入 BOOTH Shop 名稱與 Shop URL，找賣家或商店網址更直覺。"))),
+      item("beta4-improvement-2", nodes(text("素材詳情的 BOOTH 區塊會顯示商品連結與 Shop 連結，未編輯時也能直接開啟。"))),
+      item("beta4-improvement-3", nodes(text("匯出與匯入存檔會保留 BOOTH Shop 資訊，舊版存檔仍可照常匯入。"))),
+      item("beta4-improvement-4", nodes(text("新增與批次導入流程整理了補充資料、建議標籤、建議模型與來源內容列表，操作狀態更容易掃讀。"))),
+      item("beta4-improvement-5", nodes(text("側邊欄篩選、進階篩選與拖曳排序的互動拆分後更穩定，篩選摘要會固定保留位置，畫面比較不會跳動。"))),
+    ],
+    fixes: [
+      item("beta4-fix-1", nodes(text("BOOTH 資訊解析現在會從 JSON-LD、頁面連結或 Shop 子網域推回 Shop URL，減少只抓到商品但缺少賣家網址的情況。"))),
+      item("beta4-fix-2", nodes(text("回填既有素材時會把空白 Shop 欄位視為缺資料，不會因為空字串而略過可補齊的項目。"))),
+    ],
+    breakingChanges: [
+      item("beta4-note-1", nodes(text("「補齊既有素材」會逐筆讀取 BOOTH 商品頁；若頁面無法讀取、商品不存在或網路失敗，該筆會被列入略過或失敗。"))),
+      item("beta4-note-2", nodes(text("首次啟動新版時會自動為素材庫加入 BOOTH Shop 欄位，不需要手動搬移資料。"))),
+    ],
+  },
+  {
+    version: "0.2.0-beta.3",
+    date: "2026-06-13",
+    title: "內建更新內容",
+    summaryNodes: nodes(
+      text("這版加入 "),
+      highlight("首次開啟更新內容"),
+      text("，讓 app 更新後可以直接看到本版重點，也能從設定裡重新查看。"),
+    ),
+    features: [
+      item("beta3-feature-1", nodes(text("更新到新版後，app 會自動顯示"), strong("更新內容"), text("視窗，列出還沒看過的 release notes。"))),
+      item("beta3-feature-2", nodes(text("設定中心的"), strong("更新"), text("頁新增「查看更新內容」，可以隨時重新打開目前版本的說明。"))),
+      item("beta3-feature-3", nodes(text("Release notes 會從 app 內建資料載入，支援新功能、改善、修正與需要注意等分類。"))),
+    ],
+    improvements: [
+      item("beta3-improvement-1", nodes(text("已讀版本會保存在本機，下次開啟同一版本時不會重複打擾。"))),
+      item("beta3-improvement-2", nodes(text("更新內容支援 "), code("code"), text("、"), strong("粗體"), text("與"), highlight("重點標示"), text("，讓重要資訊更容易掃讀。"))),
+      item("beta3-improvement-3", nodes(text("在非桌面預覽環境中會使用最新內建 release note 版本，方便開發與檢查內容。"))),
+    ],
+    fixes: [],
+    breakingChanges: [
+      item("beta3-note-1", nodes(text("若某個版本沒有內建對應的 release note，手動查看本版更新內容時不會開啟視窗。"))),
+    ],
+  },
+];
 
 function parseVersion(version: string): ParsedVersion {
   const [coreText, prereleaseText = ""] = version.replace(/^v/i, "").split("-");
@@ -105,135 +155,6 @@ function comparePrereleasePart(first: string, second: string) {
 
   return first.localeCompare(second);
 }
-
-function parseFrontmatter(markdown: string) {
-  const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-  if (!match) {
-    return { frontmatter: {}, body: markdown };
-  }
-
-  const frontmatter = match[1].split(/\r?\n/).reduce<ReleaseNoteFrontmatter>(
-    (metadata, line) => {
-      const keyMatch = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
-      if (!keyMatch) return metadata;
-
-      return {
-        ...metadata,
-        [keyMatch[1]]: keyMatch[2].replace(/^["']|["']$/g, "").trim(),
-      };
-    },
-    {},
-  );
-
-  return {
-    frontmatter,
-    body: markdown.slice(match[0].length),
-  };
-}
-
-function parseInlineMarkdown(text: string): ReleaseNoteInlineNode[] {
-  const nodes: ReleaseNoteInlineNode[] = [];
-  const pattern = /(`([^`]+)`|\*\*([^*]+)\*\*|==([^=]+)==)/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > cursor) {
-      nodes.push({ type: "text", text: text.slice(cursor, match.index) });
-    }
-
-    if (match[2]) {
-      nodes.push({ type: "code", text: match[2] });
-    } else if (match[3]) {
-      nodes.push({ type: "strong", text: match[3] });
-    } else if (match[4]) {
-      nodes.push({ type: "highlight", text: match[4] });
-    }
-
-    cursor = pattern.lastIndex;
-  }
-
-  if (cursor < text.length) {
-    nodes.push({ type: "text", text: text.slice(cursor) });
-  }
-
-  return nodes.length > 0 ? nodes : [{ type: "text", text }];
-}
-
-function stripInlineMarkers(text: string) {
-  return text
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/==([^=]+)==/g, "$1");
-}
-
-function toReleaseNoteItem(section: ReleaseNoteSectionKey, index: number, text: string) {
-  const plainText = stripInlineMarkers(text.trim());
-  return {
-    key: `${section}-${index}-${plainText}`,
-    text: plainText,
-    nodes: parseInlineMarkdown(text.trim()),
-  };
-}
-
-function parseReleaseNoteMarkdown(markdown: string): ReleaseNote {
-  const { frontmatter, body } = parseFrontmatter(markdown);
-  const sections: Record<ReleaseNoteSectionKey, string[]> = {
-    features: [],
-    improvements: [],
-    fixes: [],
-    breakingChanges: [],
-  };
-  let activeSection: ReleaseNoteSectionKey | null = null;
-
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-
-    const heading = line.match(/^##\s+(.+)$/);
-    if (heading) {
-      activeSection = sectionHeadingMap[heading[1].trim().toLowerCase()] ?? null;
-      continue;
-    }
-
-    const bullet = line.match(/^[-*]\s+(.+)$/);
-    if (bullet && activeSection) {
-      sections[activeSection].push(bullet[1]);
-      continue;
-    }
-
-    if (activeSection && sections[activeSection].length > 0) {
-      const lastIndex = sections[activeSection].length - 1;
-      sections[activeSection][lastIndex] =
-        `${sections[activeSection][lastIndex]} ${line}`;
-    }
-  }
-
-  const version = frontmatter.version ?? "0.0.0";
-  const summary = frontmatter.summary ?? "";
-
-  return {
-    version,
-    date: frontmatter.date ?? "",
-    title: frontmatter.title ?? version,
-    summary: stripInlineMarkers(summary),
-    summaryNodes: parseInlineMarkdown(summary),
-    features: sections.features.map((item, index) =>
-      toReleaseNoteItem("features", index, item),
-    ),
-    improvements: sections.improvements.map((item, index) =>
-      toReleaseNoteItem("improvements", index, item),
-    ),
-    fixes: sections.fixes.map((item, index) => toReleaseNoteItem("fixes", index, item)),
-    breakingChanges: sections.breakingChanges.map((item, index) =>
-      toReleaseNoteItem("breakingChanges", index, item),
-    ),
-  };
-}
-
-export const releaseNotes: ReleaseNote[] = releaseNoteMarkdownSources.map(
-  parseReleaseNoteMarkdown,
-);
 
 export function compareVersions(firstVersion: string, secondVersion: string) {
   const first = parseVersion(firstVersion);

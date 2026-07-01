@@ -44,7 +44,7 @@ async function resolveAppVersion() {
   }
 }
 
-export type ReleaseNotesController = {
+type ReleaseNotesController = {
   currentVersion: string;
   lastSeenVersion: string | null;
   notes: ReleaseNote[];

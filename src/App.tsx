@@ -32,7 +32,7 @@ import { FloatingSurface } from "@/components/ui/floating-surface";
 import { IconButton } from "@/components/ui/icon-button";
 import { Toaster } from "@/components/ui/sonner";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
-import { useReleaseNotesController, type ReleaseNotesController } from "@/lib/use-release-notes";
+import { useReleaseNotesController } from "@/lib/use-release-notes";
 import { VccProjects } from "@/components/vcc-projects";
 import { useAssetStore } from "@/stores/asset-store";
 import type { AssetSortOrder, BoothShopBackfillProgress } from "@/types";
@@ -54,7 +54,7 @@ type AppController = {
   noticeTone: "success" | "loading";
   boothShopBackfilling: boolean;
   boothShopBackfillProgress: BoothShopBackfillProgress | null;
-  releaseNotes: ReleaseNotesController;
+  releaseNotes: ReturnType<typeof useReleaseNotesController>;
   selectedAssetId: number | null;
   setIsCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
   setBatchImportPaths: Dispatch<SetStateAction<string[]>>;
