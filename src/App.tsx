@@ -10,7 +10,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { Toaster as Sonner, toast } from "sonner";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { AddModelDialog } from "@/components/add-model-dialog";
 import { AddTagDialog } from "@/components/add-tag-dialog";
@@ -30,7 +30,6 @@ import { Button } from "@/components/ui/button";
 import { FloatingMenuItem } from "@/components/ui/floating-menu";
 import { FloatingSurface } from "@/components/ui/floating-surface";
 import { IconButton } from "@/components/ui/icon-button";
-import { Toaster } from "@/components/ui/sonner";
 import { isTauriRuntime } from "@/lib/tauri-runtime";
 import { useReleaseNotesController } from "@/lib/use-release-notes";
 import { VccProjects } from "@/components/vcc-projects";
@@ -519,7 +518,30 @@ function AppNotifications({ controller }: { controller: AppController }) {
     noticeTone,
   ]);
 
-  return <Toaster />;
+  return <AppToaster />;
+}
+
+function AppToaster() {
+  return (
+    <Sonner
+      theme="dark"
+      className="toaster group"
+      position="bottom-right"
+      closeButton
+      richColors
+      toastOptions={{
+        classNames: {
+          toast:
+            "group toast group-[.toaster]:border-border group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:shadow-2xl",
+          description: "group-[.toast]:text-muted-foreground",
+          actionButton:
+            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+          cancelButton:
+            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+        },
+      }}
+    />
+  );
 }
 
 function DragImportOverlay({ visible }: { visible: boolean }) {
@@ -529,7 +551,7 @@ function DragImportOverlay({ visible }: { visible: boolean }) {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
-      <div className="grid min-h-[240px] w-[min(520px,calc(100vw-3rem))] place-items-center rounded-lg border-2 border-dashed border-primary bg-card/95 p-8 text-center text-card-foreground shadow-2xl animate-in fade-in-0 zoom-in-95">
+      <div className="grid min-h-[240px] w-[min(520px,calc(100vw-3rem))] place-items-center rounded-lg border-2 border-dashed border-primary bg-card/95 p-8 text-center text-card-foreground shadow-2xl">
         <div className="space-y-4">
           <div className="mx-auto flex size-14 animate-pulse items-center justify-center rounded-md bg-primary text-primary-foreground">
             <MousePointer2 className="h-7 w-7" />

@@ -34,4 +34,4 @@ function ToneBadge({
   );
 }
 
-export { ToneBadge, type ToneBadgeTone };
+export { ToneBadge };

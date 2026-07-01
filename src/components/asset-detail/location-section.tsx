@@ -1,5 +1,3 @@
-"use client";
-
 import { FileSearch, FolderSearch } from "lucide-react";
 import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
 import { Button } from "@/components/ui/button";

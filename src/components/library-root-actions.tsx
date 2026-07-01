@@ -1,5 +1,3 @@
-"use client";
-
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { FolderSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";

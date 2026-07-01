@@ -1,5 +1,3 @@
-"use client";
-
 import { FolderOpen, Pencil, Save, Trash2 } from "lucide-react";
 import {
   AlertDialog,

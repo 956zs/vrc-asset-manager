@@ -1,5 +1,3 @@
-"use client";
-
 import { Package } from "lucide-react";
 import { AssetCard } from "@/components/asset-card";
 import { EmptyState } from "@/components/ui/empty-state";

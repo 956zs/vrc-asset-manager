@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo } from "react";
 import { invokeTauri } from "@/lib/tauri-runtime";
 import { selectSelectedAsset, useAssetStore } from "@/stores/asset-store";

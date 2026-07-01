@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { FolderCog, Save } from "lucide-react";
 import { LibraryRootActions } from "@/components/library-root-actions";

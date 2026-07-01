@@ -33,4 +33,4 @@ function Panel({
   );
 }
 
-export { Panel, type PanelTone };
+export { Panel };

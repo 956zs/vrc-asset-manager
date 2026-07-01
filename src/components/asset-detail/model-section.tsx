@@ -1,5 +1,3 @@
-"use client";
-
 import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
 import { assetDetailModelSelectionPreset } from "@/components/asset-form/field-presets";
 import { ModelSelectionField } from "@/components/asset-form/model-selection-field";

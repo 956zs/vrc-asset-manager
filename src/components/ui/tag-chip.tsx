@@ -55,4 +55,4 @@ function TagChip({
   );
 }
 
-export { TagChip, type TagChipVariant };
+export { TagChip };

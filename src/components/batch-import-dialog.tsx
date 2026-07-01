@@ -1,9 +1,8 @@
-"use client";
-
 import {
   useEffect,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
 } from "react";
 import {
@@ -58,10 +57,8 @@ import { FormField } from "@/components/ui/form-field";
 import { IconButton } from "@/components/ui/icon-button";
 import { IconTile } from "@/components/ui/icon-tile";
 import { Input } from "@/components/ui/input";
-import { MetaLabel } from "@/components/ui/meta-label";
 import { SegmentedField } from "@/components/ui/segmented-field";
 import { Spinner } from "@/components/ui/spinner";
-import { StateSurface, type StateSurfaceTone } from "@/components/ui/state-surface";
 import { StatusMessage } from "@/components/ui/status-message";
 import { SurfaceBox } from "@/components/ui/surface-box";
 import { Textarea } from "@/components/ui/textarea";
@@ -136,6 +133,8 @@ type BatchImportDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type StateSurfaceTone = "default" | "success" | "warning" | "danger";
+
 const isZipPath = (path: string) => path.toLocaleLowerCase().endsWith(".zip");
 const isUnityPackagePath = (path: string) =>
   path.toLocaleLowerCase().endsWith(".unitypackage");
@@ -162,6 +161,30 @@ const archiveOptions: { value: ArchiveStrategy; label: string }[] = [
   { value: "keepArchive", label: "保留壓縮檔" },
   { value: "extract", label: "解壓後管理" },
 ];
+
+const stateSurfaceToneClassNames: Record<StateSurfaceTone, string> = {
+  default: "border-border/90 bg-background",
+  success: "border-emerald-500/35 bg-emerald-500/5",
+  warning: "border-amber-500/45 bg-amber-500/5",
+  danger: "border-destructive/45 bg-destructive/5",
+};
+
+function StateSurface({
+  className,
+  tone = "default",
+  ...props
+}: ComponentProps<"div"> & { tone?: StateSurfaceTone }) {
+  return (
+    <div
+      className={cn(
+        "rounded-md border transition-colors",
+        stateSurfaceToneClassNames[tone],
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 const defaultBulkDraft: BulkImportDraft = {
   category: "accessory",
@@ -511,11 +534,11 @@ function PathDetails({
       {open && (
         <div className="mt-2 space-y-2 border-t border-border/70 pt-2 text-xs">
           <div>
-            <MetaLabel>來源</MetaLabel>
+            <p className="text-[11px] font-semibold text-foreground/55">來源</p>
             <p className="mt-1 break-all text-foreground/78">{draft.sourcePath}</p>
           </div>
           <div>
-            <MetaLabel>目標</MetaLabel>
+            <p className="text-[11px] font-semibold text-foreground/55">目標</p>
             <div className="mt-1">
               <TargetPreviewLine preview={preview} />
             </div>

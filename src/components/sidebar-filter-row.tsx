@@ -1,5 +1,3 @@
-"use client";
-
 import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -46,9 +44,9 @@ function getRowClassName(props: SidebarFilterRowProps) {
   const isDropTarget = props.dropTarget?.id === props.id && !props.dragging;
 
   return cn(
-    "relative grid cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+    "relative grid min-h-9 w-full cursor-pointer select-none items-center gap-2 rounded-md px-2 py-2 transition-colors outline-none",
     props.swatchColor ? "grid-cols-[auto_auto_minmax(0,1fr)]" : "grid-cols-[auto_minmax(0,1fr)]",
-    "hover:bg-sidebar-accent",
+    "hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring/45",
     props.checked && "bg-sidebar-accent",
     props.editing && getEditingGridClassName(Boolean(props.swatchColor)),
     props.dragging && "scale-[0.98] opacity-40",
@@ -99,18 +97,11 @@ function Swatch({ color }: { color?: string }) {
   return <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />;
 }
 
-function FilterLabelButton({
-  label,
-  onToggle,
-}: Pick<SidebarFilterRowProps, "label" | "onToggle">) {
+function FilterLabel({ label }: Pick<SidebarFilterRowProps, "label">) {
   return (
-    <button
-      type="button"
-      className="min-w-0 flex-1 truncate text-left text-sm text-sidebar-foreground"
-      onClick={onToggle}
-    >
+    <span className="min-w-0 truncate text-sm text-sidebar-foreground">
       {label}
-    </button>
+    </span>
   );
 }
 
@@ -159,11 +150,19 @@ function RowActions({
 
 export function SidebarFilterRow(props: SidebarFilterRowProps) {
   return (
-    <div {...getDataAttributes(props.kind, props.id)} className={getRowClassName(props)}>
+    <div
+      {...getDataAttributes(props.kind, props.id)}
+      className={getRowClassName(props)}
+      onClick={props.onToggle}
+    >
       {props.editing && <DragHandle id={props.id} onDragStart={props.onDragStart} />}
-      <Checkbox checked={props.checked} onCheckedChange={props.onToggle} />
+      <Checkbox
+        checked={props.checked}
+        onClick={(event) => event.stopPropagation()}
+        onCheckedChange={props.onToggle}
+      />
       <Swatch color={props.swatchColor} />
-      <FilterLabelButton label={props.label} onToggle={props.onToggle} />
+      <FilterLabel label={props.label} />
       {props.editing && <RowActions {...props} />}
     </div>
   );

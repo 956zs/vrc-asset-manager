@@ -1,5 +1,3 @@
-"use client";
-
 import { ExternalLink } from "lucide-react";
 import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
 import { BoothShopFields } from "@/components/booth-shop-fields";

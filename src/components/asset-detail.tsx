@@ -1,5 +1,3 @@
-"use client";
-
 import { invokeTauri } from "@/lib/tauri-runtime";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -18,7 +16,6 @@ import { AssetDetailThumbnail } from "@/components/asset-detail/thumbnail";
 import { useAssetDetailDraft } from "@/components/asset-detail/use-asset-detail-draft";
 import { BoothModelSuggestionPanel, BoothTagSuggestionPanel } from "@/components/booth-suggestion-panel";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { StatusMessage } from "@/components/ui/status-message";
 import { Textarea } from "@/components/ui/textarea";
 import { hasSensitiveTags } from "@/lib/sensitive-content";
@@ -110,6 +107,10 @@ function MissingFileNotice({ editing }: { editing: boolean }) {
   );
 }
 
+function DetailSeparator() {
+  return <div role="presentation" className="h-px w-full shrink-0 bg-border" />;
+}
+
 function AssetNameField({ asset }: { asset: Asset }) {
   return (
     <div className="min-w-0">
@@ -178,7 +179,7 @@ function ModelAndTagSections({
         models={draft.isEditingAsset ? draft.suggestedModels : []}
         onAdd={(model) => void draft.addSuggestedModel(model)}
       />
-      <Separator />
+      <DetailSeparator />
       <AssetDetailTagSection
         tags={tags}
         assetTags={asset.tags}
@@ -211,14 +212,14 @@ function AssetDetailBody(props: AssetDetailBodyProps) {
         {!asset.file_exists && <MissingFileNotice editing={draft.isEditingAsset} />}
         <AssetNameField asset={asset} />
         <DisplayNameField asset={asset} draft={draft} />
-        <Separator />
+        <DetailSeparator />
         <ModelAndTagSections asset={asset} draft={draft} models={props.models} tags={props.tags} />
         <BoothTagSuggestionPanel
           origins={draft.suggestedTagOrigins}
           tags={draft.isEditingAsset ? draft.suggestedTags : []}
           onAdd={(tagName) => void draft.addSuggestedTag(tagName)}
         />
-        <Separator />
+        <DetailSeparator />
         <AssetDetailBoothSection
           isEditing={draft.isEditingAsset}
           boothUrl={props.boothUrl}
@@ -232,7 +233,7 @@ function AssetDetailBody(props: AssetDetailBodyProps) {
           onOpenBooth={() => void props.onOpenBooth()}
           onOpenBoothShop={() => void props.onOpenBoothShop()}
         />
-        <Separator />
+        <DetailSeparator />
         <AssetDetailRelatedLinksSection
           isEditing={draft.isEditingAsset}
           relatedLinks={props.relatedLinks}
@@ -243,9 +244,9 @@ function AssetDetailBody(props: AssetDetailBodyProps) {
           onRemove={draft.removeRelatedLink}
           onOpen={(url) => void props.onOpenRelatedLink(url)}
         />
-        <Separator />
+        <DetailSeparator />
         <NoteSection asset={asset} draft={draft} />
-        <Separator />
+        <DetailSeparator />
         <AssetDetailLocationSection
           isEditing={draft.isEditingAsset}
           filePath={props.filePath}

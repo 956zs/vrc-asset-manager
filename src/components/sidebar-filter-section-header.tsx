@@ -33,7 +33,7 @@ function SidebarSectionToggleButton({
   return (
     <button
       type="button"
-      className="flex h-8 min-w-0 items-center gap-2 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+      className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring/45"
       aria-expanded={open}
       onClick={onToggleOpen}
     >

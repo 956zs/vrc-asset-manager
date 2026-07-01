@@ -1,5 +1,3 @@
-"use client";
-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DeleteConfirmDialog } from "@/components/vcc/delete-confirm-dialog";
 import { VccEmptyState } from "@/components/vcc/empty-state";

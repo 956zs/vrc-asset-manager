@@ -1,5 +1,3 @@
-"use client";
-
 import { ExternalLink } from "lucide-react";
 import { DetailFieldLabel } from "@/components/asset-detail/detail-field-label";
 import { assetDetailRelatedLinksPreset } from "@/components/asset-form/field-presets";

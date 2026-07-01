@@ -1,5 +1,3 @@
-"use client";
-
 import {
   AlertTriangle,
   Archive,
@@ -28,7 +26,6 @@ import {
 } from "@/components/ui/dialog";
 import { DialogActionBar } from "@/components/ui/dialog-action-bar";
 import { Input } from "@/components/ui/input";
-import { MetaLabel } from "@/components/ui/meta-label";
 import { SegmentedField } from "@/components/ui/segmented-field";
 import { Spinner } from "@/components/ui/spinner";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -283,7 +280,7 @@ function TargetPreview({
     <SurfaceBox className="border-border/70 bg-background/35 px-3 py-2 text-xs">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="min-w-0">
-          <MetaLabel>目標位置</MetaLabel>
+          <p className="text-[11px] font-semibold text-foreground/55">目標位置</p>
           <p className="mt-0.5 min-w-0 truncate text-foreground/72">
             {targetSummary(preview, libraryRootPath).replace(/^目標：/, "")}
           </p>

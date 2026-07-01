@@ -1,8 +1,5 @@
-"use client";
-
 import { Link2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DashedActionButton } from "@/components/ui/dashed-action-button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { SurfaceBox } from "@/components/ui/surface-box";
@@ -151,12 +148,14 @@ function EmptyRelatedLinksButton({
   onCreateFirst,
 }: Pick<RelatedLinksEditorProps, "onCreateFirst">) {
   return (
-    <DashedActionButton
-      icon={<Link2 className="h-4 w-4" />}
+    <button
+      type="button"
+      className="flex w-full min-w-0 items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50"
       onClick={onCreateFirst}
     >
-      新增論壇、教學或輔助插件連結
-    </DashedActionButton>
+      <Link2 className="h-4 w-4" />
+      <span className="min-w-0 truncate">新增論壇、教學或輔助插件連結</span>
+    </button>
   );
 }
 

@@ -1,5 +1,3 @@
-"use client";
-
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
@@ -27,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IconTile } from "@/components/ui/icon-tile";
-import { KeyHint } from "@/components/ui/key-hint";
 import { MetaBadge } from "@/components/ui/meta-badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
@@ -925,8 +922,12 @@ function CommandPaletteSearchBar({
         <Spinner className="shrink-0 text-muted-foreground" />
       ) : (
         <div className="hidden shrink-0 items-center gap-1 sm:flex">
-          <KeyHint>Ctrl</KeyHint>
-          <KeyHint>K</KeyHint>
+          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            Ctrl
+          </kbd>
+          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            K
+          </kbd>
         </div>
       )}
     </div>

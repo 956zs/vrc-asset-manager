@@ -1,5 +1,3 @@
-"use client";
-
 import { Pencil, X } from "lucide-react";
 import { IconButton } from "@/components/ui/icon-button";
 

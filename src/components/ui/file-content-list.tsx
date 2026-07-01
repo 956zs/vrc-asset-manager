@@ -6,7 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SurfaceBox } from "@/components/ui/surface-box";
 import { cn } from "@/lib/utils";
 
-export type FileContentEntry = {
+type FileContentEntry = {
   path: string;
   isDirectory?: boolean | null;
   sizeBytes?: number | null;

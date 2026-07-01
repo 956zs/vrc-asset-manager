@@ -10,7 +10,7 @@ export type SuggestedBoothModel = {
 
 export type SuggestedBoothTagOrigins = Record<string, string[]>;
 
-export type AppliedBoothProductInfo = {
+type AppliedBoothProductInfo = {
   matchedModelIds: number[];
   matchedTagIds: number[];
   suggestedModels: SuggestedBoothModel[];

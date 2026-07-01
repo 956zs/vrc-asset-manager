@@ -1,9 +1,6 @@
-"use client";
-
 import { AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { MetaBadge } from "@/components/ui/meta-badge";
 import { hasSensitiveAssetTags } from "@/lib/sensitive-content";
-import { Card } from "@/components/ui/card";
 import { TagChip } from "@/components/ui/tag-chip";
 import { ToneBadge } from "@/components/ui/tone-badge";
 import { cn } from "@/lib/utils";
@@ -23,14 +20,14 @@ export function AssetCard({ asset, isSelected, onClick }: AssetCardProps) {
   const displayName = asset.display_name || asset.name;
 
   return (
-    <Card
+    <div
+      data-slot="card"
       data-context-asset-id={asset.id}
       data-context-asset-name={displayName}
       data-context-path={asset.file_path}
       data-context-url={asset.booth_url || undefined}
       className={cn(
-        "group relative self-start overflow-hidden py-0 transition-all duration-200",
-        "cursor-pointer",
+        "group relative flex self-start cursor-pointer flex-col gap-6 overflow-hidden rounded-xl border bg-card py-0 text-card-foreground shadow-sm transition-all duration-200",
         "hover:ring-2 hover:ring-ring hover:shadow-md",
         isSelected && "ring-2 ring-primary shadow-md",
       )}
@@ -46,7 +43,7 @@ export function AssetCard({ asset, isSelected, onClick }: AssetCardProps) {
         <AssetTags tags={asset.tags} />
         <AssetModels models={asset.models} />
       </div>
-    </Card>
+    </div>
   );
 }
 

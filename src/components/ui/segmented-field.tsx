@@ -1,9 +1,7 @@
-"use client";
-
-import { HelpHint } from "@/components/ui/help-hint";
+import { CircleHelp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SegmentedFieldOption<TValue extends string> = {
+type SegmentedFieldOption<TValue extends string> = {
   value: TValue;
   label: string;
   tone?: "danger";
@@ -95,7 +93,16 @@ export function SegmentedField<TValue extends string>({
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground/70">
         <span>{label}</span>
-        {help && <HelpHint label={label}>{help}</HelpHint>}
+        {help && (
+          <button
+            type="button"
+            aria-label={`${label}說明：${help}`}
+            title={help}
+            className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
       <SegmentedControl options={options} value={value} onChange={onChange} />
     </div>

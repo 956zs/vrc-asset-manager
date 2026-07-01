@@ -72,4 +72,4 @@ function StatusMessage({
   );
 }
 
-export { StatusMessage, type StatusTone };
+export { StatusMessage };

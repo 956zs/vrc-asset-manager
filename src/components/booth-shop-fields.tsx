@@ -1,5 +1,3 @@
-"use client";
-
 import { ExternalLink } from "lucide-react";
 
 import { FormField } from "@/components/ui/form-field";

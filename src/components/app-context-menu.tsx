@@ -1,5 +1,3 @@
-"use client";
-
 import { ContextMenuPanel } from "@/components/context-menu/panel";
 import { useAppContextMenu } from "@/components/context-menu/use-app-context-menu";
 

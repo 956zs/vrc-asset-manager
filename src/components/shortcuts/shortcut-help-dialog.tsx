@@ -1,5 +1,3 @@
-"use client";
-
 import {
   Dialog,
   DialogContent,
@@ -7,7 +5,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { KeyHint } from "@/components/ui/key-hint";
 
 type ShortcutHelpDialogProps = {
   open: boolean;
@@ -67,9 +64,12 @@ export function ShortcutHelpDialog({
                   <div key={`${group.title}-${shortcut.label}`} className="contents">
                     <div className="flex flex-wrap gap-1">
                       {shortcut.keys.map((key) => (
-                        <KeyHint key={key}>
+                        <kbd
+                          key={key}
+                          className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                        >
                           {key}
-                        </KeyHint>
+                        </kbd>
                       ))}
                     </div>
                     <span className="text-sm text-muted-foreground">
