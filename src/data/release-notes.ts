@@ -65,6 +65,40 @@ function item(key: string, itemNodes: ReleaseNoteInlineNode[]): ReleaseNoteItem 
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    version: "0.2.0-beta.5",
+    date: "2026-07-01",
+    title: "導入診斷與更新安裝",
+    summaryNodes: nodes(
+      text("這版讓 "),
+      strong("批次導入"),
+      text(" 的失敗原因更容易判斷，也補強 "),
+      strong("BOOTH"),
+      text(" 建議與 "),
+      highlight("更新安裝後重啟"),
+      text("。"),
+    ),
+    features: [
+      item("beta5-feature-1", nodes(text("批次導入結果現在會標示失敗階段，區分預檢、檔案處理與資料庫記錄失敗，排查問題更快。"))),
+      item("beta5-feature-2", nodes(text("若檔案已移入素材庫但資料庫記錄建立失敗，報告會保留目標位置並提示先手動確認檔案，再重新建立素材記錄。"))),
+      item("beta5-feature-3", nodes(text("更新下載並安裝完成後，設定的更新頁會顯示「立即重啟」，可以直接重新啟動 app 讓新版生效。"))),
+    ],
+    improvements: [
+      item("beta5-improvement-1", nodes(text("拖入 URL、一般單檔、"), code(".7z"), text(" 或 "), code(".rar"), text(" 時，批次導入會顯示更明確的不支援原因與目前支援的來源格式。"))),
+      item("beta5-improvement-2", nodes(text("BOOTH 資訊解析會合併 JSON-LD、meta 與頁面描述，減少支援模型、變體名稱或商品描述被單一來源覆蓋的情況。"))),
+      item("beta5-improvement-3", nodes(text("BOOTH 建議模型與標籤擴充了常見別名，包含「ちゃん」模型稱呼、衣裝、洋服、ヘア、メイク、Body Texture 與 Props 等描述。"))),
+      item("beta5-improvement-4", nodes(text("發佈流程會在上傳前檢查安裝檔、簽章與 "), code("latest.json"), text("，確認版本、簽章與 GitHub Release URL 彼此一致。"))),
+      item("beta5-improvement-5", nodes(text("內建更新內容改為直接打包在 TypeScript 資料中，少了一層 Markdown 解析流程，降低 release notes 載入出錯的機會。"))),
+    ],
+    fixes: [
+      item("beta5-fix-1", nodes(text("BOOTH 商品描述不再只取最長的一段文字，避免商品頁 body 或 JSON-LD 中的支援模型清單被忽略。"))),
+      item("beta5-fix-2", nodes(text("解壓縮匯入現在會在結果中顯示為「解壓」，不再只用移動或複製描述實際操作。"))),
+    ],
+    breakingChanges: [
+      item("beta5-note-1", nodes(text("目前批次導入仍只支援資料夾、"), code(".zip"), text(" 與 "), code(".unitypackage"), text("；"), code(".7z"), text("、"), code(".rar"), text(" 與一般單檔會被預檢擋下。"))),
+      item("beta5-note-2", nodes(text("使用 GitHub "), code("/releases/latest"), text(" 的更新端點時，beta / RC prerelease 不會被穩定版更新通道自動送出。"))),
+    ],
+  },
+  {
     version: "0.2.0-beta.4",
     date: "2026-06-14",
     title: "BOOTH Shop 整理",

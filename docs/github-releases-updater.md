@@ -119,7 +119,7 @@ for a fresh GitHub-hosted Windows runner.
 1. Update all release versions:
 
 ```powershell
-npm run version:bump -- 0.2.0-beta.4
+npm run version:bump -- 0.2.0-beta.5
 ```
 
 2. Enable the local tag guard once per clone:
@@ -136,7 +136,7 @@ the push if the tag does not match the app versions.
 4. Optional fast guard before building:
 
 ```powershell
-npm run release:check -- -Tag v0.2.0-beta.4
+npm run release:check -- -Tag v0.2.0-beta.5
 ```
 
 This check also runs automatically in `release:local` and in GitHub Actions
@@ -145,7 +145,7 @@ before the expensive Windows build starts.
 5. Run:
 
 ```powershell
-npm run release:local -- -Tag v0.2.0-beta.4
+npm run release:local -- -Tag v0.2.0-beta.5
 ```
 
 The script checks that versions match the tag, creates and pushes the tag if it
@@ -171,7 +171,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your key password"
 If a draft release already exists and you want to replace its assets:
 
 ```powershell
-npm run release:local -- -Tag v0.2.0-beta.4 -Clobber
+npm run release:local -- -Tag v0.2.0-beta.5 -Clobber
 ```
 
 ## Artifact Validation
@@ -179,7 +179,7 @@ npm run release:local -- -Tag v0.2.0-beta.4 -Clobber
 After a local build has produced NSIS updater artifacts, run:
 
 ```powershell
-npm run release:check -- -Tag v0.2.0-beta.4 -Artifacts
+npm run release:check -- -Tag v0.2.0-beta.5 -Artifacts
 ```
 
 The checker fails when:
