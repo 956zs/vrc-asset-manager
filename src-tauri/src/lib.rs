@@ -8,16 +8,14 @@ use commands::{
         get_assets, get_booth_shop_options, get_library_settings, inspect_import_sources,
         list_import_source_contents, list_zip_contents, managed_import_batch, open_file_location,
         preview_managed_import_target, scan_asset_health, update_asset, update_library_settings,
-        validate_file_path,
     },
-    booth::{fetch_booth_product_info, fetch_booth_thumbnail},
+    booth::fetch_booth_product_info,
     models::{create_model, delete_model, get_models, reorder_models, update_model},
     saves::{export_save, import_save},
     tags::{create_tag, delete_tag, get_tags, reorder_tags, update_tag},
     vcc::{
         add_vcc_project, add_vcc_repository, delete_vcc_project, delete_vcc_repository,
-        get_vcc_projects, get_vcc_repositories, scan_vcc_project, scan_vcc_projects,
-        sync_vcc_repositories,
+        get_vcc_repositories, scan_vcc_project, scan_vcc_projects, sync_vcc_repositories,
     },
 };
 use std::{env, error::Error, path::PathBuf};
@@ -65,7 +63,6 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
             reorder_tags,
             export_save,
             import_save,
-            get_vcc_projects,
             get_vcc_repositories,
             add_vcc_project,
             add_vcc_repository,
@@ -75,8 +72,6 @@ fn app_builder() -> tauri::Builder<tauri::Wry> {
             scan_vcc_project,
             scan_vcc_projects,
             fetch_booth_product_info,
-            fetch_booth_thumbnail,
-            validate_file_path,
             open_file_location
         ])
 }

@@ -222,11 +222,6 @@ fn smoke_asset_config(demo_root: &Path, relations: SmokeRelations) -> SmokeAsset
     fs::write(asset_dir.join("README.txt"), "Smoke test asset").expect("write smoke asset");
     let asset_path = asset_dir.to_string_lossy().to_string();
 
-    assert!(commands::assets::validate_file_path(asset_path.clone()));
-    assert!(!commands::assets::validate_file_path(
-        demo_root.join("missing").to_string_lossy().to_string()
-    ));
-
     SmokeAssetConfig {
         asset_path,
         relations,
@@ -788,10 +783,6 @@ fn managed_import_batch_reports_db_failure_after_file_operation() {
 }
 
 fn assert_vcc_snapshot(db: &db::DbState) {
-    let vcc_projects =
-        commands::vcc::get_vcc_projects(command_state(db)).expect("load vcc projects");
-    assert_eq!(vcc_projects.len(), 1);
-
     let repositories =
         commands::vcc::get_vcc_repositories(command_state(db)).expect("load vcc repositories");
     assert!(repositories.len() >= 2);

@@ -606,12 +606,6 @@ pub(crate) fn snapshot_vcc_projects(conn: &Connection) -> CommandResult<Vec<VccP
 }
 
 #[tauri::command]
-pub fn get_vcc_projects(db: State<'_, DbState>) -> CommandResult<Vec<VccProject>> {
-    let conn = connection(&db)?;
-    list_vcc_projects(&conn).map_err(db_error)
-}
-
-#[tauri::command]
 pub fn get_vcc_repositories(db: State<'_, DbState>) -> CommandResult<Vec<VccRepository>> {
     let conn = connection(&db)?;
     list_vcc_repositories(&conn).map_err(db_error)

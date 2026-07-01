@@ -1978,11 +1978,6 @@ pub fn delete_asset(id: i64, db: State<'_, DbState>) -> CommandResult<()> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn validate_file_path(path: String) -> bool {
-    Path::new(&path).exists()
-}
-
 #[cfg(target_os = "windows")]
 fn open_folder(path: &Path) -> CommandResult<()> {
     Command::new("explorer")

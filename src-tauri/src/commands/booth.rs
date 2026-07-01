@@ -556,11 +556,6 @@ pub fn fetch_product_info(url: &str) -> CommandResult<Option<BoothProductInfo>> 
 }
 
 #[tauri::command]
-pub fn fetch_booth_thumbnail(url: String) -> CommandResult<Option<String>> {
-    fetch_thumbnail_url(&url)
-}
-
-#[tauri::command]
 pub fn fetch_booth_product_info(url: String) -> CommandResult<Option<BoothProductInfo>> {
     fetch_product_info(&url)
 }
