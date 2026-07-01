@@ -1,8 +1,7 @@
-"use client";
-
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { invokeTauri } from "@/lib/tauri-runtime";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import {
   Activity,
@@ -10,12 +9,12 @@ import {
   FolderCog,
   Info,
   ShieldCheck,
+  type LucideIcon,
   X,
 } from "lucide-react";
 import appIconUrl from "@/assets/app-icon.png";
 import { useEffect, useMemo, useState } from "react";
 import { IconButton } from "@/components/ui/icon-button";
-import { IconTabNav, type IconTabNavItem } from "@/components/ui/icon-tab-nav";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { useAssetStore } from "@/stores/asset-store";
 import type { AssetHealthIssue, AssetHealthSummary } from "@/types";
 import { AboutSection } from "./settings/about-section";
@@ -48,7 +48,14 @@ type AppSettingsDialogProps = {
   showAssets: () => void;
 };
 
-const tabs: Array<IconTabNavItem<SettingsTab>> = [
+type SettingsTabItem = {
+  icon: LucideIcon;
+  itemClassName?: string;
+  label: string;
+  value: SettingsTab;
+};
+
+const tabs: SettingsTabItem[] = [
   { value: "overview", label: "總覽", icon: Activity },
   { value: "library", label: "素材庫", icon: FolderCog },
   { value: "updates", label: "更新", icon: Download },
@@ -81,6 +88,7 @@ type UpdateController = {
   downloadPercent: number | null;
   onCheckUpdate: () => Promise<void>;
   onInstallUpdate: () => Promise<void>;
+  onRestartApp: () => Promise<void>;
   onOpenReleases: () => void;
 };
 
@@ -229,6 +237,19 @@ function createInstallUpdateHandler(update: Update | null, setters: UpdateSetter
   };
 }
 
+function createRestartAppHandler(setters: UpdateSetters) {
+  return async () => {
+    setters.setUpdateMessage("正在重新啟動 app...");
+
+    try {
+      await relaunch();
+    } catch (error) {
+      setters.setUpdateStatus("installed");
+      setters.setUpdateMessage(`重新啟動失敗：${toMessage(error)}`);
+    }
+  };
+}
+
 function useUpdateController(
   appVersion: string | null,
   setActiveTab: (tab: SettingsTab) => void,
@@ -260,6 +281,7 @@ function useUpdateController(
     }),
     onCheckUpdate: createCheckUpdateHandler(appVersion, setActiveTab, setters),
     onInstallUpdate: createInstallUpdateHandler(update, setters),
+    onRestartApp: createRestartAppHandler(setters),
     onOpenReleases: () => void openUrl(releaseUrl),
   };
 }
@@ -344,12 +366,33 @@ function SettingsTabList({
   onOpenTab: (tab: SettingsTab) => void;
 }) {
   return (
-    <IconTabNav
-      className="lg:w-auto"
-      items={tabs}
-      value={activeTab}
-      onValueChange={onOpenTab}
-    />
+    <div
+      role="tablist"
+      className="flex w-full max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/50 p-1 lg:w-auto"
+    >
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const selected = activeTab === tab.value;
+
+        return (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            className={cn(
+              "flex h-8 min-w-[104px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 text-sm text-muted-foreground transition-colors",
+              selected && "bg-background text-foreground shadow-sm",
+              tab.itemClassName,
+            )}
+            onClick={() => onOpenTab(tab.value)}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -407,6 +450,7 @@ function SettingsUpdateContent({
       downloadPercent={update.downloadPercent}
       onCheckUpdate={update.onCheckUpdate}
       onInstallUpdate={update.onInstallUpdate}
+      onRestartApp={update.onRestartApp}
       onOpenReleaseNotes={onOpenReleaseNotes}
       onOpenReleases={update.onOpenReleases}
     />

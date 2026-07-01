@@ -5,6 +5,7 @@ import {
   ExternalLink,
   Info,
   Newspaper,
+  Power,
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
@@ -26,6 +27,7 @@ type UpdateSectionProps = {
   downloadPercent: number | null;
   onCheckUpdate: () => void | Promise<void>;
   onInstallUpdate: () => void | Promise<void>;
+  onRestartApp: () => void | Promise<void>;
   onOpenReleaseNotes: () => void | Promise<void>;
   onOpenReleases: () => void | Promise<void>;
 };
@@ -39,6 +41,7 @@ type UpdateHeaderProps = Pick<
   | "downloadPercent"
   | "onCheckUpdate"
   | "onInstallUpdate"
+  | "onRestartApp"
 >;
 
 type UpdateStatusMessageProps = Pick<
@@ -54,6 +57,7 @@ function UpdateHeader({
   downloadPercent,
   onCheckUpdate,
   onInstallUpdate,
+  onRestartApp,
 }: UpdateHeaderProps) {
   const busy = updateStatus === "checking" || updateStatus === "downloading";
 
@@ -75,6 +79,7 @@ function UpdateHeader({
           updateStatus={updateStatus}
           onCheckUpdate={onCheckUpdate}
           onInstallUpdate={onInstallUpdate}
+          onRestartApp={onRestartApp}
         />
       </div>
       {updateStatus === "downloading" && (
@@ -90,7 +95,11 @@ function UpdateHeaderActions({
   updateStatus,
   onCheckUpdate,
   onInstallUpdate,
-}: Pick<UpdateHeaderProps, "update" | "updateStatus" | "onCheckUpdate" | "onInstallUpdate"> & {
+  onRestartApp,
+}: Pick<
+  UpdateHeaderProps,
+  "update" | "updateStatus" | "onCheckUpdate" | "onInstallUpdate" | "onRestartApp"
+> & {
   busy: boolean;
 }) {
   return (
@@ -112,6 +121,12 @@ function UpdateHeaderActions({
         <Button type="button" onClick={() => void onInstallUpdate()}>
           <Download className="h-4 w-4" />
           下載安裝
+        </Button>
+      )}
+      {updateStatus === "installed" && (
+        <Button type="button" onClick={() => void onRestartApp()}>
+          <Power className="h-4 w-4" />
+          立即重啟
         </Button>
       )}
     </div>
